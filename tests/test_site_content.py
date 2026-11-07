@@ -1883,7 +1883,7 @@ def _header():
 
 # T224: the five family members, in the order the user set: the heart first.
 FAMILY_NAV = [
-    ("Easy Kit", "https://personal-agentic-claude.vercel.app/"),
+    ("Easy Kit", "https://easy-kits.vercel.app/"),
     ("Easy Verifier", "https://easy-verifier.vercel.app/"),
     ("Easy UI", "https://easy-ui-mcp.vercel.app/"),
     ("Easy Memory", "https://easy-memory.vercel.app/"),

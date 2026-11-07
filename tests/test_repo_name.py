@@ -27,8 +27,8 @@ HISTORY_PREFIXES = (
     "docs/memory-usage-finding-2026-08-07.md",
 )
 
-# D4: the Vercel project keeps its own name until the user renames it, so its URL is still live.
-VERCEL_HOST = OLD + ".vercel.app"
+# T255: the docs site moved to easy-kits.vercel.app, so the old Vercel host is no longer allowed (was D4).
+NEW_SITE = "https://easy-kits.vercel.app/"
 
 # (path, text on the line) -> reason. A line in `path` that holds the text may name the old repo.
 ALLOWED = {
@@ -56,7 +56,7 @@ def stray_lines(path, text):
     """Lines of `text` (file `path`) that name the old repo and no rule allows."""
     bad = []
     for n, line in enumerate(text.splitlines(), 1):
-        rest = line.replace(VERCEL_HOST, "")
+        rest = line
         if OLD not in rest:
             continue
         if any(path == p and needle in rest for p, needle in ALLOWED):
@@ -87,7 +87,8 @@ def test_the_sweep_catches_the_old_name():
         ("site/index.html", "https://personal-agentic-claude.vercel.app/ and github.com/thunderkds/personal-agentic-claude"),
     ):
         assert stray_lines(path, line), line
-    assert not stray_lines("README.md", "[site](https://personal-agentic-claude.vercel.app/)")
+    assert stray_lines("README.md", "[site](https://personal-agentic-claude.vercel.app/)")
+    assert not stray_lines("README.md", "[site](" + NEW_SITE + ")")
 
 
 def test_every_allow_entry_still_matches_a_line():
@@ -96,7 +97,7 @@ def test_every_allow_entry_still_matches_a_line():
         if path == "tests/test_repo_name.py":
             continue
         text = (REPO / path).read_text(encoding="utf-8")
-        assert any(needle in line.replace(VERCEL_HOST, "") for line in text.splitlines()), (path, reason)
+        assert any(needle in line for line in text.splitlines()), (path, reason)
 
 
 # --- AC3: the installer's URLs ----------------------------------------------------------------

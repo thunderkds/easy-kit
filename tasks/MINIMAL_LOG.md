@@ -4,6 +4,20 @@
 > new record directly under this note. On first use, the Supervisor creates `tasks/MINIMAL_LOG.md` from
 > this template and deletes the example comment. The same block is the Supervisor's final chat message.
 
+## T283 — Kit docs site link moves to easy-kits.vercel.app · minimal
+**Asked:** "I updated the link for the heart to easy-kits.vercel.app, let check all the repos in family and update following"
+**Decisions:**
+1. Minimal track: C0, Risk Low, link text in docs/site plus one test pin; no code path changes — RULE: `docs/claude-md/tracks.md` `## Track rule`
+2. Change exactly the T240 D4 step-4 list (`tasks/TASK_REVIEW_T240.md` AC 4): `README.md`, `RUNBOOK.md`, `site/index.html`, `site/docs.html`, `tests/test_site_content.py`; then drop `VERCEL_HOST` from `tests/test_repo_name.py` — FACT: D4 said "once a new URL exists … then drop `VERCEL_HOST`"
+3. History files (`tasks/`, `memory/`, `docs/archive/`, `docs/brainstorming/`) keep the old URL as written — RULE: T240 D3 (history is never rewritten)
+4. Sibling repos get their own PRs (one per repo, Gate 4: one project per board); no row on this board for them
+**Checked:**
+- `tests/test_repo_name.py` with `VERCEL_HOST` dropped and the anti-vacuity check now flagging the old host: `1 failed, 7 passed` before the link change (10 stray lines), `8 passed` after
+- `python3 -m pytest tests/test_repo_name.py tests/test_site_content.py tests/test_site_story.py tests/test_readme_slim.py tests/test_docs_match_installer.py -q` — `217 passed in 1.72s`
+- Suite: `python3 -m pytest tests -q` — `9 failed, 1767 passed, 4 skipped in 231.44s`; the same 8 fail on the unchanged tree (shallow cloud clone: `git show c573bbf`, `bad revision 'e50fe56..HEAD'`), and the 9th, `test_auto_verify.py::test_ac3_committing_only_the_record_does_not_start_a_new_run`, passes alone (T237 flake)
+**Files:** `README.md`, `RUNBOOK.md`, `site/index.html`, `site/docs.html`, `tests/test_site_content.py`, `tests/test_repo_name.py`, `tasks/MINIMAL_LOG.md`, `PROJECT_KANBAN.md`
+**Memory:** nothing new
+**Not done:** merge (yours); the Vercel old-URL redirect (dashboard, yours — D4 step 2)
 
 ## T282 — The home journey's improve step is an Easy Kit step, not "Your step" · minimal
 Mode: auto

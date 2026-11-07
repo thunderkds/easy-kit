@@ -96,6 +96,7 @@
 
 ### Ready for Review
 
+- [ ] **T283** — Kit docs site link `personal-agentic-claude.vercel.app` → `easy-kits.vercel.app` in live files (T240 D4 step 4) and `VERCEL_HOST` exemption dropped from `tests/test_repo_name.py` | Supervisor | C0 | Risk: Low | P1 | minimal track, record `tasks/MINIMAL_LOG.md` | Registered 2026-11-05, user: "I updated the link for the heart to easy-kits.vercel.app" | Branch `claude/project-thread-t4s1yn`
 
 ### Done
 - [x] **T282** — The home journey's sixth node says "Easy Kit · It proposes fixes" instead of "Your step · You improve it": the kit proposes, the user only starts and approves | Supervisor | C0 | Risk: Low | P2 | Branch `fix/t282-improve-step-is-kits` in `../wt-t282`, commit on the branch | Registered 2026-11-07, user: "but from the easy-kits, I saw the improve is your step, not the Easy kit" | Ready for Review 2026-11-07 | Track: minimal | Record: tasks/MINIMAL_LOG.md | auto verify pass (commit 27131f11); Done 2026-11-07: merged by user go-ahead ("merge and push") `f87a20c3` --no-ff
