@@ -3035,3 +3035,7 @@ Invoked from the main checkout, `security-review` builds its diff from the curre
 ### 2026-11-07 — `tap_probe.py` scans the whole page; judge a header change by what the banner lists for the header (T279)
 On T278 a scratch copy that hid every section but `#skills` printed `2 under 44px` (the nav links). The same probe on the full page printed 131 on `docs.html` and 18 on `index.html`, so a guide AC "0 under 44px" could never pass. Write the AC as "the changed element is not listed", and read the red boxes on it. A scratch copy that hides sections also understates the count for any later whole-page claim.
 **Files**: skills/ux-evaluate/scripts/tap_probe.py, site/theme.css
+
+### 2026-11-07 — An implementer that writes `☑ N/A` in the `verify` row stops the auto verify from starting (T280)
+`stop_auto_verify.py --start` answered "its result is already filled for commit …, nothing started" because the frontend agent had ticked the `verify` row `N/A` ("only the auto run writes it"). The check treats any filled form as done. Tell implementers in the spawn prompt to leave the `verify` and Companion score rows in the template form; if it happens, restore the row from `templates/TASK_REVIEW_template.md`, commit, and start again.
+**Files**: .claude/hooks/stop_auto_verify.py, templates/TASK_REVIEW_template.md
