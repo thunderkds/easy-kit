@@ -274,6 +274,7 @@ After all Stage 4 reviews pass:
    - Update matched entries in place (fix stale facts, expand with new context)
    - Append any new decisions or learnings from this session to the appropriate cold file
    - Summarize new/changed entries as one-liners in `memory/MEMORY.md` (keep hot tier ≤50,000 characters)
+   - **Self-review reminder** (a reminder only: you never start the loop): run `python3 skills/self-review/scripts/self_review.py pre`. It calls no model. Its one write marks register rows `fixed` once their fix task has merged, so commit `memory/self-review/register.md` with this pass if it changed. If it prints `"status": "ready"` with at least 3 `files`, tell the user in one line that N merged review files wait and that `/self-review` mines them. Never run `/self-review` or its miner yourself. Any other status, or an error: say nothing. In auto mode, put the line under `Not done:`.
 
 5. Merge the worktree and close the task on PROJECT_KANBAN.md. In auto mode the merge is never automatic: it waits for the user. After an auto verify pass, the hook moves the row to Done (`docs/claude-md/tracks.md` `### Auto close-out`), and the Supervisor ran item 4 before it stopped (the report's `Memory:` line).
 
