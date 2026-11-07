@@ -1,5 +1,5 @@
 # PROJECT_KANBAN.md
-**Last updated**: 2026-11-07
+**Last updated**: 2026-11-08
 
 > Compact task board. Full context lives in `PROJECT_SPEC.md`. Update this file whenever a task status changes.
 
@@ -87,6 +87,8 @@
 
 
 ### In Progress
+- [ ] **T284** — `[admin]` tag — auto mode plus merge and push after a passed verify | common-infrastructure | C2 | Risk: High | P1 | Guide: `tasks/TASK_GUIDE_T284.md` | User 2026-11-08: "add 1 more tag as administrator to allow supervisor to merge and push to git"; choices: `[admin]`, gate stays, no ship | Started 2026-11-08: branch `feat/t284-admin-tag`, worktree `../wt-t284`
+- [ ] **T283** — Karpathy autoresearch loop — seven spikes with evidence, then a decision | common-infrastructure | C3 | Risk: Medium | P1 | Guide: `tasks/TASK_GUIDE_T283.md` | User 2026-11-08: "all of them should be experimented with good evidence, after that, let decide" | Report-only: no merge of spikes | Started 2026-11-08: branch `feat/t283-karpathy-spikes`, worktree `../wt-t283`; spikes `spike/t283-*`
 
 
 
