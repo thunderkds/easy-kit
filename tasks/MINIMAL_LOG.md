@@ -17,8 +17,9 @@
 - Suite: `python3 -m pytest tests .claude/hooks/tests -q -p no:cacheprovider` — `3432 passed, 25 subtests passed in 191.16s`; `sh scripts/validate.sh` — `validate.sh: PASS`
 - Real run: `python3 skills/self-review/scripts/self_review.py pre` — printed `status: ready`, `files`: 33 review files, `waiting: 0` (so the reminder would say 33 merged review files wait); a second run left `git status` clean
 - Simplify: skipped: under 20 lines
+- verify: ☑ pass — auto-run by hook, session d790a624-f34c-46e7-8eb2-59a86c942da4, commit c5d1b7bf414660b30a1d9c4dd7b510e14556b500, log .claude/verify-runs/T281-c5d1b7bf4146.log
 **Files:** `docs/claude-md/pipeline-stages.md`, `tests/test_t281_self_review_reminder.py` (new), `tasks/MINIMAL_LOG.md`, `PROJECT_KANBAN.md`
-**Not done:** merge (yours); push (yours); `/self-review` itself (33 review files, 84 more deferred, wait for you to run it); auto verify: running (T182)
+**Not done:** merge (yours); push (yours); `/self-review` itself (33 review files, 84 more deferred, wait for you to run it); auto verify: ☑ pass (session d790a624-f34c-46e7-8eb2-59a86c942da4, commit c5d1b7bf414660b30a1d9c4dd7b510e14556b500, log .claude/verify-runs/T281-c5d1b7bf4146.log)
 
 ## T261 — The minimal track runs `/simplify` after the change · minimal
 **Asked:** "let investigate more clearly and do if you think it's good for progress, if needed take an experiment"
