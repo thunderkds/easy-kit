@@ -145,8 +145,6 @@ def admin_request(transcript_path):
     origin = entry.get("origin")
     if not isinstance(origin, dict) or origin.get("kind") != "human" or entry.get("isSidechain"):
         return None
-    if not isinstance((entry.get("message") or {}).get("content"), (str, list)):
-        return None
     try:
         ts = datetime.fromisoformat(str(entry.get("timestamp")).replace("Z", "+00:00"))
     except Exception:
