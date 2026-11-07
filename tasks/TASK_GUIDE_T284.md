@@ -66,6 +66,7 @@ User, 2026-11-08: *"add 1 more tag as administrator to allow supervisor to merge
 | 7 | The tag covers only the task of the request it was typed in. A later plain request, or another task, is not admin | one tag, one task |
 | 8 | `ship`, force push and a push to a branch other than the task branch stay blocked under `[admin]` | Out of scope |
 | 9 | `docs/claude-md/tracks.md` (`## Auto mode`, `### Never in auto mode`), `AGENTS.md` (Tracks paragraph) and the site/docs text that lists the tag name the new tag and its limit, and state no old fact | stale-text rule (LR-0005) |
+| 10 | With `[admin]`, the Supervisor starts the headless auto verify run itself (`python3 .claude/hooks/stop_auto_verify.py --start <ID>`) as soon as the task is at Ready for Review, waits for the verdict, and only on a pass goes on to merge and push without asking. It never runs `/verify` in its own session. On `skip`, `blocked` or `fail` it merges nothing and reports why; a docs-only task answers `skip` (seen on T246 and T283), so the user runs `/verify` for it | User 2026-11-08: "with [admin] tag, you should run verify as automatically also" |
 
 ---
 
