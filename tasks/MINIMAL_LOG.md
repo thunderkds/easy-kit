@@ -4,6 +4,23 @@
 > new record directly under this note. On first use, the Supervisor creates `tasks/MINIMAL_LOG.md` from
 > this template and deletes the example comment. The same block is the Supervisor's final chat message.
 
+
+## T281 — Stage 5 tells the Supervisor to remind the user about /self-review · minimal
+**Asked:** "let continue" — after the user chose Option C, "Keep /self-review, Supervisor only reminds" (`docs/brainstorming/BRAINSTORMING_LOG_self-review-trigger.md`)
+**Decisions:**
+- Track minimal — RULE: C1, Risk Low, one line in one doc file, no UI, no user data (`docs/claude-md/tracks.md` `## Track rule`).
+- The line sits in `docs/claude-md/pipeline-stages.md` Stage 5 item 4 (the memory update, which runs right after a merge) and nowhere else — a change to `AGENTS.md` would force a baseline repoint (LR-0004) for no gain.
+- The line says `pre` is not read-only: the real run showed `pre` marks register rows `fixed` once their fix task has merged (`self_review.py` `cmd_pre` / `mark_fixed`). My earlier "read-only" claim in the brainstorming log was wrong; corrected there and in `memory/decisions.md`, and the register change that run made (T257–T259 `fixed`) is committed on `main` (`ddec912c`).
+- Assumed: "let continue" means build the reminder, not merge or push T280 — merge and push are outward actions and were not asked for.
+**Checked:**
+- New test `tests/test_t281_self_review_reminder.py` — 4 failed before the change (no bullet), `5 passed` after; deleting the "Never run `/self-review` or its miner yourself" sentence fails `test_reminder_never_starts_the_loop_or_the_miner`
+- Suite: `python3 -m pytest tests .claude/hooks/tests -q -p no:cacheprovider` — `3432 passed, 25 subtests passed in 191.16s`; `sh scripts/validate.sh` — `validate.sh: PASS`
+- Real run: `python3 skills/self-review/scripts/self_review.py pre` — printed `status: ready`, `files`: 33 review files, `waiting: 0` (so the reminder would say 33 merged review files wait); a second run left `git status` clean
+- Simplify: skipped: under 20 lines
+- verify: ☑ pass — auto-run by hook, session d790a624-f34c-46e7-8eb2-59a86c942da4, commit c5d1b7bf414660b30a1d9c4dd7b510e14556b500, log .claude/verify-runs/T281-c5d1b7bf4146.log
+**Files:** `docs/claude-md/pipeline-stages.md`, `tests/test_t281_self_review_reminder.py` (new), `tasks/MINIMAL_LOG.md`, `PROJECT_KANBAN.md`
+**Not done:** merge (yours); push (yours); `/self-review` itself (33 review files, 84 more deferred, wait for you to run it); auto verify: ☑ pass (session d790a624-f34c-46e7-8eb2-59a86c942da4, commit c5d1b7bf414660b30a1d9c4dd7b510e14556b500, log .claude/verify-runs/T281-c5d1b7bf4146.log)
+
 ## T261 — The minimal track runs `/simplify` after the change · minimal
 **Asked:** "let investigate more clearly and do if you think it's good for progress, if needed take an experiment"
 **Decisions:**
