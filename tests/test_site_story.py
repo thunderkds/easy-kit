@@ -241,7 +241,7 @@ def test_journey_marks_the_users_three_steps_with_a_text_label():
 
 
 def test_the_journey_heading_and_the_merge_step_say_what_is_true():
-    """Round 5: the fast path skips the plan and the agents, so the five steps are the full journey; and
+    """Round 5: the fast path skips the plan and the agents, so the six steps are the full journey; and
     docs/claude-md/tracks.md has the Supervisor merge when the user asks, so 'never merges' is false."""
     body = section(index_html(), "journey")
     assert " ".join(visible_words(re.search(r"<h2>(.*?)</h2>", body, re.DOTALL).group(1))) == "The full journey"
@@ -690,7 +690,7 @@ def test_every_layout_class_of_the_story_page_stacks_at_768px():
     assert layout == ["flow-row", "flow-branches", "flow-map", "story-cards", "skill-flow"], f"fixture broken: {layout}"
     for cls in layout:
         assert f".{cls}" in phone, f".{cls} is not restacked at 768px"
-    assert ".flow-row.is-long" in _media_bodies(css, "@media (max-width: 1100px)"), "the five-step journey stacks at 1100px"
+    assert ".flow-row.is-long" in _media_bodies(css, "@media (max-width: 1100px)"), "the six-step journey stacks at 1100px"
 
 
 def test_hero_mentions_the_plugin_and_links_to_the_docs_install_section():

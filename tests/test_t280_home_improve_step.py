@@ -37,7 +37,7 @@ def test_sixth_step_is_your_step_linking_to_the_docs_diagram():
     assert _span(inner, "flow-key").strip() == "Your step"
     title = _span(inner, "flow-title")
     assert re.fullmatch(r'\s*<a href="docs\.html#skills">You improve it</a>\s*', title), title
-    assert re.fullmatch(r"\s*Optional: <code>/self-review</code>\s*", _span(inner, "flow-desc"))
+    assert re.fullmatch(r"\s*<code>/self-review</code> \(optional\)\s*", _span(inner, "flow-desc"))
     assert 'id="skills"' in story.docs_html(), "the link target must exist in docs.html"
 
 

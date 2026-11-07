@@ -48,13 +48,13 @@ Not done: merge (yours); <auto verify: running (T182) | auto verify: <result> | 
 | Check | Result | Notes / output snippet |
 |-------|--------|------------------------|
 | **New test(s) cover Acceptance Criteria (file paths pasted)** | ☑ pass | `tests/test_t280_home_improve_step.py` (AC 1, 2, 4, 5: 4 tests); `tests/test_site_story.py` three edited pins (AC 7). Red first: before the `index.html` edit, `6 failed, 51 passed` (4 new + 2 edited pins; the merge-step pin is title-based so it stayed green on both trees). |
-| Verification command run | ☑ pass | 2026-11-07T09:58:10Z `python3 -m pytest tests/test_t280_home_improve_step.py tests/test_site_story.py tests/test_site_content.py tests/test_site_visual_first.py tests/test_docs_t151.py -q` -> `223 passed in 0.57s`. `<main>` words: 300 of 300 (`WORD_CAP` untouched). |
-| Negative cases hold | ☑ pass | Mutation: removed the sixth `li` (`git diff --stat site/index.html` -> `1 file changed, 3 insertions(+), 3 deletions(-)`, only the card trim left); run gave `6 failed, 51 passed`, incl. `test_journey_is_an_ordered_list_of_six_steps_each_linking_into_the_docs` (`journey has 5 steps, want 6`). Restored from a saved copy; `git diff --stat` back to `8 insertions(+), 3 deletions(-)`; suite `223 passed`. |
+| Verification command run | ☑ pass | 2026-11-07T12:03:44Z `python3 -m pytest tests/test_t280_home_improve_step.py tests/test_site_story.py tests/test_site_content.py tests/test_site_visual_first.py tests/test_docs_t151.py -q` -> `223 passed in 0.61s` (after the Stage 4 fixes). `<main>` words: 300 of 300 (`WORD_CAP` untouched). Full `tests/` run `1910 passed` was taken before the two Stage 4 fixes (see smoke row). |
+| Negative cases hold | ☑ pass | Re-run after the Stage 4 fixes. Mutation: removed the sixth `li` (`git diff --stat site/index.html` vs the commit -> `1 file changed, 5 deletions(-)`); run gave `6 failed, 51 passed`: 4 in `test_t280_home_improve_step.py` and `test_journey_is_an_ordered_list_of_six_steps_each_linking_into_the_docs`, `test_journey_marks_the_users_three_steps_with_a_text_label` in `test_site_story.py`. Restored from a saved copy (`git diff --stat` back to `1 insertion(+), 1 deletion(-)`, the P3 edit only); suite `223 passed in 0.60s`. Red first for the P3 edit: with the new fullmatch and the old `Optional:` markup, `1 failed, 3 passed`. |
 | verify | ☑ N/A | Not run by the frontend agent: only the Supervisor's headless auto verify run writes this row. |
 | Review scope bounded to the change's blast radius (affected set, not whole repo) | ☑ pass | Blast radius: `site/index.html` and the site pin tests. Stale-reference grep of `README.md`, `RUNBOOK.md`, `docs/claude-md/`, `agents/` for "five steps" / "5 steps": no hit. Two text-only hits in `tests/test_site_story.py` left unedited by scope: docstring line 244 ("the five steps are the full journey") and assert message line 693 ("the five-step journey stacks at 1100px"). code-review skill not run (no Skill tool). |
 | Full smoke suite still green (no regression) | ☑ pass | `python3 -m pytest tests -q -x` -> `1910 passed in 154.37s (0:02:34)`. |
 | **Companion score (easy-verifier)** | ☑ N/A | Not run: no companion tool is available to the frontend agent; the merge gate blocks on fail only. |
-| **UI: Visual regression (diff or verdict pasted)** | ☑ pass | Screenshots read: `/tmp/claude-1000/-home-hungnguyenhuu-workspace-pets-personal-agentic-claude/bb743e7c-a3c3-44e9-972e-46e28295830d/scratchpad/journey-375-full.png`, `/tmp/claude-1000/-home-hungnguyenhuu-workspace-pets-personal-agentic-claude/bb743e7c-a3c3-44e9-972e-46e28295830d/scratchpad/journey-768-full.png`, `/tmp/claude-1000/-home-hungnguyenhuu-workspace-pets-personal-agentic-claude/bb743e7c-a3c3-44e9-972e-46e28295830d/scratchpad/journey-1280.png`. Six nodes in order; "Your step" on 1, 5 and 6; green outcome stays on "You merge"; "Skills by stage" follows unchanged. ux-evaluate table below. |
+| **UI: Visual regression (diff or verdict pasted)** | ☑ pass | Screenshots read: `/tmp/claude-1000/-home-hungnguyenhuu-workspace-pets-personal-agentic-claude/bb743e7c-a3c3-44e9-972e-46e28295830d/scratchpad/journey-375-full.png`, `/tmp/claude-1000/-home-hungnguyenhuu-workspace-pets-personal-agentic-claude/bb743e7c-a3c3-44e9-972e-46e28295830d/scratchpad/journey-768-full.png`, `/tmp/claude-1000/-home-hungnguyenhuu-workspace-pets-personal-agentic-claude/bb743e7c-a3c3-44e9-972e-46e28295830d/scratchpad/journey-1280.png`, `/tmp/claude-1000/-home-hungnguyenhuu-workspace-pets-personal-agentic-claude/bb743e7c-a3c3-44e9-972e-46e28295830d/scratchpad/journey-1280-v2.png` (after the P3 fix). Six nodes in order; "Your step" on 1, 5 and 6; green outcome stays on "You merge"; "Skills by stage" follows unchanged. ux-evaluate table below. |
 | **UI: Design-system compliance (tokens/colors/typography verified)** | ☑ pass | The new node reuses existing classes `flow-node is-yours is-link` (same as "You ask"); `git status` shows `site/theme.css` untouched; no new class, colour or image. |
 | **UI: Responsiveness at target viewports** | ☑ pass | 375px (iframe; headless Chrome cannot open a window under 500px): inside a 375px iframe `documentElement.scrollWidth=360 clientWidth=360` (15px scrollbar), `ol scrollWidth=328 clientWidth=328`, 6 nodes all `left=16 width=328`, stacked: no sideways scroll. 768px: stacked. 1280px: one row of six, no clipped text. |
 
@@ -131,7 +131,7 @@ main words 300      (cap WORD_CAP = 300)
     <li class="flow-node is-yours is-link">
       <span class="flow-key">Your step</span>
       <span class="flow-title"><a href="docs.html#skills">You improve it</a></span>
-      <span class="flow-desc">Optional: <code>/self-review</code></span>
+      <span class="flow-desc"><code>/self-review</code> (optional)</span>
     </li>
   </ol>
 ...
@@ -147,7 +147,7 @@ $ python3 -m pytest tests/test_t280_home_improve_step.py tests/test_site_story.p
 $ <main> words: 300 of 300     (cap unchanged)
 ```
 
-**DELTA**: A visitor to the home page now sees, in "The full journey", an optional sixth step "You improve it / Optional: /self-review" that links to the docs diagram.
+**DELTA**: A visitor to the home page now sees, in "The full journey", an optional sixth step "You improve it / /self-review (optional)" that links to the docs diagram.
 
 **WITNESS**: frontend-developer ran it 2026-11-07 (the implementing agent alone; the Supervisor adds the witness from `memory/event-trace/T280.jsonl`). [template note: derived from `memory/event-trace/Txxx.jsonl`, never the
 implementing agent alone]
@@ -160,10 +160,10 @@ Screenshots (scratch, not committed): `/tmp/claude-1000/-home-hungnguyenhuu-work
 
 | # | User story | Flow / state | Width | Verdict | Screenshot | Reason |
 |---|------------|--------------|-------|---------|------------|--------|
-| 1 | "should show the overview flow in the home" | Home, "The full journey" | 375 / 1280 | pass | journey-375-full.png, journey-1280.png | Sixth node "Your step / You improve it / Optional: /self-review" shows without a click at both widths; its title is a link to `docs.html#skills` (checked by the new test) |
+| 1 | "should show the overview flow in the home" | Home, "The full journey" | 375 / 1280 | pass | journey-375-full.png, journey-1280.png | Sixth node "Your step / You improve it / /self-review (optional)" shows without a click at both widths; its title is a link to `docs.html#skills` (checked by the new test) |
 | B-a | baseline | default | 375 / 1280 | pass | same | Task adds no action; the install Copy button is unchanged and in view at 1280 |
 | B-b | baseline | default | 375 / 1280 | pass | same | Heading, six nodes, next section in one reading order |
-| B-c | baseline | default | 375 / 1280 | pass | same | Same gaps and arrows as the other nodes. Note: at 1280 `/self-review` wraps at its hyphen ("/self-" then "review"); readable, left as is (no CSS change in scope) |
+| B-c | baseline | default | 375 / 1280 | pass | same | Same gaps and arrows as the other nodes. At 1280 `/self-review` first wrapped at its hyphen; after the Stage 4 fix (`<code>/self-review</code> (optional)`) `journey-1280-v2.png` was read and the command stays on one line, "(optional)" below it |
 | B-d | baseline | default | 375 | pass | journey-375-full.png | `.story .flow-title a::after` stretches the link over the whole node (`site/theme.css:438`), about 328x92px; `tap_probe.py` ran (page `/tmp/claude-1000/-home-hungnguyenhuu-workspace-pets-personal-agentic-claude/bb743e7c-a3c3-44e9-972e-46e28295830d/scratchpad/tap/index-probe.html`, not shot) |
 | B-e | baseline | default | 375 / 1280 | pass | same | Node text is the existing flow-desc size; readable on the dark ground |
 | B-f | baseline | default | 375 / 1280 | not checkable | n/a | The guide names no empty, loading, error or success state |
@@ -173,3 +173,5 @@ Screenshots (scratch, not committed): `/tmp/claude-1000/-home-hungnguyenhuu-work
 | B-i | baseline | default | 375 / 1280 | pass | same | Same accent, border and radius as the other nodes |
 
 ux-evaluate: 9 pass, 0 fail, 0 not checked, 2 not checkable. Overall: pass (the two `not checkable` rows name no state or action in this change).
+
+Stage 4 re-check (2026-11-07): `/tmp/claude-1000/-home-hungnguyenhuu-workspace-pets-personal-agentic-claude/bb743e7c-a3c3-44e9-972e-46e28295830d/scratchpad/journey-1280-v2.png` read at 1280px: six nodes in one row, `/self-review` on one line with "(optional)" under it, green outcome still on "You merge". B-c pass, no `not checkable` change.

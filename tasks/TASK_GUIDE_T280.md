@@ -25,7 +25,7 @@
 User, 2026-11-07: *"I checked from the easy kits page but got no item"* (the self-review diagram is on `docs.html`, the home shows only a chip), then *"should show the overview flow in the home, maybe adding or just update the current flow, it's up to you"*.
 
 **Restated intent** (the Supervisor decided "update the current flow", because `index.html` is at its 300-word cap and its six sections are pinned):
-> The home page's "The full journey" flow gets one more step after "You merge": **Your step · Improve it · Optional: `/self-review`**, linked to the docs diagram. A visitor sees on the home page that the kit can propose improvements to itself and that the user starts it.
+> The home page's "The full journey" flow gets one more step after "You merge": **Your step · You improve it · `/self-review` (optional)**, linked to the docs diagram. A visitor sees on the home page that the kit can propose improvements to itself and that the user starts it.
 
 **Out of scope**:
 - `site/docs.html` (its diagram stays as T278 built it), the chip rows, `skills/self-review/**`
@@ -55,7 +55,7 @@ User, 2026-11-07: *"I checked from the easy kits page but got no item"* (the sel
 
 | # | Criterion (testable) | Traces to requirement |
 |---|----------------------|-----------------------|
-| 1 | The `#journey` ordered list has 6 steps. Steps 1–5 are unchanged in order, key, title and link. The sixth step is `flow-key` "Your step", `flow-title` a link "You improve it" to `docs.html#skills`, `flow-desc` "Optional: " plus `<code>/self-review</code>` | "update the current flow" |
+| 1 | The `#journey` ordered list has 6 steps. Steps 1–5 are unchanged in order, key, title and link. The sixth step is `flow-key` "Your step", `flow-title` a link "You improve it" to `docs.html#skills`, `flow-desc` `<code>/self-review</code>` then ` (optional)` (Stage 4 change 2026-11-07: the command first, so it does not break at its hyphen at 1280px) | "update the current flow" |
 | 2 | The sixth step has classes `flow-node is-yours is-link` and no `is-outcome`; `is-outcome` stays on "You merge" | Design |
 | 3 | `index.html` `<main>` shows at most 300 visible words (`WORD_CAP`), and none of the banned terms. Make room by shortening the four "Go deeper" card descriptions (`#deeper`), not by raising the cap | Word cap |
 | 4 | The journey heading stays "The full journey"; the "You merge" description stays "You review. Easy Kit merges only when you ask." | Existing pins |
@@ -74,7 +74,7 @@ User, 2026-11-07: *"I checked from the easy kits page but got no item"* (the sel
 | 1 | `site/index.html` after the change | `#journey` holds 6 `li`; the sixth links to `docs.html#skills` and holds `/self-review` | automated (the edited pin tests) |
 | 2 | `<main>` word count | at most 300 | `test_main_holds_at_most_300_words` |
 | 3 | Mutation: remove the sixth step | the edited step-count test fails | mutation control, run by the reviewer |
-| 4 | The sixth step's text | none of the banned words (AC 5) | automated (new `tests/test_t280_home_improve_step.py`) |
+| 4 | The sixth step's text | none of the banned words (AC 5); the `flow-desc` is `<code>/self-review</code> (optional)` | automated (new `tests/test_t280_home_improve_step.py`) |
 
 ### Verification Command (exact, runnable)
 
@@ -122,7 +122,7 @@ python3 -m pytest tests/test_t280_home_improve_step.py tests/test_site_story.py 
 
 | User story | User goal | Flow / state | Pass condition (observable) |
 |------------|-----------|--------------|-----------------------------|
-| Request: "should show the overview flow in the home" | A visitor sees the kit can improve itself, and that they start it | Open the home page, look at "The full journey" | The sixth node "You improve it / Optional: /self-review" shows at 375px and 1280px without a click, and links to the docs diagram |
+| Request: "should show the overview flow in the home" | A visitor sees the kit can improve itself, and that they start it | Open the home page, look at "The full journey" | The sixth node "You improve it / /self-review (optional)" shows at 375px and 1280px without a click, and links to the docs diagram |
 
 ---
 
