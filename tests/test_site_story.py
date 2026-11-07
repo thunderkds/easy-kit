@@ -232,11 +232,11 @@ def test_journey_is_an_ordered_list_of_six_steps_each_linking_into_the_docs():
         assert all(link in known for link in links), f"journey links to an id docs.html lacks: {links}"
 
 
-def test_journey_marks_the_users_three_steps_with_a_text_label():
+def test_journey_marks_the_users_two_steps_with_a_text_label():
     steps = _journey_steps()
     labelled = ["Your step" in " ".join(visible_words(s)).replace("  ", " ") for s in steps]
-    assert labelled == [True, False, False, False, True, True], (
-        f"the ask, merge and improve steps (and only those) carry the text label 'Your step': {labelled}"
+    assert labelled == [True, False, False, False, True, False], (
+        f"the ask and merge steps (and only those) carry the text label 'Your step': {labelled}"
     )
 
 

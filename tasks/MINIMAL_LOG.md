@@ -5,6 +5,24 @@
 > this template and deletes the example comment. The same block is the Supervisor's final chat message.
 
 
+## T282 — The home journey's improve step is an Easy Kit step, not "Your step" · minimal
+**Asked:** "but from the easy-kits, I saw the improve is your step, not the Easy kit"
+**Decisions:**
+- Track minimal — RULE: C0, Risk Low, one node in `site/index.html` and its pin tests, no new component, no user data (`docs/claude-md/tracks.md` `## Track rule`).
+- The user is right: the kit mines the reviews and proposes the fixes; the user only starts `/self-review` and approves. So the sixth node now reads key "Easy Kit", title "It proposes fixes", and loses `is-yours`. The `<code>/self-review</code> (optional)` line stays, so the visitor still sees how to start it.
+- Wording "proposes" matches the skill (`skills/self-review/SKILL.md`: proposes, the user approves) and keeps the page free of "autonomous", "self-improving" and "automatic". Same word count as before, so `<main>` stays at 300 of 300.
+- Pin edits (the three T280 tests, the one `test_site_story.py` label pin) are the direct consequence of this request, not drift; `WORD_CAP` and `BANNED_TERMS` untouched.
+- The docs diagram (T278) is unchanged: its first node "You start it" is still true.
+- Assumed: "It proposes fixes" is the wording you want; say so if you prefer another.
+**Checked:**
+- Tests edited first: 4 failed before the page change, `223 passed` after (`test_t280_home_improve_step.py`, `test_site_story.py`, `test_site_content.py`, `test_site_visual_first.py`, `test_docs_t151.py`)
+- Mutation: putting "Your step" back on the sixth node fails `test_sixth_step_is_an_easy_kit_step_linking_to_the_docs_diagram` and `test_the_outcome_stays_on_you_merge_and_steps_one_to_five_are_unchanged`
+- Real run: headless Chrome at 1280px shows six nodes; only "You ask" and "You merge" carry "Your step"; the sixth shows "Easy Kit / It proposes fixes / /self-review (optional)"
+- Suite: `python3 -m pytest tests .claude/hooks/tests -q -p no:cacheprovider` — `3435 passed, 1 failed`; the one failure, `test_memory_usage_report.py::test_script_does_not_touch_the_real_repository`, failed because I edited the board and this log while the suite ran; run alone on a still tree: `9 passed`. `sh scripts/validate.sh` — `validate.sh: PASS`
+- Simplify: skipped: under 20 lines
+**Files:** `site/index.html`, `tests/test_t280_home_improve_step.py`, `tests/test_site_story.py`, `tasks/MINIMAL_LOG.md`, `PROJECT_KANBAN.md`
+**Not done:** merge (yours); push (yours); a 375px screenshot (headless Chrome cannot open a window that narrow; the node uses the same classes as the other Easy Kit nodes); auto verify: not started yet
+
 ## T281 — Stage 5 tells the Supervisor to remind the user about /self-review · minimal
 **Asked:** "let continue" — after the user chose Option C, "Keep /self-review, Supervisor only reminds" (`docs/brainstorming/BRAINSTORMING_LOG_self-review-trigger.md`)
 **Decisions:**
