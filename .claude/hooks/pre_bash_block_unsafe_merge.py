@@ -18,6 +18,9 @@ scripts that call git, and `gh pr merge` are out of scope too.
 
 T232: the project comes from `lib/project_root.py`, and from a plugin the hook stands down in a
 non-kit project. Inside one, input it cannot read is a block: it cannot tell the call is not a push.
+
+T284: while the session's latest user request carries `[auto]` or `[admin]`, a merge, push or pull
+is blocked, unless `[admin]` allows that one command (see `auto_mode_blocker`).
 """
 import json
 import os
@@ -439,9 +442,10 @@ def has_filled_verify_row(task_id, tasks_dir=None):
     return False
 
 
-def verify_row_passes(section, confirm):
+def verify_row_passes(section, confirm, hook_only=False):
     """True when an Evidence `section` holds a filled `verify` pass row. `confirm(notes, None)`
-    decides an `auto-run by hook` row (T182 D5): against which commit is the caller's choice."""
+    decides an `auto-run by hook` row (T182 D5): against which commit is the caller's choice.
+    `hook_only` (T284) counts only such a row: a hand-typed pass row is skipped."""
     if not section:
         return False
     for match in VERIFY_ROW_PATTERN.finditer(section):
@@ -452,6 +456,8 @@ def verify_row_passes(section, confirm):
         # `auto-run by hook` row counts only with its run record (D5) for this task and the
         # head commit of the checkout (or branch) this row was read from.
         if AUTO_CHECKED_TAG in notes:
+            continue
+        if hook_only and AUTO_ROW_TAG not in notes:
             continue
         if AUTO_ROW_TAG in notes and not confirm(match.group("notes"), None):
             continue
@@ -559,10 +565,11 @@ def _auto_row_confirmed_at(directory, task_id, notes, tip, report_rel=None):
     return same_code(directory, task_id, sha, tip, report_rel)
 
 
-def committed_verify_row(task_id, branch, directory):
+def committed_verify_row(task_id, branch, directory, hook_only=False):
     """True/False: whether `branch`'s tip, read in `directory`, commits a filled `verify` row (or a
     confirmed minimal-track `verify:` line) for `task_id`. None when the tip cannot be resolved —
-    the caller then keeps the pre-T210 working-tree read. Never raises."""
+    the caller then keeps the pre-T210 working-tree read. `hook_only` (T284) accepts only the
+    hook's own `auto-run by hook` result, confirmed by its run record. Never raises."""
     try:
         done = _git(directory, "rev-parse", "--verify", "--quiet", f"{branch}^{{commit}}")
         tip = done.stdout.strip() if done is not None and done.returncode == 0 else ""
@@ -581,13 +588,13 @@ def committed_verify_row(task_id, branch, directory):
                     for prefix in (GUIDE_PREFIX, REVIEW_PREFIX)
                     for rel in _candidate_paths("tasks", prefix, normalized))
         if verify_row_passes(next((s for s in sections if s is not None
-                                   and not is_pointer_only(s)), None), confirm):
+                                   and not is_pointer_only(s)), None), confirm, hook_only):
             return True
         block = record_block(show(MINIMAL_LOG_REL) or "", task_id, skip_comments=True)
-        return any(minimal_line_passes(
-            line, confirm,
+        user = None if hook_only else (
             lambda notes: user_line_confirmed(directory, task_id, notes, tip, ref=tip))
-            for line in (record_verify_lines(block[2]) if block else []))
+        return any(minimal_line_passes(line, confirm, user)
+                   for line in (record_verify_lines(block[2]) if block else []))
     except Exception:
         return False
 
@@ -1256,6 +1263,125 @@ def session_owned_in_progress(rows, command, cwd, transcript_path):
         return ids
 
 
+# --- Auto mode: merge and push stay the user's, except under `[admin]` (T284) ---------------
+#
+# While the session's latest user request carries `[auto]` or `[admin]` (`lib/auto_mode.py`, the
+# reader the Stop check shares), a `git merge`, `git push` or `git pull` — or an inline git alias,
+# which may be one — is blocked. Before T284 "never in auto mode: merge, push" was doctrine only:
+# this gate did not read the tag. `git rebase` is not part of this rule; it keeps its board check.
+#
+# `[admin]` lifts that block for one command, and only when every one of these holds (any doubt is
+# a block):
+#   * the latest request is one the user typed (`origin.kind` "human", not a sidechain) and carries
+#     `[admin]` outside code spans and `>` quoted lines — `auto_mode.admin_request`;
+#   * each git action of the command is `git merge <one branch>` or a plain `git push` of a branch
+#     to the same branch name: no force flag, no `+refspec`, no other destination, no `--no-verify`;
+#   * every branch names the same one task, and that task is the request's: the request names it,
+#     or this session (or a sub-agent) worked on it since the request (`session_work`);
+#   * the branch tip commits the hook's own `auto-run by hook` verify result for the task, confirmed
+#     by its run record for that commit (`committed_verify_row(..., hook_only=True)`): a hand-typed
+#     pass row never counts.
+# The gate's other checks then still run. No transcript, or one that cannot be read, means no
+# request is known: the rule does not apply and the gate is exactly as before T284.
+AUTO_MODE_PATTERNS = [
+    GIT_VERB_PREFIX + r"push\b",
+    GIT_VERB_PREFIX + r"merge\b(?!-base\b)",
+    GIT_VERB_PREFIX + r"pull\b",
+]
+ADMIN_PUSH_FLAGS = frozenset({"-u", "--set-upstream", "-q", "--quiet", "-v", "--verbose",
+                              "--progress", "-n", "--dry-run"})
+AUTO_MODE_LIMIT = ("With `[auto]`, merge and push stay the user's. `[admin]` allows only a merge or a "
+                   "plain push of the request's own task branch, after its auto verify passed "
+                   "(docs/claude-md/tracks.md `### Admin tag`).")
+
+
+def _admin_push_branch(args, directory):
+    """The one branch a `git push <args>` run in `directory` sends to the same branch name, or None
+    (a force, an unknown option, a URL, more than one refspec, another destination)."""
+    positionals = []
+    for arg in args:
+        if arg.startswith("-"):
+            if arg not in ADMIN_PUSH_FLAGS:
+                return None
+        else:
+            positionals.append(arg)
+    if len(positionals) > 2 or (positionals and not REMOTE_NAME_PATTERN.fullmatch(positionals[0])):
+        return None
+    current = _current_branch(directory)
+    if current is None or not _push_config_is_plain(directory):
+        return None
+    spec = positionals[1] if len(positionals) == 2 else "HEAD"
+    if spec.startswith("+"):
+        return None
+    src, colon, dst = spec.partition(":")
+    strip = lambda name: name[len("refs/heads/"):] if name.startswith("refs/heads/") else name
+    src = current if src == "HEAD" else strip(src)
+    if colon and strip(dst) != src:
+        return None
+    return src or None
+
+
+def admin_refusal(command, cwd, transcript_path, admin):
+    """Why `[admin]` (`admin` = `(timestamp, text)` of the request) does not allow `command`, or
+    None when it does. Never raises: an error is a refusal."""
+    try:
+        when, text = admin
+        actions = _git_actions(command, cwd)
+        if not actions:
+            return "cannot tell which branch this command merges or pushes"
+        id_regex = re.compile(task_id_pattern(ROOT, bounded=True), re.IGNORECASE)
+        targets = set()
+        for args, where in actions:
+            if where is None:
+                return "cannot tell which directory this command runs in"
+            if args[0] == "merge":
+                names = [name for _, name in _merge_sources(args[1:], where)]
+                if len(names) != 1:
+                    return "an `[admin]` merge names exactly one task branch"
+                branch = names[0]
+            elif args[0] == "push":
+                branch = _admin_push_branch(args[1:], where)
+                if branch is None:
+                    return ("`[admin]` allows only a plain push of the task branch to the same "
+                            "branch: no force, no other destination")
+            else:
+                return f"`[admin]` allows only merge and push, not `git {args[0]}`"
+            task_id = _ref_task_id(branch, id_regex)
+            if task_id is None:
+                return f"{branch} names no single task"
+            targets.add((task_id, branch, where))
+        task_ids = {task_id for task_id, _, _ in targets}
+        if len(task_ids) != 1:
+            return "an `[admin]` command covers one task only"
+        task_id = task_ids.pop()
+        if not auto_mode.names_task(text, task_id):
+            calls = session_work.load_work(transcript_path, since=when)
+            if not calls or not session_work.worked_on(
+                    calls, task_id, session_work.task_worktrees(ROOT, task_id)):
+                return (f"{task_id} is not the task of the `[admin]` request: the request does not "
+                        "name it and this session did not work on it since the request")
+        for _, branch, where in sorted(targets):
+            if committed_verify_row(task_id, branch, where, hook_only=True) is not True:
+                return (f"{task_id} has no passed auto verify committed on {branch} (a hook-written "
+                        "`auto-run by hook` row with its run record for that commit)")
+        return None
+    except Exception as exc:
+        return f"the `[admin]` check failed ({type(exc).__name__})"
+
+
+def auto_mode_blocker(command, cwd, transcript_path):
+    """The block line for a merge, push or pull while the latest request carries `[auto]` or
+    `[admin]`, or None (no such request, or `[admin]` allows this command)."""
+    latest = auto_mode.latest_request(transcript_path)
+    if latest is None or not auto_mode.auto_tagged(latest[1]):
+        return None
+    admin = auto_mode.admin_request(transcript_path)
+    if admin is None:
+        return "auto mode (`[auto]`): merge, push and pull stay the user's"
+    why = admin_refusal(command, cwd, transcript_path, admin)
+    return f"`[admin]` does not allow this command: {why}" if why else None
+
+
 # --- What to actually do about an unattributed Bash call (T095 defect B) ----
 #
 # This gate used to end its block with "a Bash command is attributed to a task
@@ -1353,6 +1479,15 @@ def main():
     if (not any(re.search(p, scannable) for p in BLOCKED_PATTERNS)
             and not defines_git_alias(scannable)):
         sys.exit(0)
+
+    # T284: in auto mode a merge, push or pull is the user's, unless `[admin]` allows this one.
+    if any(re.search(p, scannable) for p in AUTO_MODE_PATTERNS) or defines_git_alias(scannable):
+        auto_block = auto_mode_blocker(command, event.get("cwd"), transcript_path)
+        if auto_block:
+            print(json.dumps({"decision": "block", "reason": (
+                "[hook:pre_bash] Auto-mode gate — cannot push/merge:\n  • " + auto_block
+                + "\n" + AUTO_MODE_LIMIT)}))
+            sys.exit(0)
 
     # T157: in board mode `online` the board cache is refreshed before it is evaluated
     # (the pre-merge pull moment). A failed or hanging pull is a warning, and the gate

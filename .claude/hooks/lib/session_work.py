@@ -122,9 +122,11 @@ def _session_files(transcript_path):
     return [transcript_path] + sorted(glob.glob(pattern))
 
 
-def load_work(transcript_path):
+def load_work(transcript_path, since=None):
     """`[(tool name, input, cwd)]` for every call that may change a task — write tools, `Bash`,
-    `Agent` — in the session and its sub-agents, or None when ownership cannot be read."""
+    `Agent` — in the session and its sub-agents, or None when ownership cannot be read.
+    `since` (an aware datetime, T284) keeps only calls dated at or after it; a call with no
+    readable date is then dropped (the narrower answer)."""
     if not isinstance(transcript_path, str) or not os.path.isfile(transcript_path):
         return None
     calls = []
@@ -142,6 +144,10 @@ def load_work(transcript_path):
                     content = message.get("content") if isinstance(message, dict) else None
                     if entry.get("type") != "assistant" or not isinstance(content, list):
                         continue
+                    if since is not None:
+                        ts = parse_ts(entry.get("timestamp"))
+                        if ts is None or ts < since:
+                            continue
                     cwd = entry.get("cwd") if isinstance(entry.get("cwd"), str) else None
                     for block in content:
                         if (isinstance(block, dict) and block.get("type") == "tool_use"
