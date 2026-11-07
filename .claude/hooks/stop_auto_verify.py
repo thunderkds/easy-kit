@@ -63,8 +63,8 @@ line; T203 D6 keeps this scope, so an unmarked task's row stays in Ready for Rev
 run record proves the pass (D3), the task's evidence meets Hard-Stop Gates 5 and 6 (D2) and the report
 holds every required field (D9), it writes the report's `Closed:` line and moves the board row from
 Ready for Review to Done; otherwise it writes `Paused: done not moved — <reason>` and leaves the row.
-A `fail` or `blocked` verdict leaves the row untouched. Merge, push and `ship` stay with the user: the
-run issues no git command that writes. Fails open: any error is one stderr line, never a block.
+A `fail` or `blocked` verdict leaves the row untouched. The run never merges, pushes or runs `ship`: it
+issues no git command that writes (with `[admin]`, the Supervisor may merge and push afterwards, T284). Fails open: any error is one stderr line, never a block.
 """
 import json
 import os

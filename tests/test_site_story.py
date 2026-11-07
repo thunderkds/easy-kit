@@ -555,15 +555,21 @@ CHANGED_BY_T261 = {
     "00c6f8eb7a941ca7": "the Minimal track item names the /simplify pass and its reviewer exception (T261)",
 }
 
+# T284: the `[admin]` tag lets the Supervisor merge and push the task branch after a passed auto verify.
+CHANGED_BY_T284 = {
+    "596c0bfd2c49b939": "the Close-out paragraph scopes 'merge, push and ship stay with you' to [auto] and names [admin] (T284)",
+    "8e686e366761b120": "the stop_auto_verify.py hooks row gains the [admin] merge item (T284)",
+}
+
 
 def test_every_paragraph_item_cell_and_definition_of_the_old_page_is_on_docs():
     now = set(sentence_hashes(docs_html()))
-    missing = [(h, t) for h, t in _baseline()["sentences"] if h not in now and h not in CHANGED_BY_T239 and h not in CHANGED_BY_T240 and h not in CHANGED_BY_T245 and h not in CHANGED_BY_T251 and h not in CHANGED_BY_T256 and h not in CHANGED_BY_T261]
+    missing = [(h, t) for h, t in _baseline()["sentences"] if h not in now and h not in CHANGED_BY_T239 and h not in CHANGED_BY_T240 and h not in CHANGED_BY_T245 and h not in CHANGED_BY_T251 and h not in CHANGED_BY_T256 and h not in CHANGED_BY_T261 and h not in CHANGED_BY_T284]
     assert not missing, f"{len(missing)} text(s) lost from docs.html: {missing[:5]}"
 
 
 def test_every_listed_change_is_a_real_baseline_text():
-    assert set(CHANGED_BY_T239) | set(CHANGED_BY_T240) | set(CHANGED_BY_T245) | set(CHANGED_BY_T251) | set(CHANGED_BY_T256) | set(CHANGED_BY_T261) <= {h for h, _ in _baseline()["sentences"]}
+    assert set(CHANGED_BY_T239) | set(CHANGED_BY_T240) | set(CHANGED_BY_T245) | set(CHANGED_BY_T251) | set(CHANGED_BY_T256) | set(CHANGED_BY_T261) | set(CHANGED_BY_T284) <= {h for h, _ in _baseline()["sentences"]}
 
 
 def test_the_baseline_is_not_empty():

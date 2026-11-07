@@ -374,8 +374,9 @@ def _norm(text):
 
 
 def _auto_mode_section():
-    body = TRACKS.read_text(encoding="utf-8")
-    return body.split("## Auto mode", 1)[1].split("\n## ", 1)[0]
+    m = re.search(r"^## Auto mode\n(.*?)(?=^## |\Z)", TRACKS.read_text(encoding="utf-8"), re.M | re.S)
+    assert m, "no `## Auto mode` heading in tracks.md"
+    return m.group(1)
 
 
 def test_ac9_tracks_md_has_an_admin_tag_section_with_its_limits():
