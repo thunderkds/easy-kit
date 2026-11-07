@@ -3039,3 +3039,7 @@ On T278 a scratch copy that hid every section but `#skills` printed `2 under 44p
 ### 2026-11-07 — An implementer that writes `☑ N/A` in the `verify` row stops the auto verify from starting (T280)
 `stop_auto_verify.py --start` answered "its result is already filled for commit …, nothing started" because the frontend agent had ticked the `verify` row `N/A` ("only the auto run writes it"). The check treats any filled form as done. Tell implementers in the spawn prompt to leave the `verify` and Companion score rows in the template form; if it happens, restore the row from `templates/TASK_REVIEW_template.md`, commit, and start again.
 **Files**: .claude/hooks/stop_auto_verify.py, templates/TASK_REVIEW_template.md
+
+### 2026-11-07 — `self_review.py pre` is not read-only: it marks register rows `fixed` (T281)
+`cmd_pre` calls `mark_fixed` and rewrites `memory/self-review/register.md` when the fix task of an `open` row has merged (T257–T259 flipped to `fixed` on the first run after their merge). A Supervisor who runs `pre` leaves a tracked file modified on `main`. Say "no model call", never "read-only"; commit the register with the memory pass. A claim about what a script writes must come from running it, not from the docstring or memory.
+**Files**: skills/self-review/scripts/self_review.py, memory/self-review/register.md, docs/claude-md/pipeline-stages.md
