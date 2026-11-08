@@ -102,3 +102,31 @@ Real data check (read-only, `_raw_diff` between the recorded base and the verifi
 - `merge_gate_guard.AUTHORISED_TASKS` gains `T289` (the tripwire says the Supervisor signs this off).
 - Stale-text grep (LR-0005) for `skip` + verify wording: fixed `docs/claude-md/tracks.md` (3 places), `AGENTS.md`, `PROJECT_SPEC.md` glossary, `.claude/hooks/stop_auto_verify.py` docstring; added one sentence to `site/docs.html`. `README.md` says only "after its auto verify passes": true still, unchanged. Not mine to edit and still stale: `memory/learnings.md` entry "A docs-only task gets SKIP from auto verify, written as `blocked` (T283)", `memory/decisions.md` T283-T288 status line; `tasks/TASK_GUIDE_T250.md` "SKIP stays `blocked`" is history.
 - Open: `memory/**` and `tasks/TASK_GUIDE_*.md` are in the list as the guide says, but `memory/MEMORY.md` is injected into agent prompts and guides steer agents; a docs-only branch can change them. Consider excluding `memory/MEMORY.md` and `tasks/TASK_GUIDE_*.md` (one tuple edit plus one test).
+
+## Stage 4 round 1 (Supervisor review findings and what the implementing agent did)
+
+Findings: no P0/P1; P2-1 `refs/heads/main` is a mutable local ref; P2-2 `git replace` refs can show a fake commit; policy P2 the list was too wide (any file type under `tasks/`, `memory/`, `docs/`; every file under `tests/`; steering files); P3-1 `SAFE_PATH` used `match`; P3-3 stale text; P3-4 four guards with no red test. Supervisor decisions applied:
+
+1. **List tightened** (`verify_record.py`): under `tasks/`, `memory/`, `docs/` only `.md`, `.txt`, `.gitkeep`; `memory/MEMORY.md` and `tasks/**/TASK_GUIDE_*` out (compared in lower case); `tasks/TASK_REVIEW_*.md` and `tasks/MINIMAL_LOG.md` stay; under `tests/` and `.claude/hooks/tests/` only `test_*.py` and `tests/fixtures/`, never a `conftest.py`, a `*.sh`, `tests/lib/` or `merge_gate_guard.py`; `PROJECT_KANBAN_SITE.md` and `PROJECT_SPEC_SITE.md` also out. `tracks.md` states the list and the accepted risk that a `test_*.py` still runs at the next pytest collection.
+2. **`GIT_NO_REPLACE_OBJECTS=1`** on `verify_record._git`, which every git read of the skip-pass path uses (the hook's `docs_only_change`, the gate's `record_confirms_pass`, `head_commit`, `same_code`). Test `test_stage4_git_replace_cannot_show_a_fake_docs_only_history` builds a `git replace` fake commit; control inside the test shows git does show the fake diff.
+3. **P2-1 documented, not fixed**: `test_known_limit_a_local_main_ref_moved_onto_the_runtime_change_hides_it` pins the exact repro (`git update-ref refs/heads/main <runtime commit>`); `tracks.md` `### Known limits` says it is part of the T182 record trust root and that `_main_push_refusal` still ties a push of `main` to the real remote. Local hardening ("base is also an ancestor of `refs/remotes/origin/main`") **not added**: local `main` normally carries unpushed commits (plan commits), so it would turn most real branches into false blocks.
+4. **P3-1** `SAFE_PATH.fullmatch`; tests for `tasks/a.md\n` (unit and a real git file). **P3-3** fixed in `tracks.md` (verdict words `PASS`, `FAIL` or `SKIP`; Notes and slot shape), `stop_auto_verify.py` docstring, `VERDICTS` (now lists `skip-pass`), `_raw_diff` docstring. **P3-4** new tests for `--ignore-submodules=none` (a `.gitmodules` `ignore = all` repo; control shows git's default output hides the moved submodule), the ancestor-of-commit check (a `main` commit holding the same runtime file), the full-hash check on `base`, the leading `/`.
+
+Round-1 mutation controls (byte-changing, `git diff` shown by the script, restored by `git checkout`; run against the new test file, 222 tests):
+
+| # | Mutation | Result |
+|---|---|---|
+| N1 | drop `--ignore-submodules=none` | 1 failed (`test_stage4_an_ignore_all_gitmodules_entry_...`) |
+| N2 | drop `merge-base --is-ancestor base sha` | 1 failed (`test_stage4_a_base_that_is_not_an_ancestor_of_the_commit_blocks`) |
+| N3 | drop the full-hash check in `_raw_diff` | 1 failed (`test_stage4_a_base_must_be_a_full_hash`) |
+| N3b | drop the full-hash check in `record_confirms_pass` | **222 passed, cannot be made red**: `_raw_diff` re-checks both hashes, so the second layer decides the same result (defence in depth) |
+| N4 | drop the leading-`/` guard | **222 passed, cannot be made red**: the next clause (`part in ("", ".", "..")`) rejects the empty first part, and a `/tasks/...` path never starts with an allowed prefix anyway (redundant guard; test kept as a behaviour pin) |
+| N5 | leave git replace refs on | 1 failed (`test_stage4_git_replace_...`) |
+| N6 | `SAFE_PATH.match` instead of `fullmatch` | 11 failed |
+| N7 | any file type under `tasks/`, `memory/`, `docs/` | 13 failed |
+| N8 | steering files allowed | 10 failed |
+| N9 | `conftest`/`*.sh`/`tests/lib/` allowed | 5 failed |
+| N10 | any file allowed under `tests/` | 6 failed |
+| N11 | the two `*_SITE.md` root files allowed | 4 failed (first attempt changed no bytes and was redone) |
+
+Under the tighter list T283 `880e93b7` still gives `['tasks/SPIKE_REPORT_T283.md', 'tasks/TASK_REVIEW_T283.md']` and T286 `396afdd5` still gives `['tasks/TASK_REVIEW_T286.md', 'tests/test_claude_md_slim.py']`: both are still skip-passes. Counts after round 1: guide command 1 `951 passed, 1171 deselected in 38.94s`; full suite `4081 passed, 25 subtests passed in 296.24s`; new file 222 tests. `AGENTS.md` unchanged (21724 bytes, cap unchanged).
