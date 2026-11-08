@@ -145,7 +145,8 @@ T069_BASELINE_REF = "8d6d56b"
 # REPOINTED AGAIN by T284 (`46c013fc` -> `6258406b`, T284's docs commit; the Tracks paragraph gains one sentence naming the `[admin]` tag and its limit, required by TASK_GUIDE_T284 AC 9 from the user's request of 2026-11-08). Nothing collapsed. Repointed, NOT deleted.
 # REPOINTED AGAIN by T284 (AC 10) (`6258406b` -> `f46a854a`, T284's AC 10 commit; the same Tracks sentence gains "the Supervisor starts that run itself, waits, and on `skip`, `blocked` or `fail` merges nothing", from the user's request of 2026-11-08). Nothing collapsed. Repointed, NOT deleted.
 # REPOINTED AGAIN by T284 (AC 8, push of `main`) (`f46a854a` -> `250e04ee`, T284's docs commit; the same Tracks sentence gains "then push `main` after that merge", user decision 2026-11-08). Nothing collapsed. Repointed, NOT deleted.
-T070_BASELINE_REF = "250e04ee"  # T284 AC 8 (was f46a854a)
+# REPOINTED AGAIN by T284 (Stage 4 fix round) (`250e04ee` -> `c566b2b6`, T284's Stage 4 docs commit; the Tracks paragraph's never-list gains "pulls", code-review finding 2026-11-08). Nothing collapsed. Repointed, NOT deleted.
+T070_BASELINE_REF = "c566b2b6"  # T284 Stage 4 (was 250e04ee)
 
 # T082's own edit commit (same commit as the repoint above). T082 adds a mandatory Base Rule bullet
 # to `general-agent-template.md` too (the same untrusted-content pointer) — a legitimate, required
