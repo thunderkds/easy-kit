@@ -74,8 +74,13 @@ GATE_REL = ".claude/hooks/pre_bash_block_unsafe_merge.py"
 #   T291 — `TEST_INVOCATION_PATTERN` counts `python3 [-B -u -O -s -E -I] -m pytest|unittest` as a
 #          test run; no other command starts to count (`tasks/TASK_GUIDE_T291.md`, AC 1-3). User
 #          request, 2026-11-08; the Supervisor signs this line off at Stage 4.
+#   T296 — in auto mode a git word or git verb that is not a plain literal word (and `send-pack`) is
+#          a block; the value of a `git merge` option is never the branch; a branch push goes only to
+#          the repository's own remote; `invokes_test_runner` reads backslashes as the shell does
+#          (`tasks/TASK_GUIDE_T296.md`, AC 1-3, 5-7). User request, 2026-11-08; the Supervisor signs
+#          this line off at Stage 4.
 AUTHORISED_TASKS = ("T182", "T188", "T190", "T197", "T196", "T210", "T211", "T232", "T250", "T284",
-                    "T289", "T291")
+                    "T289", "T291", "T296")
 
 
 def _git(root, *args):
