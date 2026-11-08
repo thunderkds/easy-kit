@@ -61,16 +61,48 @@ task, while the Supervisor works on several. They need two remedies, because onl
 signal on the call itself (the directory it runs in). C leaves one on an earlier call of the same
 session (`resolve-question` `task=T242`, its documented `Args:`).
 
+## Stage 4 fix round (2026-11-08)
+
+Security review: one P0, one P1, three P2 and two P3 findings, all confirmed by the reviewer's experiments E1-E9. Each experiment is now a red test in `.claude/hooks/tests/test_stop_attribution_t287.py`. The tests were committed red in `c687279e` (`14 failed, 20 passed`; the `pushd` case was already blocked); the fix is in `deac1d5d`.
+
+| Finding | What I did |
+|---------|------------|
+| **P0** slot 2b filed a test run that did not run in X's worktree, or did not run at all (E1 comment, E2 main checkout then `cd`, E3 `/tmp` then `cd`, E4 subshell `cd`) | **Fixed.** `.claude/hooks/lib/task_context.py` `_run_dirs` / `_task_id_from_worktree`: a call is filed under X only when EVERY simple command runs in X's worktree. A command in the main checkout, in a directory that is no worktree, in an unknown directory or in another task's worktree gives None, so the session pointer decides. None also for any `#` comment token, `(` / `)`, `$(` or backticks, a background `&` (including a trailing one), a pipe after `cd`, and `pushd` / `popd`. Tests: `test_p0_*` (10 cases). The positive T120 cases (`cd <wt-t120> && python3 -m pytest …`) stay green. |
+| **P1** `_debate_counts` counted an Advocate `tool_use` that a hook or the user denied (E7) | **Fixed.** `.claude/hooks/stop_auto_mode_check.py`: an Advocate `tool_use` counts only when a `tool_result` for its id, in the same file, is not an error. The max(trace, session) rule is kept. Tests: `test_p1_*` (no result; an error result). The fixture `Session.call` now writes real `tool_result` entries with unique ids. |
+| **P2a** a raising slot 2b (no `git`, timeout, OSError) dropped the whole resolution to `_untagged` (E5) | **Fixed.** `resolve_task_id` wraps slot 2b in its own `try`, so slots 3-5 still run. Test: `test_p2_slot_2b_failing_falls_through_to_the_pointer` (`PATH=/nonexistent`, filed under T250). |
+| **P2b** forged `subagents/agent-*.jsonl` or a symlink to another session's transcript was read (E6, E8) | **Fixed in the T287 code path only.** `session_work.py` was last changed by T284 (`f654ee3c`), so I left it alone and added `_own_session_files` in `stop_auto_mode_check.py`: it skips symlinks, and `_debate_counts` reads only entries whose `sessionId` equals this session's id. The docstring and `tracks.md` now say what is enforced. A file planted in this session's folder with this session's id is still read; only the `.claude/settings.json` deny rules (T251) protect that folder. Tests: `test_p2_a_forged_sub_agent_transcript_is_not_read`, `test_p2_a_symlink_to_another_sessions_transcript_is_not_read`. |
+| **P2c** docs said "all run in live worktrees" while the code also filed when some ran elsewhere | **Fixed.** `docs/claude-md/tracks.md` `### Auto-mode check (Stop hook)` and `### Known limits`, and the `task_context.py` slot 2b docstring, now state the every-command rule, the forms that block it, and that a main-checkout command blocks the filing. `test_ac6_*` pins the new sentences. |
+| **P3** `DEBATE_TASK` took the first `task=` anywhere, including quoted question text (E9) | **Fixed.** `_debate_task` splits `args` with `shlex` and takes the last whole top-level `task=<ID>` token. Test: `test_p3_*`, run as a subprocess Stop check (so no in-process `main()` waits on stdin). |
+| **P3** `git worktree list --porcelain` without `-z` | **Fixed.** `-z`, fields split on NUL. |
+| **P3** session window (Debates of the whole session count, not only recent ones) | **Skipped, follow-up.** Not part of this round, as the coordinator asked. Today a Debate counts for its named task for the whole session. |
+
+Mutation controls for the new guards (each `git diff --stat` = `1 file changed, 1 insertion(+), 1 deletion(-)`, restored with `git checkout`, then green). Run at `4d5a73ed`:
+
+```
+N1  return None -> continue for a non-worktree dir  task_context.py | 2 +-  RED 1 failed  / GREEN 1 passed  (e3-tmp-then-cd)
+N3  drop the `#` comment guard                     task_context.py | 2 +-  RED 1 failed  / GREEN 1 passed  (e1-comment-after-cd)
+N4  follow `(` `)`                                 task_context.py | 2 +-  RED 1 failed  / GREEN 1 passed  (e4-subshell)
+N5  narrow the slot 2b try to KeyError             task_context.py | 2 +-  RED 1 failed  / GREEN 1 passed  (p2 falls through)
+N6  count a tool_use without a non-error result    stop_auto_mode_check.py | 2 +-  RED 2 failed / GREEN 2 passed (p1 x2)
+N7  read symlinked sub-agent files                 stop_auto_mode_check.py | 2 +-  RED 1 failed  / GREEN 1 passed  (p2 symlink)
+N8  drop the sessionId check                       stop_auto_mode_check.py | 2 +-  RED 1 failed  / GREEN 1 passed  (p2 forged)
+N9  first task= token, not the last                stop_auto_mode_check.py | 2 +-  RED 1 failed  / GREEN 1 passed  (p3)
+N10 porcelain without -z                           task_context.py | 2 +-  RED 1 failed  / GREEN 1 passed  (ac2 t120)
+N2  `any(d == root)` -> `all(...)`                 task_context.py | 2 +-  stays green (1 passed)
+```
+
+N2 stays green by design. The main checkout is never in the worktree list, so N1's rule already blocks a main-checkout command. The `any(d == root)` line only skips the `git` call; it is not a separate guard. Two tests were adjusted so that one guard does not hide another: `e1-comment-after-cd` (the comment comes after the `cd`), and the forged and symlinked transcripts now carry non-error results (`4d5a73ed`). My earlier positive case `cd <main>; printf …; cd ../wt-t120 && pytest` now correctly says nothing (it has a main-checkout command), so it became `cd ../wt-t120 && python3 -m pytest -q 2>&1 | tail -3` from the main checkout.
+
 ## Evidence
 
 | Check | Result | Notes / output snippet |
 |-------|--------|------------------------|
-| **New test(s) cover Acceptance Criteria (file paths pasted)** | ☑ pass | `.claude/hooks/tests/test_stop_attribution_t287.py` (19 tests, written first; 6 red against the unchanged hooks at `a4e0221b`, see BEFORE). AC 1b/2: `test_ac2_t120_*` (2); AC 1c/2: `test_ac2_t242_advocates_of_its_own_debate_are_found`; AC 3: `test_ac3_*` (5); AC 4: `test_ac4_*` (7); AC 5: `test_ac5_*` (3); AC 6: `test_ac6_tracks_md_states_the_new_attribution`. After `86a91d88`: `19 passed in 3.01s` |
-| Verification command run | ☑ pass | `python3 -m pytest .claude/hooks/tests/test_stop_attribution_t287.py -q` → `19 passed in 3.01s` (head `86a91d88`) |
-| Negative cases hold | ☑ pass | AC 3/AC 4 negatives pass before and after the change (9 of the BEFORE run's passes). Six byte-changing mutation controls, each `git diff --stat` non-empty, red then restored (`git checkout`) green: M1 `stop_auto_mode_check.py \| 2 +-` (credit every trace file to every task) → `test_ac4_another_sessions_debate_is_not_credited` `1 failed` / `1 passed`; M2 `task_context.py \| 8 ++++----` (slot 2b after the pointer) → `test_ac2_t120_tests_run_in_its_worktree_are_found` `1 failed` / `1 passed`; M3 `task_context.py \| 2 +-` (any worktree counts) → `test_ac4_a_test_run_in_another_tasks_worktree_is_not_credited_to_the_pointer` `1 failed` / `1 passed`; M4 `stop_auto_mode_check.py \| 2 +-` (a Debate counts for every task) → `test_ac4_advocates_of_a_debate_for_another_task_are_not_credited` `1 failed` / `1 passed`; M5 `task_context.py \| 2 +-` (`per_call=True` by default, reaches the safety hook and step limit) → `test_ac5_the_safety_hook_and_the_step_limit_still_resolve_by_the_pointer` `1 failed` / `1 passed`; M6 `stop_auto_mode_check.py \| 2 +-` (sum, not max) → `test_ac3_an_advocate_filed_right_is_not_counted_twice` `1 failed` / `1 passed` |
+| **New test(s) cover Acceptance Criteria (file paths pasted)** | ☑ pass | `.claude/hooks/tests/test_stop_attribution_t287.py`, 35 tests. First round: 19 tests, written first, 6 red on the unchanged hooks at `a4e0221b` (see BEFORE). AC 1b/2: `test_ac2_t120_*` (2); AC 1c/2: `test_ac2_t242_*`; AC 3: `test_ac3_*`; AC 4: `test_ac4_*`; AC 5: `test_ac5_*`; AC 6: `test_ac6_*`. Stage 4 round: 16 more (`test_p0_*` 10, `test_p1_*` 2, `test_p2_*` 3, `test_p3_*` 1), committed red in `c687279e` (`14 failed, 20 passed`). At `4d5a73ed`: `35 passed in 5.43s` |
+| Verification command run | ☑ pass | `python3 -B -m pytest .claude/hooks/tests/test_stop_attribution_t287.py -q` → `35 passed in 5.43s` (head `4d5a73ed`) |
+| Negative cases hold | ☑ pass | First round: M1-M6, each `git diff --stat` non-empty, red then green after `git checkout`: M1 credit every trace file to every task → `test_ac4_another_sessions_debate_is_not_credited`; M2 slot 2b after the pointer → `test_ac2_t120_tests_run_in_its_worktree_are_found`; M3 any worktree counts → `test_ac4_a_test_run_in_another_tasks_worktree_is_not_credited_to_the_pointer`; M4 a Debate counts for every task → `test_ac4_advocates_of_a_debate_for_another_task_are_not_credited`; M5 `per_call=True` by default → `test_ac5_the_safety_hook_and_the_step_limit_still_resolve_by_the_pointer`; M6 sum, not max → `test_ac3_an_advocate_filed_right_is_not_counted_twice`; each `1 failed` / `1 passed`. Stage 4 round: N1, N3-N10 red then green, N2 green by design (see § Stage 4 fix round) |
 | verify | ☐ pass / ☐ fail / ☐ N/A | [what was observed — must literally state "pass" or "fail" here too, e.g. "skill run, feature confirmed working — pass": the merge gate scans this Notes column for the word "pass", not just the Result column] |
 | Review scope bounded to the change's blast radius (affected set, not whole repo) | ☐ pass / ☐ fail | [what was reviewed vs. skipped, and why] |
-| Full smoke suite still green (no regression) | ☑ pass | `python3 -m pytest .claude/hooks/tests/ tests/ -q` at head `86a91d88` (2026-11-08T00:35:07Z–00:38:31Z): `1 failed, 3562 passed, 25 subtests passed in 203.28s`. The 1 failure is `tests/test_spike_report_t283.py::test_the_real_report_is_valid` — `tasks/SPIKE_REPORT_T283.md is not written yet`: that file is only on `feat/t283-karpathy-spikes`, the test came in with `faa5180f`, and T287 touches neither (no regression from this change) |
+| Full smoke suite still green (no regression) | ☑ pass | `python3 -B -m pytest .claude/hooks/tests/ tests/ -q` at head `4d5a73ed` (2026-11-08T00:51:37Z–00:54:58Z): `1 failed, 3578 passed, 25 subtests passed in 201.30s`. The 1 failure is `tests/test_spike_report_t283.py::test_the_real_report_is_valid` — `tasks/SPIKE_REPORT_T283.md is not written yet`: that file is only on `feat/t283-karpathy-spikes`, and T287 touches neither (no regression from this change) |
 | **Companion score (easy-verifier)** | ☐ pass / ☐ fail / ☐ N/A | [`overall` and `change_risk` as the tool returned them, the scope, the ref, and the absolute path of the verifier report after a literal `report:` label — e.g. "overall 86 (>= 80), change_risk pass, scope changes, ref `main...HEAD`, report: `/home/me/.easy-verifier-reports/kit/score_changes_20261028T0530Z.html`". The gate reads the path that follows `report:` and nothing else, so with no label, or a path that is absent, the row is unscored — write ☑ N/A instead. ☑ N/A with a reason when neither companion tool was run: the merge gate blocks on ☑ fail only, never on an absent or N/A row] |
 | **UI: Visual regression (diff or verdict pasted)** | ☑ N/A | pure hook code and doctrine text: no UI component, no `site/` change |
 | **UI: Design-system compliance (tokens/colors/typography verified)** | ☑ N/A | pure hook code and doctrine text: no UI component, no `site/` change |
@@ -113,12 +145,14 @@ The T120 fixtures pause on check (7) (`no test run in memory/event-trace/T120.js
 fixture pauses on check (3) (`the trace has 0`). The 9 that pass before the change are the
 negatives (AC 3, AC 4) and the stops that stay (AC 5): they must hold before and after.
 
-**AFTER** (same command, head `86a91d88`):
+**AFTER** (same command; first round at head `86a91d88`, Stage 4 round at `4d5a73ed`):
 
 ```
 $ python3 -m pytest .claude/hooks/tests/test_stop_attribution_t287.py -q
 ...................                                                      [100%]
 19 passed in 3.01s
+$ python3 -B -m pytest .claude/hooks/tests/test_stop_attribution_t287.py -q   # 4d5a73ed
+35 passed in 5.43s
 ```
 
 Against the real repo (`CLAUDE_PROJECT_DIR` = the main checkout), slot 2b files
