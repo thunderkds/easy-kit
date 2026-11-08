@@ -49,7 +49,7 @@ python3 "${CLAUDE_PLUGIN_ROOT}/skills/settings-setup/scripts/apply_profile.py" h
 ```
 
 The script only adds: every existing key, hook and rule stays as it is. If the user says no, write
-nothing and say that the file did not change. In auto mode (`[auto]`), ask nothing and write
+nothing and say that the file did not change. In auto mode (`[auto]`/`[admin]`), ask nothing and write
 nothing: put the dry-run lines in the final report as yours to approve.
 
 ## Step 3 — Report

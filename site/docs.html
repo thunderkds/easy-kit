@@ -411,8 +411,8 @@
     <li class="flow-node"><span class="step-no">05</span><span class="flow-title">Close-out</span><span class="flow-meta">Gates 5 and 6, report complete</span></li>
     <li class="flow-node is-outcome"><span class="step-no">06</span><span class="flow-title">Done</span><span class="flow-meta">row moved by the hook</span></li>
   </ol>
-  <div class="flow-lane" data-owner="you" role="group" aria-label="Stays with you, never in auto mode">
-    <span class="flow-lane-label">Stays yours</span>
+  <div class="flow-lane" data-owner="you" role="group" aria-label="Stays with you in auto mode; with [admin] the Supervisor may merge and push after a passed verify">
+    <span class="flow-lane-label">Stays yours with [auto]</span>
     <ul class="flow-chips"><li class="chip">merge</li><li class="chip">push</li><li class="chip">ship</li></ul>
   </div>
 </div>
@@ -460,7 +460,9 @@
   <strong>Close-out:</strong> after a pass, the hook moves the row to Done only if the run record proves the pass,
   the tests row and the UI rows hold, and the report is complete. With <code>CLAUDE_AUTO_VERIFY=off</code>,
   <code>/verify</code> is yours again for every task without <code>[auto]</code>.
-  <strong>Merge, push and ship stay with you.</strong>
+  <strong>With <code>[auto]</code>, merge, push and ship stay with you.</strong>
+  With <code>[admin]</code> instead, the run is the same, and the Supervisor may also merge and push the task's own branch, and then push <code>main</code>, only after its auto verify passed.
+  A force push or a push of any other branch stays blocked, and <code>ship</code> stays with you.
 </p></details>
 </section>
 
@@ -1991,7 +1993,7 @@ curl -fsSL https://raw.githubusercontent.com/$GITHUB_USERNAME/easy-kit/main/setu
 <tr><td data-label="Event">PostToolUse</td><td data-label="Matcher"><code>.*</code></td><td data-label="Script"><code>post_tool_trace.py</code></td><td data-label="Behavior"><span class="tag tag-advise">advises</span> — appends every tool call to <code>memory/<wbr>event-<wbr>trace/<wbr>&lt;task&gt;.jsonl</code>; <code>scripts/<wbr>verify_<wbr>trace.py &lt;task&gt;</code> reports whether the trace still matches <details><summary>How an edit shows</summary><p>Each line is linked to the one before by a hash chain, with a copy of each line's hash kept outside the repo under <code>~/.claude/<wbr>harness-<wbr>anchors/</code>.</p></details></td></tr>
 <tr><td data-label="Event">Stop</td><td data-label="Matcher">—</td><td data-label="Script"><code>stop_<wbr>review_<wbr>reminder.py</code></td><td data-label="Behavior"><span class="tag tag-advise">advises</span> — reminds the Supervisor to run Stage 4 review for pending tasks</td></tr>
 <tr><td data-label="Event">Stop</td><td data-label="Matcher">—</td><td data-label="Script"><code>stop_<wbr>auto_<wbr>mode_<wbr>check.py</code></td><td data-label="Behavior"><span class="tag tag-block">blocks</span> the end of an <code>[auto]</code> run until its final report checks out — once; the second try stops <details><summary>What it checks</summary><ul><li>The report is in its file, marked <code>Mode: auto</code></li><li>Each Medium/High-risk choice was argued by 2 or 3 Advocates</li><li>Stage 4 review ran</li></ul></details></td></tr>
-<tr><td data-label="Event">Stop</td><td data-label="Matcher">—</td><td data-label="Script"><code>stop_<wbr>auto_<wbr>verify.py</code></td><td data-label="Behavior"><span class="tag tag-advise">advises</span> — starts one headless <code>/verify</code> run per commit for an <code>[auto]</code> task that waits for review <details><summary>What the run does</summary><ul><li>It writes the <code>verify</code> row and a run record</li><li>The merge gate accepts that row only with the record</li><li>The merge stays yours</li></ul></details></td></tr>
+<tr><td data-label="Event">Stop</td><td data-label="Matcher">—</td><td data-label="Script"><code>stop_<wbr>auto_<wbr>verify.py</code></td><td data-label="Behavior"><span class="tag tag-advise">advises</span> — starts one headless <code>/verify</code> run per commit for an <code>[auto]</code> task that waits for review <details><summary>What the run does</summary><ul><li>It writes the <code>verify</code> row and a run record</li><li>The merge gate accepts that row only with the record</li><li>The merge stays yours</li><li>With <code>[admin]</code>, the Supervisor may merge and push the task branch after a pass</li></ul></details></td></tr>
 </tbody>
 </table>
 </div>

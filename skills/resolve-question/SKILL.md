@@ -14,7 +14,7 @@ Terms (`PROJECT_SPEC.md` glossary): **Citation** = `file:line` plus the quoted t
 not "evidence", which is the TASK_GUIDE Evidence table. **Fact question** = the repo can answer it
 with a Citation. **Choice question** = only the user can decide it (scope, trade-off, preference).
 **Scanner** = a read-only `Explore` agent that searches one area. **Auto mode** = the
-request carries `[auto]` (`docs/claude-md/tracks.md`).
+request has `[auto]`/`[admin]` (`docs/claude-md/tracks.md`).
 
 ---
 

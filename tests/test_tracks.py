@@ -132,7 +132,7 @@ def test_ac1_flow_states_the_one_stop_and_what_it_omits():
     _, body = _flow_steps()
     assert "ask one clear question and stop" in body, "the only stop (unclear request) is missing"
     assert re.search(r"[Nn]o task guide, no sub-agent, no Stage 4 skills", body)
-    assert re.search(r"[Mm]erge is never automatic", body)
+    assert re.search(r"[Mm]erge is automatic only under `\[admin\]`", body)  # T284 (was "never automatic")
     # Edge case: a fact about the code is not a stop — the Supervisor reads the code.
     assert re.search(r"fact[^.]*code[^.]*not a stop", body, re.I)
 

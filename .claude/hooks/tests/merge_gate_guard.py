@@ -62,7 +62,11 @@ GATE_REL = ".claude/hooks/pre_bash_block_unsafe_merge.py"
 #          `/verify <ID>` entry in that session's transcript and the same code as the head; an In
 #          Progress task blocks a merge only when this session worked on it, the merge brings in its
 #          branch, or that cannot be told (`tasks/TASK_GUIDE_T250.md`). User-approved, 2026-11-04.
-AUTHORISED_TASKS = ("T182", "T188", "T190", "T197", "T196", "T210", "T211", "T232", "T250")
+#   T284 — while the latest user request carries `[auto]` or `[admin]`, a merge, push or pull is
+#          blocked; `[admin]` allows one merge or plain push of the request's own task branch, only
+#          with the hook's `auto-run by hook` verify result and its run record committed on that
+#          branch (`tasks/TASK_GUIDE_T284.md`). User request and scope answers, 2026-11-08.
+AUTHORISED_TASKS = ("T182", "T188", "T190", "T197", "T196", "T210", "T211", "T232", "T250", "T284")
 
 
 def _git(root, *args):

@@ -29,7 +29,8 @@ or a `Mode: auto` line, and the newest `tasks/MINIMAL_LOG.md` record carrying `M
 can never disagree about which tasks are in auto mode. Skipped as finished: a task whose row is in
 Done, and a review file whose `verify` row has `☑ pass` in its Result cell. A board row counts as
 auto mode when its report is marked as above, or the task's files changed while a request carrying
-`[auto]` (outside code spans) was the latest user request — up to the next request without it (T229).
+`[auto]` or `[admin]` (T284; outside code spans) was the latest user request — up to the next request
+without it (T229).
 T250: that last rule also needs this session's own work on the task (`lib/session_work.py`): an edit,
 a writing `Bash` command or a spawn for it, by the session or its sub-agents. A parallel session's task
 whose files changed in the same window is not checked. Ownership that cannot be read keeps the check.
@@ -115,7 +116,6 @@ ADVOCATE_DESCRIPTION = re.compile(r"Advocate \d+:")
 D10_REASON = "Risk High, but no decision was DEBATED with 3 Advocates"
 WINDOW_DEFAULT_S = 6 * 3600
 
-CODE = re.compile(r"```.*?```|`[^`\n]*`", re.S)
 RISK = re.compile(r"\bRisk(?: Level)?\**:\**\s*(Low|Med(?:ium)?|High)\b")
 LABEL = re.compile(r"\b(DEBATED|SAFER OPTION|RULE|FACT):")
 # D9: at Risk Medium/High a RULE must name a written rule, a FACT must carry a Citation.
@@ -145,33 +145,15 @@ def parse_ts(value):
         return None
 
 
-# T229: not a user request — the harness writes these as `user` entries too
-NOT_A_REQUEST = re.compile(r"\s*<(task-notification|bash-input|bash-stdout|bash-stderr|local-command)")
-
-
-def request_text(entry):
-    """The text of a user request in a transcript entry, or None for any other entry (a tool
-    result, a task notification, a skill body or reminder, the compact summary, a `!` command)."""
-    if not isinstance(entry, dict) or entry.get("type") != "user":
-        return None
-    if entry.get("isMeta") or entry.get("isCompactSummary"):
-        return None
-    origin = entry.get("origin")
-    if isinstance(origin, dict) and origin.get("kind") not in (None, "human"):
-        return None
-    content = (entry.get("message") or {}).get("content")
-    if isinstance(content, list):
-        content = " ".join(b.get("text", "") for b in content
-                           if isinstance(b, dict) and b.get("type") == "text")
-    if not isinstance(content, str) or not content.strip() or NOT_A_REQUEST.match(content):
-        return None
-    return content
+# T229: what a user request is, and T284: which tags it carries — read by `lib/auto_mode.py`, the
+# one reader the merge gate shares.
+request_text = am.request_text
 
 
 def auto_windows(transcript_path):
     """(start, end) spans the session's `[auto]` requests cover (T229). A request carrying `[auto]`
-    outside code spans opens a span; the next request without it closes the span (end None: still
-    open). Before T229 the first `[auto]` request covered the rest of the session, so a task done
+    (or `[admin]`, T284) outside code spans opens a span; the next request without it closes the
+    span (end None: still open). Before T229 the first `[auto]` request covered the rest of the session, so a task done
     in normal mode later was checked as an auto-mode task."""
     if not transcript_path or not os.path.isfile(transcript_path):
         return []
@@ -189,7 +171,7 @@ def auto_windows(transcript_path):
                 ts = parse_ts(entry.get("timestamp"))
                 if ts is None:
                     continue
-                if am.TAG in CODE.sub(" ", text):
+                if am.auto_tagged(text):  # T284: `[admin]` opens the window as `[auto]` does
                     if start is None:
                         start = ts
                 elif start is not None:

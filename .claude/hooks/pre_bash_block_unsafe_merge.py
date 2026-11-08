@@ -18,6 +18,9 @@ scripts that call git, and `gh pr merge` are out of scope too.
 
 T232: the project comes from `lib/project_root.py`, and from a plugin the hook stands down in a
 non-kit project. Inside one, input it cannot read is a block: it cannot tell the call is not a push.
+
+T284: while the session's latest user request carries `[auto]` or `[admin]`, a merge, push or pull
+is blocked, unless `[admin]` allows that one command (see `auto_mode_blocker`).
 """
 import json
 import os
@@ -25,6 +28,7 @@ import re
 import shlex
 import subprocess
 import sys
+import time
 from datetime import datetime, timezone
 
 HOOKS_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -439,9 +443,10 @@ def has_filled_verify_row(task_id, tasks_dir=None):
     return False
 
 
-def verify_row_passes(section, confirm):
+def verify_row_passes(section, confirm, hook_only=False):
     """True when an Evidence `section` holds a filled `verify` pass row. `confirm(notes, None)`
-    decides an `auto-run by hook` row (T182 D5): against which commit is the caller's choice."""
+    decides an `auto-run by hook` row (T182 D5): against which commit is the caller's choice.
+    `hook_only` (T284) counts only such a row: a hand-typed pass row is skipped."""
     if not section:
         return False
     for match in VERIFY_ROW_PATTERN.finditer(section):
@@ -452,6 +457,8 @@ def verify_row_passes(section, confirm):
         # `auto-run by hook` row counts only with its run record (D5) for this task and the
         # head commit of the checkout (or branch) this row was read from.
         if AUTO_CHECKED_TAG in notes:
+            continue
+        if hook_only and AUTO_ROW_TAG not in notes:
             continue
         if AUTO_ROW_TAG in notes and not confirm(match.group("notes"), None):
             continue
@@ -559,10 +566,11 @@ def _auto_row_confirmed_at(directory, task_id, notes, tip, report_rel=None):
     return same_code(directory, task_id, sha, tip, report_rel)
 
 
-def committed_verify_row(task_id, branch, directory):
+def committed_verify_row(task_id, branch, directory, hook_only=False):
     """True/False: whether `branch`'s tip, read in `directory`, commits a filled `verify` row (or a
     confirmed minimal-track `verify:` line) for `task_id`. None when the tip cannot be resolved —
-    the caller then keeps the pre-T210 working-tree read. Never raises."""
+    the caller then keeps the pre-T210 working-tree read. `hook_only` (T284) accepts only the
+    hook's own `auto-run by hook` result, confirmed by its run record. Never raises."""
     try:
         done = _git(directory, "rev-parse", "--verify", "--quiet", f"{branch}^{{commit}}")
         tip = done.stdout.strip() if done is not None and done.returncode == 0 else ""
@@ -581,13 +589,13 @@ def committed_verify_row(task_id, branch, directory):
                     for prefix in (GUIDE_PREFIX, REVIEW_PREFIX)
                     for rel in _candidate_paths("tasks", prefix, normalized))
         if verify_row_passes(next((s for s in sections if s is not None
-                                   and not is_pointer_only(s)), None), confirm):
+                                   and not is_pointer_only(s)), None), confirm, hook_only):
             return True
         block = record_block(show(MINIMAL_LOG_REL) or "", task_id, skip_comments=True)
-        return any(minimal_line_passes(
-            line, confirm,
+        user = None if hook_only else (
             lambda notes: user_line_confirmed(directory, task_id, notes, tip, ref=tip))
-            for line in (record_verify_lines(block[2]) if block else []))
+        return any(minimal_line_passes(line, confirm, user)
+                   for line in (record_verify_lines(block[2]) if block else []))
     except Exception:
         return False
 
@@ -899,10 +907,11 @@ def _current_branch(directory):
     return name if name and name != "HEAD" else None
 
 
-def _push_config_is_plain(directory):
+def _push_config_is_plain(directory, keys=PUSH_CONFIG_KEYS):
     """True only when no config in `directory` can send a push somewhere its refspec
-    does not say: no `remote.*.push`, no `remote.*.mirror`, `push.default` simple/current."""
-    done = _git(directory, "config", "--get-regexp", PUSH_CONFIG_KEYS)
+    does not say: no `remote.*.push`, no `remote.*.mirror`, `push.default` simple/current.
+    T284 passes `ADMIN_PUSH_CONFIG_KEYS`, which also refuses URL rewrites and hook/pack config."""
+    done = _git(directory, "config", "--get-regexp", keys)
     if done is None:
         return False
     if done.returncode == 1 and not done.stdout.strip():
@@ -1256,6 +1265,404 @@ def session_owned_in_progress(rows, command, cwd, transcript_path):
         return ids
 
 
+# --- Auto mode: merge and push stay the user's, except under `[admin]` (T284) ---------------
+#
+# While the session's latest user request carries `[auto]` or `[admin]` (`lib/auto_mode.py`, the
+# reader the Stop check shares), a `git merge`, `git push` or `git pull` — or an inline git alias,
+# which may be one — is blocked. Before T284 "never in auto mode: merge, push" was doctrine only:
+# this gate did not read the tag. `git rebase` is not part of this rule; it keeps its board check.
+#
+# `[admin]` lifts that block for one command, and only when every one of these holds (any doubt is
+# a block):
+#   * the latest request is one the user typed (`origin.kind` "human", not a sidechain) and carries
+#     `[admin]` outside code spans and `>` quoted lines — `auto_mode.admin_request`;
+#   * each git action of the command is `git merge <one branch>` or a plain `git push` of a branch
+#     to the same branch name: no force flag, no `+refspec`, no other destination, no `--no-verify`;
+#   * every branch names the same one task, and that task is the request's: the request names it
+#     with no negation in its clause, or it is the one task whose guide was first added after the
+#     request (`_named_tasks`, `_guides_added_since`);
+#   * a push of `main` (round 2): the remote's real `main` comes from `git ls-remote origin`, the
+#     local `main` is that sha plus only this session's merge of the task branch (run with `main`
+#     checked out), and the merge commit's tree is `git merge-tree --write-tree`'s result;
+#   * the branch tip commits the hook's own `auto-run by hook` verify result for the task, confirmed
+#     by its run record for that commit (`committed_verify_row(..., hook_only=True)`): a hand-typed
+#     pass row never counts.
+#   * round 3: one git write per command; push and merge in the same repository; no executable
+#     merge/push hook and no repo config that can run a command; `-c` refused anywhere before the
+#     verb; a hidden git verb (quotes, `${IFS}`, `$(…)`, backticks, `eval`) is a block in auto mode.
+# The gate's other checks then still run. No transcript, or one that cannot be read, means no
+# request is known: the rule does not apply and the gate is exactly as before T284.
+AUTO_MODE_PATTERNS = [p for p in BLOCKED_PATTERNS if not p.endswith(r"rebase\b")]
+ADMIN_MAIN_BRANCH = "main"  # AC 8: the one branch `[admin]` may push besides the task branch
+ADMIN_REMOTE = "origin"     # P2: the one remote `[admin]` may push to
+# P1: a task ID in the request counts only when no negation stands before it in its clause.
+NEGATION = re.compile(r"\b(?:not|never|no|without|except|skip|leave|don't|dont|hold|wait|later|"
+                      r"postpone)\b|n't\b", re.I)
+LS_REMOTE_TIMEOUT_S = 10
+# Round 3 (N1): the only git subcommands that may share an `[admin]` command with its one merge/push.
+ADMIN_READ_ONLY_GIT = frozenset({"status", "log", "diff", "show", "rev-parse"})
+GIT_OPTION_ARGS = ("-C", "-c", "--git-dir", "--work-tree", "--namespace", "--config-env")
+# Round 3 (N3): hooks a merge or push can run; any executable one (not `.sample`) refuses `[admin]`.
+ADMIN_HOOKS = ("pre-push", "pre-merge-commit", "post-merge", "pre-commit", "commit-msg",
+               "prepare-commit-msg", "post-commit", "post-checkout", "reference-transaction")
+# Round 3 (N4): repo/worktree config keys that can run a command or send git elsewhere.
+ADMIN_DENY_CONFIG = re.compile(
+    r"^(include\.|includeif\.|url\.|receive\.|core\.(sshcommand|gitproxy|hookspath)$"
+    r"|remote\..*\.(proxy|uploadpack|receivepack|vcs|pushurl)$"
+    r"|push\.(recursesubmodules|pushoption|followtags)$|transfer\.hiderefs$)")
+# Round 3 (N5): shell forms that hide which word is `git` or its verb.
+OBFUSCATION = re.compile(r"\$\{?IFS\b|\$\(|`|\beval\b")
+SHELL_WRAPPERS = frozenset({"command", "env", "sudo", "nohup", "time", "exec"})
+FUTURE_SLACK_S = 60  # B11: a commit dated later than now + this is not trusted as "added after"
+# B7: config that can send an `[admin]` push somewhere else or run code during it.
+ADMIN_PUSH_CONFIG_KEYS = (r"^(push\.default|remote\..*\.(push|mirror)|push\.followtags|core\.hookspath"
+                          r"|remote\..*\.(receivepack|pushurl)|url\..*\.(insteadof|pushinsteadof))$")
+CLAUSE_END = re.compile(r"[.;,!?\n]")
+ADMIN_PUSH_FLAGS = frozenset({"-u", "--set-upstream", "-q", "--quiet", "-v", "--verbose",
+                              "--progress", "-n", "--dry-run"})
+AUTO_MODE_LIMIT = ("With `[auto]`, merge and push stay the user's. `[admin]` allows only a merge or a "
+                   "plain push of the request's own task branch (or of `main` after that merge), "
+                   "after its auto verify passed "
+                   "(docs/claude-md/tracks.md `### Admin tag`).")
+
+
+def _config_value(directory, key):
+    """`git config --get <key>` in `directory`: the value, "" when unset, None on any failure."""
+    done = _git(directory, "config", "--get", key)
+    if done is None:
+        return None
+    if done.returncode == 1 and not done.stdout.strip():
+        return ""
+    return done.stdout.strip() if done.returncode == 0 else None
+
+
+def _admin_push_branch(args, directory):
+    """The one branch a `git push <args>` run in `directory` sends to the same branch name on
+    `origin`, or None (a force, an unknown option, another remote or a URL, more than one refspec,
+    another destination; for a bare push, `pushRemote`/`pushDefault`/the branch remote not origin)."""
+    positionals = []
+    for arg in args:
+        if arg.startswith("-"):
+            if arg not in ADMIN_PUSH_FLAGS:
+                return None
+        else:
+            positionals.append(arg)
+    if len(positionals) > 2 or (positionals and not REMOTE_NAME_PATTERN.fullmatch(positionals[0])):
+        return None
+    current = _current_branch(directory)
+    if current is None or not _push_config_is_plain(directory, ADMIN_PUSH_CONFIG_KEYS):
+        return None
+    fetch_url = _git(directory, "remote", "get-url", ADMIN_REMOTE)
+    push_url = _git(directory, "remote", "get-url", "--push", ADMIN_REMOTE)
+    if (fetch_url is None or push_url is None or fetch_url.returncode != 0
+            or push_url.returncode != 0 or fetch_url.stdout.strip() != push_url.stdout.strip()):
+        return None
+    if positionals:
+        if positionals[0] != ADMIN_REMOTE:
+            return None
+    else:
+        for key in (f"branch.{current}.pushRemote", "remote.pushDefault", f"branch.{current}.remote"):
+            if _config_value(directory, key) not in ("", ADMIN_REMOTE):
+                return None
+    spec = positionals[1] if len(positionals) == 2 else "HEAD"
+    if spec.startswith("+"):
+        return None
+    src, colon, dst = spec.partition(":")
+    strip = lambda name: name[len("refs/heads/"):] if name.startswith("refs/heads/") else name
+    src = current if src == "HEAD" else strip(src)
+    if colon and strip(dst) != src:
+        return None
+    return src or None
+
+
+def _session_admin_merges(transcript_path, when, id_regex):
+    """`[(task ID, branch, directory)]` for each `git merge <one task branch>` this session (or a
+    sub-agent) ran since `when` and whose result is in the transcript and not an error — read from
+    the transcript, never from a command's own text."""
+    found = []
+    for command, call_cwd, ok in session_work.merge_calls(transcript_path, when):
+        if not ok:
+            continue
+        for args, where in _git_actions(command, call_cwd) or []:
+            # Round 2: only a merge run with `main` checked out counts.
+            if args[0] != "merge" or where is None or _current_branch(where) != ADMIN_MAIN_BRANCH:
+                continue
+            names = [n for _, n in _merge_sources(args[1:], where)]
+            task_id = _ref_task_id(names[0], id_regex) if len(names) == 1 else None
+            if task_id:
+                found.append((task_id, names[0], where))
+    return found
+
+
+def _git_verb(tokens):
+    """The git subcommand of a `git …` token list, past git's global options; None if absent."""
+    i = 1
+    while i < len(tokens) and tokens[i].startswith("-"):
+        i += 2 if tokens[i] in GIT_OPTION_ARGS else 1
+    return tokens[i] if i < len(tokens) else None
+
+
+def _common_dir(where):
+    """The absolute, resolved `git rev-parse --git-common-dir` of `where`, or None."""
+    done = _git(where, "rev-parse", "--path-format=absolute", "--git-common-dir")
+    path = done.stdout.strip() if done is not None and done.returncode == 0 else ""
+    return os.path.realpath(path) if path else None
+
+
+def _admin_repo_refusal(where):
+    """Round 3 (N3, N4): why the repository at `where` may not run an `[admin]` merge or push, or
+    None. An executable hook it could run, or repo/worktree config that can run a command or send git
+    elsewhere, refuses. User-global and system config are trusted (not read here)."""
+    common = _common_dir(where)
+    if common is None:
+        return f"cannot read the repository at {where}"
+    for name in ADMIN_HOOKS:
+        path = os.path.join(common, "hooks", name)
+        if os.path.isfile(path) and os.access(path, os.X_OK):
+            return f"the repository has an executable `{name}` hook, which this merge or push could run"
+    done = _git(where, "config", "--list", "--show-scope")
+    if done is None or done.returncode not in (0, 1):
+        return "cannot read the repository config"
+    for line in done.stdout.splitlines():
+        scope, _, entry = line.partition("\t")
+        if scope not in ("local", "worktree"):
+            continue
+        key, _, value = entry.partition("=")
+        key, value = key.lower(), value.strip()
+        if (ADMIN_DENY_CONFIG.match(key)
+                or (key == "core.fsmonitor" and value.lower() not in ("", "true", "false"))
+                or ((key.startswith("credential.") or key.startswith("alias."))
+                    and value.startswith("!"))):
+            return f"repo config `{key}` can run a command or redirect git, so `[admin]` refuses"
+    return None
+
+
+def hidden_git_verb(command):
+    """Round 3 (N5): True when `command` may run git push/merge/pull in a form the patterns do not
+    read — a quote-split word (`git "push"`, `g''it push`, `git p\\ush`) or `${IFS}`, `$(…)`, a
+    backtick or `eval` in a segment that names git. Used only in auto mode (a block on doubt)."""
+    text = strip_heredoc_bodies(command)
+    for segment in re.split(r"[;&|\n]+", QUOTED_SPAN_PATTERN.sub(" ", text)):
+        if re.search(r"git", segment, re.I) and OBFUSCATION.search(segment):
+            return True
+    lexer = shlex.shlex(text.replace("\n", " ; "), posix=True, punctuation_chars=True)
+    lexer.whitespace_split = True
+    lexer.commenters = ""
+    try:
+        tokens = list(lexer)
+    except ValueError:
+        return "git" in text.lower()
+    words = []
+    for token in tokens + [";"]:
+        if token in PUSH_SEPARATORS or set(token) <= SHELL_PUNCTUATION:
+            while words and (words[0] in SHELL_WRAPPERS or ENV_ASSIGNMENT_PREFIX.match(words[0] + " ")):
+                words = words[1:]
+            if words and words[0] == "git" and _git_verb(words) in ("push", "merge", "pull"):
+                return True
+            words = []
+        else:
+            words.append(token)
+    return False
+
+
+def _remote_main(where):
+    """Round 2: the remote's real `main` sha from `git ls-remote origin refs/heads/main` (argv, no
+    shell, a 10 s timeout, no prompt), never the local `refs/remotes/origin/main` the model can move.
+    None on any failure, a timeout or no answer."""
+    try:
+        done = subprocess.run(
+            # Round 3 (N4): the gate's own call never runs a repo-set upload-pack (an explicit
+            # `--upload-pack` wins over `remote.origin.uploadpack`; a `-c` override does not, tested)
+            # nor a repo-set proxy. Repo-local `core.sshCommand` was already refused above.
+            ["git", "-c", "remote.origin.proxy=", "-C", where, "ls-remote",
+             "--upload-pack=git-upload-pack", ADMIN_REMOTE, f"refs/heads/{ADMIN_MAIN_BRANCH}"],
+            capture_output=True, text=True, timeout=LS_REMOTE_TIMEOUT_S,
+            env={**os.environ, "GIT_TERMINAL_PROMPT": "0"})
+    except Exception:
+        return None
+    words = done.stdout.split() if done.returncode == 0 else []
+    return words[0] if len(words) >= 2 and SHA_PATTERN.match(words[0]) and \
+        words[1] == f"refs/heads/{ADMIN_MAIN_BRANCH}" else None
+
+
+def _rev(where, ref):
+    done = _git(where, "rev-parse", "--verify", "--quiet", ref)
+    sha = done.stdout.strip() if done is not None and done.returncode == 0 else ""
+    return sha if SHA_PATTERN.match(sha) else None
+
+
+def _main_push_refusal(where, merged):
+    """P0 (rounds 1-2): why `main` may not be pushed after the merge of branch `merged`, or None.
+    Allowed: `main` is the branch tip and contains the remote's real `main` (a fast-forward), or
+    `main` is one merge commit whose parents are the remote's real `main` and the tip and whose tree
+    is `git merge-tree --write-tree <remote main> <tip>`. Anything else is refused."""
+    remote = _remote_main(where)
+    if remote is None:
+        return ("cannot read the remote's real `main`: `git ls-remote origin refs/heads/main` "
+                "failed, timed out or returned nothing")
+    # Round 3 (N8): always the branch, never a tag of the same name.
+    merged = merged if merged.startswith("refs/") else f"refs/heads/{merged}"
+    tip = _rev(where, f"{merged}^{{commit}}")
+    main_sha = _rev(where, f"refs/heads/{ADMIN_MAIN_BRANCH}^{{commit}}")
+    if tip is None or main_sha is None:
+        return f"cannot resolve `main` or {merged}"
+    if main_sha == tip:
+        held = _git(where, "merge-base", "--is-ancestor", remote, tip)
+        return None if held is not None and held.returncode == 0 else (
+            f"`main` is {merged}, which does not contain the remote's `main`")
+    parents = _git(where, "rev-list", "--parents", "-n", "1", main_sha)
+    if parents is None or parents.returncode != 0 or parents.stdout.split()[1:] != [remote, tip]:
+        return (f"`main` carries commits besides the merge of {merged}: it is not one merge commit "
+                "of the remote's `main` and the branch tip")
+    expected = _git(where, "merge-tree", "--write-tree", remote, tip)
+    tree = expected.stdout.split()[0] if expected is not None and expected.returncode == 0 \
+        and expected.stdout.split() else ""
+    if not SHA_PATTERN.match(tree):
+        return ("`git merge-tree --write-tree` failed or found a conflict: push a merge that "
+                "resolves a conflict yourself")
+    if _rev(where, f"{main_sha}^{{tree}}") != tree:
+        return f"the merge commit on `main` changes files the merge of {merged} does not"
+    return None
+
+
+def _named_tasks(text, id_regex):
+    """P1: the task IDs `text` names as tasks to do — an ID with a negation before it in its own
+    clause ("do NOT merge T900") is left out. A plain reading, not a parser (documented limit)."""
+    named = set()
+    for match in id_regex.finditer(text or ""):
+        start = max((m.end() for m in CLAUSE_END.finditer(text, 0, match.start())), default=0)
+        after = CLAUSE_END.search(text, match.end())
+        end = after.start() if after else len(text)
+        # Round 2 (B9): a negation after the ID in the same clause counts too ("T900 is not ready").
+        if not NEGATION.search(text[start:match.start()]) and \
+                not NEGATION.search(text[match.end():end]):
+            named.add(match.group(0).upper())
+    return named
+
+
+def _guides_added_since(directory, when):
+    """P1: the task IDs whose `tasks/TASK_GUIDE_<ID>.md` was first added, on any ref, at or after
+    `when`. None when git cannot be read."""
+    done = _git(directory, "log", "--all", "--diff-filter=A", "--format=%x00%ct", "--name-only",
+                "--", "tasks/")
+    if done is None or done.returncode != 0:
+        return None
+    first, latest = {}, time.time() + FUTURE_SLACK_S
+    for chunk in done.stdout.split("\x00")[1:]:
+        lines = [l.strip() for l in chunk.splitlines() if l.strip()]
+        if not lines or not lines[0].isdigit() or int(lines[0]) > latest:
+            continue  # B11: a commit dated in the future is not trusted (the date is git's record)
+        for name in lines[1:]:
+            hit = re.fullmatch(r"tasks/TASK_GUIDE_([A-Za-z]+-?\d+)\.md", name)
+            if hit:
+                task = hit.group(1).upper()
+                first[task] = min(first.get(task, int(lines[0])), int(lines[0]))
+    return {task for task, at in first.items() if at >= when.timestamp()}
+
+
+def admin_refusal(command, cwd, transcript_path, admin):
+    """Why `[admin]` (`admin` = `(timestamp, text)` of the request) does not allow `command`, or
+    None when it does. Never raises: an error is a refusal."""
+    try:
+        when, text = admin
+        # Round 2: any `git -c <k>=<v>` (or `--config-env`) before the verb can change what a merge
+        # or push runs (`core.hooksPath`) or where it goes, so `[admin]` refuses it.
+        writes = 0
+        for tokens, _, _ in _command_segments(command) or []:
+            if tokens and tokens[0] == "git":
+                i = 1  # Round 3 (N7): every global option up to the verb, past `-C <dir>` too
+                while i < len(tokens) and tokens[i].startswith("-"):
+                    if tokens[i].startswith(("-c", "--config-env")):
+                        return "`[admin]` refuses `git -c` (or `--config-env`) before merge or push"
+                    i += 2 if tokens[i] in GIT_OPTION_ARGS else 1
+                writes += _git_verb(tokens) not in ADMIN_READ_ONLY_GIT
+        # Round 3 (N1): a chained `git add`/`commit`/`reset`/… runs after this check and could change
+        # what the push publishes, so the command holds exactly one git write: its merge or push.
+        if writes != 1:
+            return ("an `[admin]` command holds exactly one git merge or push, and no other git write "
+                    "(run the others in their own command)")
+        actions = _git_actions(command, cwd)
+        if not actions:
+            return "cannot tell which branch this command merges or pushes"
+        id_regex = re.compile(task_id_pattern(ROOT, bounded=True), re.IGNORECASE)
+        targets = set()
+        for args, where in actions:
+            if where is None:
+                return "cannot tell which directory this command runs in"
+            repo_refusal = _admin_repo_refusal(where)
+            if repo_refusal:
+                return repo_refusal
+            if args[0] == "merge":
+                names = [name for _, name in _merge_sources(args[1:], where)]
+                if len(names) != 1:
+                    return "an `[admin]` merge names exactly one task branch"
+                branch = names[0]
+            elif args[0] == "push":
+                branch = _admin_push_branch(args[1:], where)
+                if branch is None:
+                    return ("`[admin]` allows only a plain push of the task branch, or of `main` "
+                            "after the task's own merge, to the same branch: no force, no other "
+                            "destination")
+                if branch == ADMIN_MAIN_BRANCH:
+                    # AC 8 / 7b: `main` only after this session's own merge of the task branch,
+                    # and only when `main` really holds that branch's tip.
+                    merges = _session_admin_merges(transcript_path, when, id_regex)
+                    if not merges:
+                        return ("a push of `main` needs the task's own `[admin]` merge into `main` "
+                                "in this session, after the request")
+                    for task_id, merged, merge_where in merges:
+                        # Round 3 (N2): the push and the merge are in the same repository.
+                        if _common_dir(where) is None or _common_dir(where) != _common_dir(merge_where):
+                            return ("the push of `main` and the task's merge are not in the same "
+                                    "repository")
+                        held = _git(where, "merge-base", "--is-ancestor",
+                                    f"refs/heads/{merged}^{{commit}}",
+                                    f"refs/heads/{ADMIN_MAIN_BRANCH}^{{commit}}")
+                        if held is None or held.returncode != 0:
+                            return f"`main` does not hold the merged branch {merged}"
+                        refusal = _main_push_refusal(where, merged)
+                        if refusal:
+                            return refusal
+                        targets.add((task_id, merged, merge_where))
+                    continue
+            else:
+                return f"`[admin]` allows only merge and push, not `git {args[0]}`"
+            task_id = _ref_task_id(branch, id_regex)
+            if task_id is None:
+                return f"{branch} names no single task"
+            targets.add((task_id, branch, where))
+        task_ids = {task_id for task_id, _, _ in targets}
+        if len(task_ids) != 1:
+            return "an `[admin]` command covers one task only"
+        task_id = task_ids.pop()
+        if task_id not in _named_tasks(text, id_regex):
+            added = _guides_added_since(sorted(targets)[0][2], when)
+            if added != {task_id}:
+                return (f"{task_id} is not the task of the `[admin]` request: the request does not "
+                        "name it, and it is not the one task whose guide was first added after "
+                        "the request")
+        for _, branch, where in sorted(targets):
+            if committed_verify_row(task_id, branch, where, hook_only=True) is not True:
+                return (f"{task_id} has no passed auto verify committed on {branch} (a hook-written "
+                        "`auto-run by hook` row with its run record for that commit)")
+        return None
+    except Exception as exc:
+        return f"the `[admin]` check failed ({type(exc).__name__})"
+
+
+def auto_mode_blocker(command, cwd, transcript_path):
+    """The block line for a merge, push or pull while the latest request carries `[auto]` or
+    `[admin]`, or None (no such request, or `[admin]` allows this command)."""
+    latest = auto_mode.latest_request(transcript_path)
+    if latest is None or not auto_mode.auto_tagged(latest[1]):
+        return None
+    admin = auto_mode.admin_request(transcript_path)
+    if admin is None:
+        return "auto mode (`[auto]`): merge, push and pull stay the user's"
+    why = admin_refusal(command, cwd, transcript_path, admin)
+    return f"`[admin]` does not allow this command: {why}" if why else None
+
+
 # --- What to actually do about an unattributed Bash call (T095 defect B) ----
 #
 # This gate used to end its block with "a Bash command is attributed to a task
@@ -1352,7 +1759,25 @@ def main():
     scannable = strip_quoted_spans(strip_heredoc_bodies(command))
     if (not any(re.search(p, scannable) for p in BLOCKED_PATTERNS)
             and not defines_git_alias(scannable)):
+        # T284 round 3 (N5): in auto mode a git verb hidden by quotes or expansion is a block on
+        # doubt. Outside auto mode nothing changes.
+        if hidden_git_verb(command):
+            latest = auto_mode.latest_request(transcript_path)
+            if latest is not None and auto_mode.auto_tagged(latest[1]):
+                print(json.dumps({"decision": "block", "reason": (
+                    "[hook:pre_bash] Auto-mode gate — cannot push/merge:\n  • cannot tell: the "
+                    "command may run git push, merge or pull in a hidden form (quotes inside the "
+                    "word, `${IFS}`, `$(…)`, backticks or `eval`)\n" + AUTO_MODE_LIMIT)}))
         sys.exit(0)
+
+    # T284: in auto mode a merge, push or pull is the user's, unless `[admin]` allows this one.
+    if any(re.search(p, scannable) for p in AUTO_MODE_PATTERNS) or defines_git_alias(scannable):
+        auto_block = auto_mode_blocker(command, event.get("cwd"), transcript_path)
+        if auto_block:
+            print(json.dumps({"decision": "block", "reason": (
+                "[hook:pre_bash] Auto-mode gate — cannot push/merge:\n  • " + auto_block
+                + "\n" + AUTO_MODE_LIMIT)}))
+            sys.exit(0)
 
     # T157: in board mode `online` the board cache is refreshed before it is evaluated
     # (the pre-merge pull moment). A failed or hanging pull is a warning, and the gate

@@ -10,7 +10,7 @@
 
 ---
 
-<!-- Optional: the final report, only for a task run in auto mode (the user's `[auto]` tag,
+<!-- Optional: the final report, only for a task run in auto mode (the user's `[auto]` or `[admin]` tag; with `[admin]`, the `Not done:` line names `merge (admin: after the auto verify pass)`,
 `docs/claude-md/tracks.md` `## Auto mode`). To use it, copy the block below out of this comment, to this
 place, and replace every <...>. Keep `Mode: auto` as its first line, exactly as written: T182's hook reads
 it. Write it to this file before the run ends; the chat message is a copy, not the report. The same

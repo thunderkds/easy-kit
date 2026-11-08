@@ -95,7 +95,7 @@ If the user says no, write nothing and say that the file did not change.
 The script writes 2-space JSON with a trailing newline. Tell the user that it may change the
 file's indentation, and that no value is removed.
 
-### Auto mode (`[auto]`)
+### Auto mode (`[auto]`/`[admin]`)
 
 Ask no question. Run only Step 1 and the dry run of `high-security`. Write nothing. In the final
 report, under `Not done:`, put: `settings-setup: recommend high-security (dry run below), not

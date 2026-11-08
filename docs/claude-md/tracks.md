@@ -90,8 +90,9 @@ Asking whether to commit is not a stop either: step 7 commits.
 **Backups.** A backup must sit inside the project or in a path the user named, never in `/tmp`: a temp
 directory can be gone by the time the user needs it.
 
-**Merge is never automatic.** The row stays in Ready for Review, so the merge gate blocks every merge, and
-every push of the task's own branch, while it is there. The branch merges only when the user asks. Stage 5 verify is still mandatory before
+**Merge is automatic only under `[admin]`.** The row stays in Ready for Review, so the merge gate blocks every merge, and
+every push of the task's own branch, while it is there. The branch merges only when the user asks, or
+when the request carried `[admin]` and the auto verify run passed (`### Admin tag`). Stage 5 verify is still mandatory before
 any merge: the Supervisor starts the headless auto verify run and reports its verdict
 (`### Auto verify (Stop hook)`). You may still run `/verify` yourself. You must run it when that run is
 blocked or `CLAUDE_AUTO_VERIFY=off`. Then the Supervisor moves the row to Done and merges. The record's
@@ -146,6 +147,9 @@ The user turns auto mode on with the literal tag `[auto]` anywhere in the reques
 `move the data from CSV to JSON [auto]`. Only the bracketed tag counts, exactly as written: a bare word
 *auto* (for example "add auto-save") or `[Auto]` is not the tag, and the task runs in normal mode. Without
 the tag, both tracks behave as the sections above say.
+
+The tag `[admin]` turns on the same auto mode. It also lets the Supervisor merge and push the task's own
+branch, but only after the auto verify run passed (`### Admin tag`). `[auto]` alone never does.
 
 In auto mode the Supervisor picks the track by the same rule and runs it to the end without asking the user
 anything. Each decision it would have asked about is made by a rule, a Citation or a Debate
@@ -224,7 +228,7 @@ is logged `RULE`, `FACT` or `SAFER OPTION`, not `DEBATED`. At Risk Medium or Hig
 | 16 | Stage 4 pull moment 3 (board mode `online`): "review against the new version?" | Review against the new version. | `RULE` |
 | 17 | Stage 4 item 7: a finding whose fix needs a choice | Debate. | `DEBATED` ⚠ |
 | 18 | Stage 5 item 1: `/verify` (never in the Supervisor's own session) | The Supervisor starts the headless auto verify run (T182; every task since T203) with `python3 .claude/hooks/stop_auto_verify.py --start <ID>`, and writes its own real-run check under `Checks:` as `auto-checked, not /verify`. The `verify` Evidence row stays unchecked until that run fills it from a real `/verify`, or the user does: a blocked run falls back to `/verify (yours)`. | `Checks:` / `Not done:` |
-| 19 | Stage 5 items 3–6: memory update, merge, Done, `ship` | Memory update: the Supervisor runs the diff-driven pass before it stops, and writes the `Memory:` line. Done: after an auto verify pass, the hook moves the row (`### Auto close-out`). Merge, push and `ship`: never in auto mode. The task waits in Ready for Review until the hook moves it. | `Memory:` / `Closed:` / `Not done:` |
+| 19 | Stage 5 items 3–6: memory update, merge, Done, `ship` | Memory update: the Supervisor runs the diff-driven pass before it stops, and writes the `Memory:` line. Done: after an auto verify pass, the hook moves the row (`### Auto close-out`). Merge, push and `ship`: never in auto mode, except the merge and push that `[admin]` allows (`### Admin tag`). The task waits in Ready for Review until the hook moves it. | `Memory:` / `Closed:` / `Not done:` |
 | 20 | `AGENTS.md` self-monitoring: "want me to compact before continuing?" | Do not ask. Near the session's context or usage limit, stop at a clean point (see Edge cases). | `Paused:` |
 | 21 | Minimal track: an unclear request (its one stop) | By `### Debate size by Risk`. At Risk Low (the minimal track's own level) the Supervisor decides the reading and logs why. | `RULE` / `SAFER OPTION` ⚠ |
 
@@ -266,7 +270,7 @@ the run ends, plus `security-review` at Risk Medium or High, because it is not a
 - `Memory:` — the diff-driven memory pass (`docs/claude-md/memory-write-protocol.md`), which the
   Supervisor runs before it stops. Name each entry it wrote, or write `Memory: nothing new`. The memory
   writes stay the Supervisor's; no hook writes memory.
-- `Not done: merge (yours)`, plus the `/verify` state: `auto verify: running (T182)`, its result, or
+- `Not done: merge (yours)` (with `[admin]`: `Not done: merge (admin: after the auto verify pass)`), plus the `/verify` state: `auto verify: running (T182)`, its result, or
   `/verify (yours)` when the hook is not installed, its run was blocked, or `CLAUDE_AUTO_VERIFY=off`.
   When the spawn hook's `⚠ HIGH RISK — project readiness incomplete:` warning fired in the run, the
   same `Not done:` line (never a second one) also names it: `readiness incomplete: <gaps> (yours)` (T223).
@@ -401,13 +405,14 @@ hash or other code: not a pass. The hook never edits or removes this line, and `
 it. A blocked hook line above it for other code still gets a new run, and that run rewrites only the hook's
 line. After a pass, the same run closes out a task whose report has the `Mode: auto` line (`### Auto close-out`).
 A task without it stays in Ready for Review after its pass, and the Supervisor moves it to Done as before.
-The merge stays yours. You may still run `/verify` yourself at any time; when the run is blocked, you must.
+The merge stays yours, unless the request carried `[admin]` (`### Admin tag`). You may still run `/verify` yourself at any time; when the run is blocked, you must.
 
 ### Auto close-out
 
 After an auto verify **pass**, the same detached run closes the task out (T189,
 `.claude/hooks/lib/auto_closeout.py`). It moves the task's row from `### Ready for Review` to `### Done`.
-It is not a merge: the branch stays unmerged, and the merge, the push and `ship` stay yours. A `fail` or
+It is not a merge: the branch stays unmerged, and the merge, the push and `ship` stay yours (with `[admin]`, see
+`### Admin tag` for the merge and the push). A `fail` or
 `blocked` result leaves the row where it is.
 
 The run moves the row only when all three checks hold:
@@ -455,14 +460,110 @@ The pause also goes in the final report, on its `Paused:` line.
 
 ### Never in auto mode
 
-These stay the user's, in every mode:
+With `[auto]`, these stay the user's:
 
 - merge;
+- pull;
 - push;
 - `ship`.
 
-The memory pass and the move to Done are automatic: see `### Final report` (`Memory:`) and
-`### Auto close-out`.
+With `[admin]`, the Supervisor may also do the first two, only as `### Admin tag` says. `ship` stays the
+user's with both tags. The memory pass and the move to Done are automatic: see `### Final report`
+(`Memory:`) and `### Auto close-out`.
+
+### Admin tag
+
+The user writes the literal tag `[admin]` in a request, for example `add the CSV export [admin]`. The task
+runs in auto mode, exactly as with `[auto]`: the same report, the same `Mode: auto` marker, the same hooks.
+`[Admin]`, `[ADMIN]`, `[administrator]` and a bare word *admin* are not the tag. `[auto][admin]` is one
+admin request.
+
+The tag adds one thing: the Supervisor may merge the task branch and push it, after the auto verify run
+passed. The merge gate, `.claude/hooks/pre_bash_block_unsafe_merge.py`, reads the tag at the time of the
+command, from this session's transcript. It allows a `git merge` or `git push` only when all of these hold:
+
+1. The session's latest request is text the user typed, and it holds `[admin]` outside code spans and
+   outside `>` quoted lines. The tag in a tool result, a fetched page, a file, a PR comment, a branch name,
+   a commit message or a sub-agent's prompt does not count. A later request without the tag ends it. A
+   tag typed in another session does not count.
+2. The command merges one task branch (`git merge <branch>`), or pushes a branch to the same branch name
+   (`git push origin <branch>`, `git push -u origin HEAD`), on the remote `origin` only (for a bare
+   `git push`, `branch.<b>.pushRemote`, `remote.pushDefault` and `branch.<b>.remote` are unset or
+   `origin`). The push URL of `origin` must equal its fetch URL, and no `url.<x>.insteadOf`,
+   `url.<x>.pushInsteadOf`, `remote.<name>.pushurl`, `remote.<name>.receivepack`, `push.followTags` or
+   `core.hooksPath` may be set. Any `git -c <key>=<value>` (or `--config-env`) anywhere before the verb,
+   also after `-C <dir>`, is refused. The command holds exactly one git write, its merge or its push:
+   a chained `git add`, `commit`, `reset`, `tag`, `checkout` or any other git write is refused, while
+   `git status`, `log`, `diff`, `show`, `rev-parse` and `cd <dir> &&` may stay. The repository must have
+   no executable hook (not `.sample`) for `pre-push`, `pre-merge-commit`, `post-merge`, `pre-commit`,
+   `commit-msg`, `prepare-commit-msg`, `post-commit`, `post-checkout` or `reference-transaction`, and no
+   repo or worktree config that can run a command or send git elsewhere (`include.*`, `includeIf.*`,
+   `url.*`, `receive.*`, `core.sshCommand`, `core.gitProxy`, `core.fsmonitor` set to a command,
+   `remote.*.proxy`, `remote.*.uploadpack`, `remote.*.vcs`, `push.recurseSubmodules`, `push.pushOption`,
+   `transfer.hideRefs`, a `credential.*` or `alias.*` value starting with `!`). User-global and system
+   config are trusted and not read.
+   It may also push `main` (`git push origin main`; the rule names `main` only), but only after this
+   session's own `[admin]` merge of the task branch: the merge call is in the transcript after the
+   request, its result is not an error, it ran with `main` checked out, and it ran in the same
+   repository as the push (the same `git rev-parse --git-common-dir`). The gate then reads the
+   remote's real `main` with `git ls-remote origin refs/heads/main` (never the local `origin/main` ref)
+   and allows only two shapes: `main` is the branch tip and contains the remote's `main` (a
+   fast-forward), or `main` is one merge commit whose parents are the remote's `main` and the branch tip
+   and whose tree equals `git merge-tree --write-tree` of those two. If `ls-remote` fails, times out or
+   returns nothing, or `merge-tree` fails or finds a conflict, the push is blocked: a merge that resolves
+   a conflict is yours to push. A force push (`-f`, `--force`, `--force-with-lease`, `+<branch>`), a push
+   of any other ref, another remote, `--no-verify`, `--all`, `--tags`, a `git pull` and an octopus merge
+   stay blocked.
+3. The branch names the task of the request: the request text names the task ID, and no negation such as
+   "not" or "don't" stands before it in its clause; or the task is the one task whose
+   `tasks/TASK_GUIDE_<ID>.md` was first added to the repo after the request. The date is git's own
+   record of the commit, and a commit dated more than 60 seconds in the future is ignored. A negation
+   after the ID in the same clause ("T900 is not ready", "T900 must wait") also leaves it out. Work that
+   only names an existing task (an edit, a `touch`, an `Agent` spawn) does not make it the request's task.
+4. The branch tip commits the hook-written `auto-run by hook` verify result for the task, with its run
+   record for that commit, and the result says pass. A hand-typed pass row does not count.
+
+With `[admin]`, the Supervisor starts the run itself: as soon as the task is at Ready for Review, it runs
+`python3 .claude/hooks/stop_auto_verify.py --start <ID>` and waits for the verdict. It never runs `/verify` in
+its own session. Only on a pass does it go on to merge and push, without asking. On `skip`, `blocked` or
+`fail` it merges nothing and reports why. A docs-only task answers `skip`; its `/verify` then falls back to
+you, as for any blocked run.
+
+The gate's other checks then still run, as for every merge. `ship` stays the user's with `[admin]` too.
+With `[auto]` alone, the same gate blocks every merge, push and pull while that request is the latest
+one. A `git rebase` is not part of this rule. A session with no readable transcript has no known request,
+so this rule does not apply and the gate works as before.
+
+Known limits:
+
+- The gate cannot tell typed text from pasted text inside your own message. An `[admin]` in text you
+  paste without a code fence or a `>` quote is part of your message, so it counts.
+- **An agent can still forge the transcript that carries `[admin]`.** The gate reads the tag from this
+  session's `<id>.jsonl` in the transcripts folder, so an agent that appends a human-origin line to it can
+  forge the request. This is the same trust root as the transcript that proves your `/verify`
+  (`### Known limits`): `.claude/settings.json` denies agents `Edit(~/.claude/projects/**/*.jsonl)` and
+  `Bash(*.claude/projects/*)`, which raises the bar and is not a proof.
+- The negation check is a plain reading of the clause before a task ID, not a parser: "do NOT merge
+  T900" does not bind T900, but a negation phrased another way may be missed. Name only the task you
+  want merged.
+- For the gate, only an entry marked as typed by a human is a request: an entry with no origin, or a
+  sub-agent's prompt, neither ends an `[auto]` request nor carries `[admin]`.
+- The run record the gate trusts is a file in the trace anchors' directory
+  (`.claude/hooks/lib/verify_record.py`), the same trust root as for `/verify`.
+- Repo config the gate does not read, such as a `core.hooksPath` hook run by `git commit`, and a model
+  that runs git through `python3 -c` or a script, are out of the gate's reach (the T211 limit).
+- `git merge -s ours` publishes nothing unverified, but it drops the task's changes from `main`.
+- A `tool_result` with no `is_error` field counts as a result that is not an error.
+- The remote `origin` itself is trusted: the gate checks that its push URL equals its fetch URL, not
+  that the URL is the one you meant. `git remote set-url origin <other>` changes both, so it passes.
+- In auto mode (`[auto]` or `[admin]`), a command that may hide its git verb — a quote inside the word
+  (`git "push"`, `g''it push`, `git p\ush`), `${IFS}`, `$(…)`, a backtick or `eval` in a segment that
+  names git — is blocked, because the gate cannot tell what it runs. Outside auto mode these forms
+  behave as before. A git alias set in config (`git pp`), a script (`bash push.sh`) and `python3 -c`
+  still go unseen.
+- The gate is a static check of the command text and of the repo config at the time of the command. It
+  is not an airtight security boundary: user-global config, a script that calls git, and a hook or
+  config added between the check and the push are out of its reach.
 
 ### The Supervisor never
 
