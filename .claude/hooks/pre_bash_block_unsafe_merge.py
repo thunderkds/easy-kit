@@ -196,10 +196,16 @@ BENIGN_COMMAND_PREFIX = re.compile(
 # One paren only — `((` opens an arithmetic expression, not a command.
 SUBSHELL_OPEN = re.compile(r"^\((?!\()\s*")
 
+# Harmless interpreter flags that may sit between `python3` and `-m` (T291): `-B -u -O -s -E -I`,
+# alone or in a run (`-uB`). A fixed list, case exact (`(?-i:…)`: the pattern below is
+# IGNORECASE, which would also admit `-b -S -i`). Any other flag (`-X dev`, `-W error`, `-c`)
+# is not in it, so that command is not counted: fail closed.
+INTERPRETER_FLAGS = r"(?:\s+(?-i:-[BuOsEI]+))*"
+
 # Anchored at the head of a command — `match`, never `search`.
 TEST_INVOCATION_PATTERN = re.compile(
     r"^(?:"
-    r"(?:python3?|py)\s+-m\s+(?:pytest|unittest)\b"
+    r"(?:python3?|py)" + INTERPRETER_FLAGS + r"\s+-m\s+(?:pytest|unittest)\b"
     r"|pytest\b"
     r"|jest\b"
     r"|tox\b"
