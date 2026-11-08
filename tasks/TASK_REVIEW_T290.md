@@ -152,3 +152,16 @@ implementing agent alone]
 - An unreadable guide or board denies every non-judge sub-agent edit until it is readable (fail closed).
 - The hook reads every `tasks/TASK_GUIDE_*.md` on each bound edit (about 30 ms at 235 guides).
 - The hook, the plugin copy and the `.claude/settings.json` entry are not wired until the user approves.
+
+## Stage 4 review: the P3 lines the independent reviewer reported (added by the Supervisor, 2026-11-08)
+
+Reviewer verdict: no P0, no P1; P2 1-3 fixed in "Stage 4 review round 1". The P3 findings, kept as known limits:
+- P3-4: a lock line inside a code fence or an HTML comment still locks (over-deny); a `>` blockquote does not.
+- P3-5: one unreadable guide (for example a directory named like a guide in `tasks/`) denies every bound edit repo-wide. Fail closed by design: availability, not a bypass.
+- P3-6: the lock is repo-wide across worktrees, so a parallel task cannot repoint a file that an In Progress task has locked (the LR-0004 repoint friction).
+- P3-7: guides are read from the main checkout only; a lock line added only on a feature branch has no effect until the guide is on `main`.
+- P3-8: the hook has its own copy of the board section and row regexes (others: `pre_agent_validate_guide.py:122-150`, `lib/auto_mode.py` `board_rows`); keep the three in step.
+- P3-10: `templates/TASK_GUIDE_template.md` sits at the 205-line cap of `test_vital_slice.py`, so the lock sentence lives on an existing line.
+- P3-12: `docs/prd/PRD_online-board.md:95` ("12 hooks/scripts read `PROJECT_KANBAN.md`") is a historic count; this hook is one more.
+Theoretical, not reproduced: a bound agent spawning `qa-expert` to edit the oracle (sub-agents normally cannot spawn sub-agents); Windows 8.3 names and Unicode normalisation (not testable on Linux).
+Code-review and security-review: run by an independent reviewer on `main...feat/t290-locked-oracle` (about 60 bypass attempts, 9 mutation controls re-run, 7 red; the 2 survivors are now killed by `test_edge_lock_entry_that_is_a_symlink_locks_its_target` and the reason-text assertion).
