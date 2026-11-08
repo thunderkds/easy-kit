@@ -47,16 +47,16 @@ Not done: merge (yours); <auto verify: running (T182) | auto verify: <result> | 
 
 | Check | Result | Notes / output snippet |
 |-------|--------|------------------------|
-| **New test(s) cover Acceptance Criteria (file paths pasted)** | ☐ pass / ☐ fail | [test file path(s) — required before Done] |
-| Verification command run | ☐ pass / ☐ fail | [paste actual output] |
-| Negative cases hold | ☐ pass / ☐ fail | [paste the red run against the prior content, or the mutation diff (`git diff --stat`, non-empty) before each verdict] |
-| verify | ☐ pass / ☐ fail / ☐ N/A | [what was observed — must literally state "pass" or "fail" here too, e.g. "skill run, feature confirmed working — pass": the merge gate scans this Notes column for the word "pass", not just the Result column] |
-| Review scope bounded to the change's blast radius (affected set, not whole repo) | ☐ pass / ☐ fail | [what was reviewed vs. skipped, and why] |
-| Full smoke suite still green (no regression) | ☐ pass / ☐ fail | |
-| **Companion score (easy-verifier)** | ☐ pass / ☐ fail / ☐ N/A | [`overall` and `change_risk` as the tool returned them, the scope, the ref, and the absolute path of the verifier report after a literal `report:` label — e.g. "overall 86 (>= 80), change_risk pass, scope changes, ref `main...HEAD`, report: `/home/me/.easy-verifier-reports/kit/score_changes_20261028T0530Z.html`". The gate reads the path that follows `report:` and nothing else, so with no label, or a path that is absent, the row is unscored — write ☑ N/A instead. ☑ N/A with a reason when neither companion tool was run: the merge gate blocks on ☑ fail only, never on an absent or N/A row] |
-| **UI: Visual regression (diff or verdict pasted)** | ☐ pass / ☐ fail / ☐ N/A | [screenshot path or LLM verdict — required for UI tasks, Hard-Stop Gate 6] |
-| **UI: Design-system compliance (tokens/colors/typography verified)** | ☐ pass / ☐ fail / ☐ N/A | [method used + output] |
-| **UI: Responsiveness at target viewports** | ☐ pass / ☐ fail / ☐ N/A | [viewports tested, any overflow findings] |
+| **New test(s) cover Acceptance Criteria (file paths pasted)** | ☑ pass | `.claude/hooks/tests/test_debate_window.py`, 21 tests, written first: `16 failed, 5 passed` on the unchanged hooks at `eb85573c` (the 5 passing are today's behaviour: AC 1 x3, AC 4 x2). AC 1: `test_ac1_*` (3). AC 2: `test_ac2_*` (5 incl. 2 parametrized). AC 3: `test_ac3_*` (6 parametrized). AC 4: `test_ac4_*` (2, with a control). AC 5: `test_ac5_*`. Window reader: `test_work_*` (4). At `116c3b32`: `21 passed in 3.17s` (plain `python3 -m pytest`). |
+| Verification command run | ☑ pass | `python3 -m pytest .claude/hooks/tests/test_debate_window.py -q -p no:cacheprovider` -> `21 passed in 3.17s`; `python3 -m pytest .claude/hooks/tests -q -k "debate or stop_auto or session_work"` covered by the full run below. |
+| Negative cases hold | ☑ pass | Nine mutation controls (table below), each with a non-empty `git diff --stat` before its verdict; every one turns at least one test red, and the restored tree is `21 passed`. |
+| verify | ☐ pass / ☐ fail / ☐ N/A | [left for the auto verify run / Supervisor; not run by the implementing agent] |
+| Review scope bounded to the change's blast radius (affected set, not whole repo) | ☑ pass | Reviewed: `session_work.py` (callers `load_work`, `worked_on`: `pre_bash_block_unsafe_merge.py`, `stop_auto_mode_check.py`, T250/T252 tests), `stop_auto_mode_check.py` (`check_task`, `main`), `tracks.md`. Skipped: the other Stop checks, the report format, the 6-hour `_untagged.jsonl` fallback (cut list). |
+| Full smoke suite still green (no regression) | ☑ pass | `python3 -m pytest .claude/hooks/tests tests -q -p no:cacheprovider` at `116c3b32` -> `4183 passed, 25 subtests passed in 264.98s (0:04:24)` |
+| **Companion score (easy-verifier)** | ☑ N/A | Companion tool not run by the implementing agent. |
+| **UI: Visual regression (diff or verdict pasted)** | ☑ N/A | No UI component. |
+| **UI: Design-system compliance (tokens/colors/typography verified)** | ☑ N/A | No UI component. |
+| **UI: Responsiveness at target viewports** | ☑ N/A | No UI component. |
 
 ---
 
@@ -78,9 +78,53 @@ Stop check          : NOT paused: the old Debate was counted
 
 Red tests run at 2026-11-08T08:49:20Z on the unchanged hooks: `16 failed, 5 passed` in `.claude/hooks/tests/test_debate_window.py` (the 5 that pass are today's behaviour: AC 1 x3, AC 4 x2). Example: `test_ac2_a_debate_dated_before_the_window_does_not_count` -> `AssertionError: None` (no pause).
 
-**AFTER**: [same command, post-change] OR [verbatim excerpt of the new content]
+**AFTER** (2026-11-08T08:56:07Z at `116c3b32`, the same script):
 
-**DELTA**: [one sentence — what a user can now do that they could not before]
+```
+now                 : 2026-11-08T08:56:08.083657+00:00
+T242 first change   : 2026-11-08T08:56:07.967693+00:00
+Debate (Skill call) : 2026-11-08T03:56:07.967693+00:00 task=T242, 2 Advocates
+Stop check          : paused: [hook:stop_auto_mode_check] Auto-mode final report check failed ... T242: 1 `DEBATED` line(s) need >=2 Advocate `Agent` calls ... the trace has 0
+```
 
-**WITNESS**: [who ran it and when — derived from `memory/event-trace/Txxx.jsonl`, never the
-implementing agent alone]
+**DELTA**: A Debate that is older than a task's first change in the session no longer satisfies the Stop check for that task, so an old Debate cannot cover work done much later.
+
+**WITNESS**: the implementing agent ran both captures; the reviewer reruns `python3 -m pytest .claude/hooks/tests/test_debate_window.py -q`. The trace `memory/event-trace/T293.jsonl` holds the counted test runs.
+
+---
+
+## Decisions (implementer)
+
+- **Window.** The start is the earliest transcript time of a call that `session_work` counts as work on the task (`work_start`, the same test as `worked_on`, so the two cannot disagree). The Skill call and each Advocate must be dated at or after it. Both the work and the Debate are dated from the transcript, so clock skew with git or file times does not arise.
+- **Boundary.** `>=`: a Debate at exactly the start counts. A Debate that ran before any file of the task changed does NOT count (AC 2, strict). The guide preferred counting from the guide's creation commit "if the window logic exposes it"; it does not, and adding git times would add a second clock, so it was not built. Consequence: write the task's guide or review file first, then debate (stated in `tracks.md`). The T287 fixture `t242_run` had the Debate before the review file; it now writes the file first (LR-0004 repoint, one pin-test edit).
+- **No upper bound.** A Debate after the task's last change still counts: the check runs at the Stop, so a Debate cannot be newer than the check, and the T287 finding was about an old Debate covering later work.
+- **No window keeps today's rule (AC 4).** For a task with no recorded change window in this session the whole session counts, as before T293. That happens when: no dated change call names the task (a marked minimal-track record whose work is in the main checkout, `T293 test_ac4_*`); the transcript cannot be read; or `session_work` raises (one stderr line, `Debate window unknown`). `tracks.md` Known limits says so.
+- **Fail closed on dates.** With a window, a Skill call or Advocate call with a missing or unparsable timestamp does not count (AC 3).
+- **Read cost.** The window is read lazily: only for a task that has a counted Advocate. That is one more pass over the transcript in that case only. `session_owner` still uses `load_work`, so the T250/T252 tests that break `load_work` still pin the ownership path.
+- **Cut list kept:** no new setting; the 6-hour `_untagged.jsonl` fallback is unchanged.
+
+## Mutation controls
+
+Each: change bytes, `git diff --stat` non-empty, run `python3 -B -m pytest .claude/hooks/tests/test_debate_window.py` (pycache cleared first), restore with `git checkout`.
+
+| # | Mutation | diff --stat | Red result |
+|---|----------|-------------|------------|
+| M1 | window check always true (`if False:`) | 1 file, 1 insertion, 2 deletions | 11 failed, 10 passed (`test_ac2_a_debate_dated_before_the_window_does_not_count` and 10 more) |
+| M2 | only the Advocate date checked | 1 file, 1+/1- | 1 failed (`test_ac2_the_skill_call_and_the_advocates_must_both_be_inside[old-skill-call-new-advocates]`) |
+| M3 | only the Skill date checked | 1 file, 1+/1- | 2 failed (`[new-skill-call-old-advocates]`, `test_ac2_one_old_and_one_new_advocate_leave_one_too_few`) |
+| M4 | a missing or unparsable date counts (fail open) | 1 file, 1+/2- | 6 failed (`test_ac3_*`) |
+| M5 | boundary `<=` instead of `<` (exact start does not count) | 1 file, 1+/1- | 1 failed (`test_ac1_a_debate_at_the_exact_start_of_the_window_counts`) |
+| M6 | no window counts nothing (fail closed instead of whole session) | 1 file, 1+/1- | 1 failed (`test_ac4_a_task_with_no_change_window_keeps_the_whole_session_rule`) |
+| M7 | window starts at the last change (`max`) | 1 file, 1+/1- | 2 failed (`test_ac1_the_window_starts_at_the_first_change_not_the_last`, `test_work_start_is_the_earliest_dated_call_that_worked_on_the_task`) |
+| M8 | `work_start` counts any dated call, not only work | 1 file, 1+/1- | 5 failed (`test_ac2_a_debate_one_second_before_the_window_does_not_count`, ...) |
+| M9 | window not passed to the count | 1 file, 1+/1- | 11 failed, 10 passed |
+
+Restored tree: `21 passed`. Script: `scratchpad/mutate.py` (not committed).
+
+## Stage 4 self-review (implementing agent; Medium risk)
+
+- **P0/P1:** none found.
+- **P2 (accepted, documented):** the window start is read from the session's own transcript files via `session_work._session_files`, which (T250) does not skip symlinks or filter `sessionId`, unlike `_own_session_files` for Debates. A planted or linked sub-agent file with an early forged work call for the task moves the start earlier, so an old Debate counts again. That equals today's rule (it fails open to T287), and writing the transcript folder is already the T251 trust root. Not changed here (Surgical Changes; `session_work` is shared with the merge gate).
+- **P2 (behaviour):** a Debate before the task's first change no longer counts. A planning Debate with no earlier edit to a task file pauses at Stop. Stated in `tracks.md` ("write the task's guide or review file first").
+- **P3:** `session_window` and `session_owner` now share `_task_worktrees` (one place for the worktree list). `_debate_counts` changed shape (`calls`, `window_start`), no other caller. Stale-text grep (LR-0005) for `_debate_counts`, `debates(task_id`, `load_work`, `session window`, `named with task=`: the hits are the changed code, `tracks.md` (updated) and `TASK_REVIEW_T287.md` (the `P3 session window` row, updated to "Fixed in T293"). No hit in `README.md`, `site/`, `agents/`, `docs/main-flow.md`.
+- **Pin tests (LR-0004):** `test_stop_attribution_t287.py` (3 tests red after the change: the Debate came before the review file; fixed in `t242_run`), `test_t250_session_ownership.py`, `test_t252_marked_ownership.py` (still pass: they break `load_work`, which `session_owner` still uses), `test_agent_guide_dedup.py`, `test_vital_slice.py`, memory budget tests: part of the full run, green.
