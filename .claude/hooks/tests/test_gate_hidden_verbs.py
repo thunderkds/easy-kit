@@ -60,6 +60,10 @@ HIDDEN_MORE = [
     f"=git push origin {B}", f"bash -c '$g push origin {B}'", f'sh -c "git \\"push\\" origin {B}"',
     f"git http-push https://example.invalid/r.git {B}", f"git -C /x send-pack ../o.git {B}",
     f'echo hi; timeout 5 git "push" x', f"true && v=push && git $v origin {B}",
+    f'strace -f git "push" origin {B}', f"flock /tmp/l git $'push' origin {B}",
+    f"env -S 'git \"push\" origin {B}'", f'xargs -I{{}} git "push" {{}}', f'{{ git "push" x; }}',
+    f'if true; then git "push" x; fi', f"for b in a; do git $v x; done", f'exec -a x git "push" x',
+    f'echo hi | xargs git "push"', f'(git "push" origin {B})', f'/usr/bin/env git "$v" x',
 ]
 # Never blocked in auto mode: data, commits and ordinary tools stay allowed.
 BENIGN = [
@@ -75,6 +79,10 @@ BENIGN = [
     "env -i pytest", "timeout 20 pytest", "nice pytest", "timeout 20 git status", "nice git log",
     "env -i git status", "bash -c 'git status'", 'bash -c "echo hi"', "gh pr create --title t",
     "python3 -c 'print(1)'", "FOO=$X pytest -q", "env FOO=$X pytest", "timeout $T pytest -q",
+    "cp git x", "man git", "ls git", "echo git $v", 'grep git "$f"', '[ "$x" = a ] && echo hi',
+    "which git", "command -v git", "git --version", "git commit -m x && git log -1",
+    "for f in a b; do git add $f; done", "if [ -f x ]; then git status; fi", "xargs -n1 git status",
+    "ln -s /usr/bin/git ~/bin/git", "docker run -v $PWD:/x img", "curl -s https://x/{a,b}",
 ]
 
 
@@ -86,6 +94,15 @@ def test_row1_unit_a_hidden_verb_form_is_flagged(command):
 @pytest.mark.parametrize("command", BENIGN)
 def test_row1_unit_ordinary_commands_are_not_flagged(command):
     assert not merge_gate.hidden_git_verb(command), command
+
+
+def test_row1_unit_a_long_wrapper_chain_is_read_fast_and_flagged():
+    """One pass over the words: a chain of 300 wrappers must not blow up (a DoS of the hook)."""
+    import time
+    started = time.time()
+    assert merge_gate.hidden_git_verb("env " * 300 + 'git "push" origin x')
+    assert time.time() - started < 2
+    assert merge_gate._hidden_in_command(["ls"], merge_gate.HIDDEN_DEPTH_LIMIT + 1)  # nested too deep: doubt
 
 
 @pytest.mark.parametrize("command", HIDDEN_FORMS)
@@ -269,13 +286,12 @@ def test_row7_rev_parse_in_an_admin_chain_is_refused_and_the_doc_says_so(gate, t
 def test_row7_the_known_limits_bullet_drops_what_is_fixed():
     flat = re.sub(r"\s+", " ", TRACKS.read_text(encoding="utf-8"))
     assert "Cheap hidden verbs" not in flat and "`git merge --message <branch>` are not caught" not in flat
-    assert "(`v=push; git $v`" not in flat
 
 
 def test_row7_the_auto_mode_hidden_verb_limit_states_the_new_rule():
     flat = re.sub(r"\s+", " ", TRACKS.read_text(encoding="utf-8"))
     assert "a git word or a git verb that is not a plain literal word" in flat
-    assert "`send-pack`" in flat and "`timeout`" in flat
+    assert "`git send-pack`" in flat and "`timeout`" in flat
 
 
 # ── Row 8 — a corpus of the old gate's answers: all of them hold except the fixed shapes ─────

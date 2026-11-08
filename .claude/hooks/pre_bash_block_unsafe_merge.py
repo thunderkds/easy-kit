@@ -267,12 +267,26 @@ def extract_command(summary):
     )
 
 
+# T296 (P3-1): the shell's reading of data in a command, left to right. A quoted span is data (a
+# double-quoted one may hold an escaped quote), a backslash + newline continues the line and joins its
+# two sides, and any other backslash makes the next character an ordinary one that cannot separate
+# commands. Used by `invokes_test_runner` only; `QUOTED_SPAN_PATTERN` keeps its other users.
+SHELL_DATA_PATTERN = re.compile(r"\"(?:[^\"\\]|\\.)*\"|'[^']*'|\\\n|\\.", re.S)
+
+
+def _shell_data_removed(match):
+    text = match.group(0)
+    if text == "\\\n":
+        return ""
+    return " " if text[0] in "\"'" else "x"
+
+
 def invokes_test_runner(command):
     """True only if `command` contains a test-runner invocation at a command
     boundary — not merely a mention of one inside a quoted string or argument."""
     if not isinstance(command, str):
         return False
-    unquoted = QUOTED_SPAN_PATTERN.sub(" ", command)
+    unquoted = SHELL_DATA_PATTERN.sub(_shell_data_removed, command)
     for part in COMMAND_SEPARATOR_PATTERN.split(unquoted):
         if TEST_INVOCATION_PATTERN.match(strip_command_prefixes(part.strip())):
             return True
@@ -1099,17 +1113,35 @@ def pushed_task_ids(command, cwd, id_pattern=None):
 
 # T211 D2: the `git merge` options that take a separate argument. Every other `-` word is skipped
 # alone (`--opt=value` and `-Xours` are one word), so any option leaves the branches resolvable.
-MERGE_OPTIONS_WITH_ARG = frozenset({"-m", "-F", "-s", "--strategy", "-X", "--strategy-option",
-                                    "--into-name"})
+# T296: `--message`, `--file` and `--cleanup` too, and git's own reading of an option word: an
+# unambiguous prefix of a long option is that option (`--mess <x>`), and a short option in a run
+# takes the rest of the run, or the next word when it ends the run (`-qm <x>`). `-S` takes only an
+# attached value, so it never takes the next word.
+MERGE_OPTIONS_WITH_ARG = frozenset({"-m", "--message", "-F", "--file", "-s", "--strategy", "-X",
+                                    "--strategy-option", "--cleanup", "--into-name"})
+MERGE_SHORT_WITH_ARG = frozenset(o[1] for o in MERGE_OPTIONS_WITH_ARG if not o.startswith("--"))
+MERGE_LONG_WITH_ARG = tuple(o for o in MERGE_OPTIONS_WITH_ARG if o.startswith("--"))
 OCTOPUS_DOUBT_MESSAGE = ("octopus merge: cannot confirm {branch} — each branch must name exactly "
                          "one task and resolve to a commit")
+
+
+def _merge_option_takes_next(arg):
+    """T296: True when the option word `arg` takes the NEXT word as its value (git's parse-options)."""
+    if arg.startswith("--"):
+        return "=" not in arg and len(arg) > 2 and any(o.startswith(arg) for o in MERGE_LONG_WITH_ARG)
+    for index, char in enumerate(arg[1:], 1):
+        if char in MERGE_SHORT_WITH_ARG:
+            return index == len(arg) - 1  # the rest of the run is the value, else the next word is
+        if char == "S":
+            return False  # `-S[<keyid>]`: an attached value only
+    return False
 
 
 def _merge_sources(args, where):
     """`[(directory, branch)]` for every branch `git merge <args>` names, in order."""
     names, index = [], 0
     while index < len(args):
-        if args[index] in MERGE_OPTIONS_WITH_ARG:
+        if args[index].startswith("-") and _merge_option_takes_next(args[index]):
             index += 2  # the option and its argument (a message, a strategy, …)
             continue
         if not args[index].startswith("-"):
@@ -1318,7 +1350,20 @@ ADMIN_DENY_CONFIG = re.compile(
     r"|push\.(recursesubmodules|pushoption|followtags)$|transfer\.hiderefs$)")
 # Round 3 (N5): shell forms that hide which word is `git` or its verb.
 OBFUSCATION = re.compile(r"\$\{?IFS\b|\$\(|`|\beval\b")
-SHELL_WRAPPERS = frozenset({"command", "env", "sudo", "nohup", "time", "exec"})
+# T296 (P2-1): the words that pass their command on (the wrapper chain), the shell keywords that
+# start a command, the shells that run a `-c` string, and the git verbs that publish. A git word or
+# a git verb that is not a plain literal word (`$`, backtick, brace or glob in it) is a block on doubt.
+SHELL_WRAPPERS = frozenset({"command", "env", "sudo", "doas", "nohup", "time", "exec", "timeout", "nice",
+                            "ionice", "setsid", "stdbuf", "xargs"})
+SHELL_KEYWORDS = frozenset({"do", "then", "else", "elif", "if", "while", "until", "!", "{", "coproc"})
+SHELLS = frozenset({"bash", "sh", "zsh", "dash", "ksh"})
+DATA_HEADS = frozenset({"echo", "printf", "grep", "egrep", "fgrep", "rg", "ag"})  # print or match only
+PUBLISH_VERBS = frozenset({"push", "merge", "pull", "send-pack", "http-push"})
+NONLITERAL = re.compile(r"[$`{}*?\[]")
+PLAIN_VERB = re.compile(r"[A-Za-z][A-Za-z0-9-]*")
+DURATION = re.compile(r"\d+(?:\.\d+)?[smhd]?")
+TEST_BRACKETS = frozenset({"[", "[["})
+HIDDEN_DEPTH_LIMIT = 6
 FUTURE_SLACK_S = 60  # B11: a commit dated later than now + this is not trusted as "added after"
 # B7: config that can send an `[admin]` push somewhere else or run code during it.
 ADMIN_PUSH_CONFIG_KEYS = (r"^(push\.default|remote\..*\.(push|mirror)|push\.followtags|core\.hookspath"
@@ -1379,6 +1424,30 @@ def _admin_push_branch(args, directory):
     if colon and strip(dst) != src:
         return None
     return src or None
+
+
+def _origin_url(directory):
+    """The URL of `origin` in `directory`, or None."""
+    done = _git(directory, "remote", "get-url", ADMIN_REMOTE)
+    return done.stdout.strip() if done is not None and done.returncode == 0 else None
+
+
+def _own_origin_refusal(where, cwd):
+    """T296 (P3-3): None when the repository a push runs in (`where`) is the one the command started
+    in (`cwd`) or the project's (`ROOT`), or when its `origin` has the URL of either one's `origin`.
+    Otherwise why: `cd <clone> && git push origin <branch>` in a clone whose `origin` is another remote
+    would send the branch there (the `main` push has had the same-repository rule since T284)."""
+    mine, url = _common_dir(where), _origin_url(where)
+    for base in (cwd, ROOT):
+        if not isinstance(base, str) or not os.path.isdir(base):
+            continue
+        if mine is not None and mine == _common_dir(base):
+            return None
+        known = _origin_url(base)
+        if url is not None and known is not None and url == known:
+            return None
+    return (f"the `origin` of the repository at {where} is another remote than this repository's "
+            "`origin`: `[admin]` pushes only to this repository's own remote")
 
 
 def _session_admin_merges(transcript_path, when, id_regex):
@@ -1443,10 +1512,67 @@ def _admin_repo_refusal(where):
     return None
 
 
-def hidden_git_verb(command):
-    """Round 3 (N5): True when `command` may run git push/merge/pull in a form the patterns do not
-    read — a quote-split word (`git "push"`, `g''it push`, `git p\\ush`) or `${IFS}`, `$(…)`, a
-    backtick or `eval` in a segment that names git. Used only in auto mode (a block on doubt)."""
+def _basename(word):
+    """The last path part of a command word; a leading `=` (zsh's `=git` is git's path) is dropped."""
+    return word.lstrip("=").rsplit("/", 1)[-1]
+
+
+def _hidden_git_words(words):
+    """T296: `words[0]` is git. True when its verb is not a plain literal word, or it publishes."""
+    verb = _git_verb(words)
+    if verb is None:
+        return False
+    return not PLAIN_VERB.fullmatch(verb) or verb in PUBLISH_VERBS
+
+
+def _hidden_in_command(words, depth):
+    """T296: True when the simple command `words` (shlex-unquoted) is, or may be, a git publish run
+    in a form the patterns do not read: git (or a wrapper chain to git) with a nonliteral verb, a
+    publishing verb the patterns lack (`send-pack`), a command word the shell expands that is
+    followed by a publishing verb or another expansion, or a `bash -c` string that is one. One pass,
+    no recursion except into a `-c` string (a wrapper's options and values are not known here, so
+    every word after a wrapper is a candidate command word)."""
+    if depth > HIDDEN_DEPTH_LIMIT:
+        return True
+    start = 0
+    while start < len(words) and (ENV_ASSIGNMENT_PREFIX.match(words[start] + " ")
+                                  or words[start] in SHELL_KEYWORDS):
+        start += 1
+    words = words[start:]
+    if not words or _basename(words[0]) in DATA_HEADS:
+        return False
+    wrapped = _basename(words[0]) in SHELL_WRAPPERS
+    for k, word in enumerate(words):
+        if wrapped and word in ("-S", "--split-string") and k + 1 < len(words):
+            return hidden_git_verb(words[k + 1], depth + 1)  # `env -S 'git "push" x'`
+        if k and (word.startswith("-") or DURATION.fullmatch(word)
+                  or ENV_ASSIGNMENT_PREFIX.match(word + " ")):
+            continue
+        base = _basename(word)
+        if base == "git" and (wrapped or k == 0 or word == "git"):
+            return _hidden_git_words(words[k:])
+        if not (wrapped or k == 0):
+            continue  # a plain word after a plain command is an argument
+        if base in SHELLS:
+            for j in range(k + 1, len(words) - 1):
+                if re.fullmatch(r"-[A-Za-z]*c[A-Za-z]*", words[j]):
+                    return hidden_git_verb(words[j + 1], depth + 1)
+            return False
+        if NONLITERAL.search(base) and base not in TEST_BRACKETS:
+            if any(w in PUBLISH_VERBS or NONLITERAL.search(w) for w in words[k + 1:]):
+                return True
+    return False
+
+
+def hidden_git_verb(command, depth=0):
+    """Round 3 (N5), T296: True when `command` may run git push/merge/pull (or `send-pack`) in a form
+    the patterns do not read. Used only in auto mode (a block on doubt). Two layers:
+    `${IFS}`, `$(…)`, a backtick or `eval` in a segment that names git; then, per simple command
+    after shlex removed the quotes and backslashes, `_hidden_in_command`: git (also `/usr/bin/git`,
+    `=git`) reached through a wrapper chain (`env`, `timeout 20`, `nice`, …) with a verb that is not
+    a plain literal word (`git $v`, `git ${v}sh`, `git {p..p}ush`, `git $'push'`) or that publishes;
+    a word `git` after any other command (`strace -f git "push"`) read the same way; a nonliteral
+    command word (`$g push`); a `bash -c '…'` string, read the same way."""
     text = strip_heredoc_bodies(command)
     for segment in re.split(r"[;&|\n]+", QUOTED_SPAN_PATTERN.sub(" ", text)):
         if re.search(r"git", segment, re.I) and OBFUSCATION.search(segment):
@@ -1461,9 +1587,7 @@ def hidden_git_verb(command):
     words = []
     for token in tokens + [";"]:
         if token in PUSH_SEPARATORS or set(token) <= SHELL_PUNCTUATION:
-            while words and (words[0] in SHELL_WRAPPERS or ENV_ASSIGNMENT_PREFIX.match(words[0] + " ")):
-                words = words[1:]
-            if words and words[0] == "git" and _git_verb(words) in ("push", "merge", "pull"):
+            if _hidden_in_command(words, depth):
                 return True
             words = []
         else:
@@ -1581,6 +1705,12 @@ def admin_refusal(command, cwd, transcript_path, admin):
                     if tokens[i].startswith(("-c", "--config-env")):
                         return "`[admin]` refuses `git -c` (or `--config-env`) before merge or push"
                     i += 2 if tokens[i] in GIT_OPTION_ARGS else 1
+                verb = tokens[i] if i < len(tokens) else None
+                if verb in SAFE_GIT_SUBCOMMANDS and not _read_only_git_args_ok(verb, tokens[i + 1:]):
+                    # T296 (P3-4): say why, instead of "cannot tell which branch"
+                    return (f"`git {verb}` carries an option or a glob outside the read-only allowlist "
+                            "(`--output=` writes a file, `--ext-diff` runs a program): `[admin]` "
+                            "refuses it")
                 writes += _git_verb(tokens) not in ADMIN_READ_ONLY_GIT
         # Round 3 (N1): a chained `git add`/`commit`/`reset`/… runs after this check and could change
         # what the push publishes, so the command holds exactly one git write: its merge or push.
@@ -1609,6 +1739,9 @@ def admin_refusal(command, cwd, transcript_path, admin):
                     return ("`[admin]` allows only a plain push of the task branch, or of `main` "
                             "after the task's own merge, to the same branch: no force, no other "
                             "destination")
+                own = _own_origin_refusal(where, cwd)
+                if own:
+                    return own
                 if branch == ADMIN_MAIN_BRANCH:
                     # AC 8 / 7b: `main` only after this session's own merge of the task branch,
                     # and only when `main` really holds that branch's tip.
@@ -1772,8 +1905,10 @@ def main():
             if latest is not None and auto_mode.auto_tagged(latest[1]):
                 print(json.dumps({"decision": "block", "reason": (
                     "[hook:pre_bash] Auto-mode gate — cannot push/merge:\n  • cannot tell: the "
-                    "command may run git push, merge or pull in a hidden form (quotes inside the "
-                    "word, `${IFS}`, `$(…)`, backticks or `eval`)\n" + AUTO_MODE_LIMIT)}))
+                    "command may run git push, merge or pull in a hidden form (a `$`, brace, glob, "
+                    "quote or backtick in the git word or its verb or before it in a wrapper chain "
+                    "such as `env` or `timeout`, `${IFS}`, `$(…)`, `eval`, or a verb that publishes "
+                    "such as `send-pack`)\n" + AUTO_MODE_LIMIT)}))
         sys.exit(0)
 
     # T284: in auto mode a merge, push or pull is the user's, unless `[admin]` allows this one.

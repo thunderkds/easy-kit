@@ -316,13 +316,14 @@ worktree under that task, before the session's active-task file. It does so only
 `cd <dir> && cmd [&& cmd]...`, where `<dir>` is an existing, searchable directory inside a worktree whose
 branch names the task (`fix/t120-x`). Every command after the `cd`, and every command after a `|`, must start
 with one word of a fixed list: `pytest`, `py.test`, `python`/`python3` (only as `-m pytest`, `-m unittest` or a
-relative script path), `git` (without `-C`, `--git-dir`, `--work-tree`), `ls`, `echo`, `cat`, `head`, `tail`,
-`grep`, `wc`, `true`, and `timeout <n>` before one of these. Any other form is not filed by its directory, and
+relative script path), `git` (without `-C`, `--git-dir`, `--work-tree`, and only with a reading verb such as
+`status`, `log`, `diff`, `show`, `rev-parse`, `ls-files` or `grep`, or `add`, `commit`, or `branch` to list), `ls`,
+`echo`, `cat`, `head`, `tail`, `grep`, `wc`, `true`, and `timeout <n>` before one of these. Any other form is not filed by its directory, and
 the session's active-task file decides, as before. That covers any other first word (`env`, `make`, `xargs`,
 `find`, `sudo`, `bash`, `sh`, `zsh`, `chdir`, `time`, a path to a program) and: a `;`, `||`, newline, `&` or pipe after the `cd`, a second
 `cd` (`cd -` too), `builtin`, `command`, `eval`, `exec`, `source`, `pushd`, `popd`, a shell keyword
 (`if`, `while`, `for`, `time`, `!`, `{`, `function`), a leading `VAR=` before a word, a heredoc `<<`, `$`,
-backticks, a `#` comment, a directory that does not exist or is a file, the main checkout, a directory that is
+backticks, a `{` or `}` (brace expansion), a `*`, `?` or `[` outside quotes (a glob), a `#` comment, a directory that does not exist or is a file, the main checkout, a directory that is
 no worktree, a `~`, `..` or `CDPATH` target, and an argument that names `..` or an absolute path outside the
 worktree (`--rootdir <main>`), an inline-code flag (`-c`, `-e`, `-lc`), an argument that holds a quote
 or paren next to a `/` (`os.chdir('/home')`), an argument `-` or `+N`/`-N` (zsh `cd -`, `cd -2`; `head`, `tail`
@@ -551,7 +552,16 @@ command, from this session's transcript. It allows a `git merge` or `git push` o
    `core.hooksPath` may be set. Any `git -c <key>=<value>` (or `--config-env`) anywhere before the verb,
    also after `-C <dir>`, is refused. The command holds exactly one git write, its merge or its push:
    a chained `git add`, `commit`, `reset`, `tag`, `checkout` or any other git write is refused, while
-   `git status`, `log`, `diff`, `show`, `rev-parse` and `cd <dir> &&` may stay. The repository must have
+   `git status`, `log`, `diff` and `show`, and `cd <dir> &&`, may stay (`rev-parse` is refused: the gate
+   resolves it as an action that is neither a merge nor a push). Those four take only the options of a short
+   allowlist: `git log --output=`, `git diff --output=` and `git show --ext-diff` are refused because they
+   write a file or run a program. A `git merge` option that takes a value (`--message`/`-m`, `--file`/`-F`,
+   `--strategy`/`-s`, `--strategy-option`/`-X`, `--cleanup`, `--into-name`, also in git's abbreviated and
+   run-together forms such as `--mess` and `-qm`) never gives the branch name. The git word and the verb
+   must be plain literal words, and the only verbs in the command are `merge`, `push` and those four (the
+   rule for hidden forms is in the limit below that starts `In auto mode`). A branch push goes only to the repository's own
+   remote: after `cd <clone>`, the clone's `origin` must be the same repository or have the same URL as the
+   origin of the directory the command started in or of the project. The repository must have
    no executable hook (not `.sample`) for `pre-push`, `pre-merge-commit`, `post-merge`, `pre-commit`,
    `commit-msg`, `prepare-commit-msg`, `post-commit`, `post-checkout` or `reference-transaction`, and no
    repo or worktree config that can run a command or send git elsewhere (`include.*`, `includeIf.*`,
@@ -612,8 +622,7 @@ Known limits:
   config the lists miss (`merge.<d>.driver`, `filter.<f>.smudge`, `filter.<f>.clean`, `diff.<d>.textconv`,
   `diff.external`, `gpg.program`, `core.editor`, `credential.helper` set to a path, `http.proxy`) and the
   hooks `post-index-change` and `pre-auto-gc` can run code during an allowed merge or push; a merge driver
-  can also make `main` differ from the checked tree. Cheap hidden verbs (`v=push; git $v`,
-  `timeout 20 git "push"`, `git send-pack`) and `git merge --message <branch>` are not caught. Treat
+  can also make `main` differ from the checked tree. Treat
   `[admin]` as a guard against accidents, not against a hostile repo or a hostile agent.
 - The run record the gate trusts is a file in the trace anchors' directory
   (`.claude/hooks/lib/verify_record.py`), the same trust root as for `/verify`.
@@ -623,11 +632,15 @@ Known limits:
 - A `tool_result` with no `is_error` field counts as a result that is not an error.
 - The remote `origin` itself is trusted: the gate checks that its push URL equals its fetch URL, not
   that the URL is the one you meant. `git remote set-url origin <other>` changes both, so it passes.
-- In auto mode (`[auto]` or `[admin]`), a command that may hide its git verb — a quote inside the word
-  (`git "push"`, `g''it push`, `git p\ush`), `${IFS}`, `$(…)`, a backtick or `eval` in a segment that
-  names git — is blocked, because the gate cannot tell what it runs. Outside auto mode these forms
-  behave as before. A git alias set in config (`git pp`), a script (`bash push.sh`) and `python3 -c`
-  still go unseen.
+- In auto mode (`[auto]` or `[admin]`), a command with a git word or a git verb that is not a plain
+  literal word is blocked, because the gate cannot tell what it runs (T296). That covers a `$`, backtick,
+  brace or glob in the git word or its verb (`v=push; git $v`, `git ${v}sh`, `git {p..p}ush`,
+  `git $'push'`, `$g push`, `$'git' push`), the same in a wrapper chain before it (`env`, `timeout`,
+  `nice`, `sudo`, `nohup`, `xargs`, `command`), a `bash -c '…'` string read the same way, a quote or
+  backslash that hides the verb (`git "push"`, `g''it push`, `git p\ush`), `${IFS}`, `$(…)`, a backtick or
+  `eval` in a segment that names git, and a verb that publishes without being `push` (`git send-pack`,
+  `git http-push`). Outside auto mode these forms behave as before. A git alias set in config
+  (`git pp`), a script (`bash push.sh`), `find -exec git …` and `python3 -c` still go unseen.
 - The gate is a static check of the command text and of the repo config at the time of the command. It
   is not an airtight security boundary: user-global config, a script that calls git, and a hook or
   config added between the check and the push are out of its reach.
@@ -682,6 +695,11 @@ Read these before you rely on `[auto]`. T180 left them open, on purpose. T186 re
     so it is not filed. A path that a script or config file in the worktree reads is not seen.
   - zsh's `autocd` (a bare directory name as a command) is not on in the tool shell. This is theoretical: if it
     were, `cd <wt> && ../main` would change directory, and the first-word list refuses `../main`.
+  - A call that renames or switches the worktree's branch is not filed by the branch it ends on (T296). The
+    trace hook runs after the command and reads the branch then, so `cd <wt> && git branch -m fix/t900-x && ...`
+    would be filed under T900. A `git` word is therefore filed only with a reading verb, `add`, `commit`, or
+    `branch` to list; `branch -m`, `checkout`, `switch`, `symbolic-ref` and `rebase` are not, and the session's
+    active-task file decides.
   - The merge gate's `invokes_test_runner` (older than T287, not changed here) counts a runner named in a
     heredoc body, or on the far side of `||` (`true || python3 -m pytest`), as a test run. The filing rules
     above keep such a call out of a worktree's trace, but a call filed by the session's active-task file
