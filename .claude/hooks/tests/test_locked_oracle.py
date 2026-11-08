@@ -39,7 +39,7 @@ def board(**sections):
 
 def make_project(tmp_path, kanban=None, guides=None):
     """A kit project: PROJECT_KANBAN.md plus tasks/TASK_GUIDE_<id>.md for each (id, text)."""
-    (tmp_path / "tasks").mkdir(exist_ok=True)
+    (tmp_path / "tasks").mkdir(parents=True, exist_ok=True)
     if kanban is not None:
         (tmp_path / "PROJECT_KANBAN.md").write_text(kanban, encoding="utf-8")
     for task_id, text in (guides or {}).items():
