@@ -10,6 +10,8 @@ Two questions, one reader:
     `MultiEdit`, `NotebookEdit` of a file in the task's worktree or a `tasks/*_<ID>*` file; a `Bash`
     command that runs in the task's worktree or names one of those paths, unless it only reads; an
     `Agent` spawn whose prompt binds to the task (`Task ID:` line first, else the first guide path).
+    `work_entries` + `work_start` (T293) give the date of the earliest such call: the start of the
+    task's change window, by the same test.
 
 Every reader works line by line and never loads a whole transcript. Each one fails closed for its
 caller: `verify_typed` is False on any doubt, and `load_work` is None (ownership unknown) when the
@@ -122,11 +124,12 @@ def _session_files(transcript_path):
     return [transcript_path] + sorted(glob.glob(pattern))
 
 
-def load_work(transcript_path, since=None):
-    """`[(tool name, input, cwd)]` for every call that may change a task — write tools, `Bash`,
-    `Agent` — in the session and its sub-agents, or None when ownership cannot be read.
-    `since` (an aware datetime, T284) keeps only calls dated at or after it; a call with no
-    readable date is then dropped (the narrower answer)."""
+def work_entries(transcript_path, since=None):
+    """`[(time, tool name, input, cwd)]` for every call that may change a task — write tools,
+    `Bash`, `Agent` — in the session and its sub-agents, or None when ownership cannot be read.
+    `time` is the call's aware datetime, None when it has no readable date (T293: the start of a
+    task's window, `work_start`). `since` (an aware datetime, T284) keeps only calls dated at or
+    after it; a call with no readable date is then dropped (the narrower answer)."""
     if not isinstance(transcript_path, str) or not os.path.isfile(transcript_path):
         return None
     calls = []
@@ -144,19 +147,26 @@ def load_work(transcript_path, since=None):
                     content = message.get("content") if isinstance(message, dict) else None
                     if entry.get("type") != "assistant" or not isinstance(content, list):
                         continue
-                    if since is not None:
-                        ts = parse_ts(entry.get("timestamp"))
-                        if ts is None or ts < since:
-                            continue
+                    ts = parse_ts(entry.get("timestamp"))
+                    if since is not None and (ts is None or ts < since):
+                        continue
                     cwd = entry.get("cwd") if isinstance(entry.get("cwd"), str) else None
                     for block in content:
                         if (isinstance(block, dict) and block.get("type") == "tool_use"
                                 and block.get("name") in KEPT_TOOLS
                                 and isinstance(block.get("input"), dict)):
-                            calls.append((block["name"], block["input"], cwd))
+                            calls.append((ts, block["name"], block["input"], cwd))
     except Exception:
         return None
     return calls
+
+
+def load_work(transcript_path, since=None):
+    """`[(tool name, input, cwd)]` for every call of `work_entries`, or None when ownership cannot
+    be read."""
+    entries = work_entries(transcript_path, since)
+    return None if entries is None else [(name, tool_input, cwd) for _, name, tool_input, cwd
+                                         in entries]
 
 
 def merge_calls(transcript_path, since):
@@ -328,22 +338,32 @@ def _bash_works(command, cwd, task, depth=0):
     return False
 
 
+def _works(task, name, tool_input, cwd):
+    """True when one call changed `task` (a `_Task`)."""
+    if name in WRITE_TOOLS:
+        path = tool_input.get(WRITE_TOOLS[name])
+        return isinstance(path, str) and task.names_path(path, cwd)
+    if name in SPAWN_TOOLS:
+        return _task_id_from_spawn_prompt(tool_input.get("prompt")) == task.task_id
+    return isinstance(tool_input.get("command"), str) and _bash_works(tool_input["command"], cwd,
+                                                                      task)
+
+
 def worked_on(calls, task_id, worktrees):
     """True when one of `calls` (from `load_work`) changed task `task_id`, whose live worktrees are
     `worktrees` (absolute paths). Read-only calls never count."""
     task = _Task(task_id, worktrees)
-    for name, tool_input, cwd in calls:
-        if name in WRITE_TOOLS:
-            path = tool_input.get(WRITE_TOOLS[name])
-            if isinstance(path, str) and task.names_path(path, cwd):
-                return True
-        elif name in SPAWN_TOOLS:
-            if _task_id_from_spawn_prompt(tool_input.get("prompt")) == task.task_id:
-                return True
-        elif isinstance(tool_input.get("command"), str):
-            if _bash_works(tool_input["command"], cwd, task):
-                return True
-    return False
+    return any(_works(task, name, tool_input, cwd) for name, tool_input, cwd in calls)
+
+
+def work_start(entries, task_id, worktrees):
+    """T293: the start of task `task_id`'s change window in this session: the earliest date of a
+    call in `entries` (from `work_entries`) that `worked_on` counts, or None when no call that
+    changed the task has a readable date. Same test as `worked_on`, so the two never disagree."""
+    task = _Task(task_id, worktrees)
+    times = [ts for ts, name, tool_input, cwd in entries
+             if ts is not None and _works(task, name, tool_input, cwd)]
+    return min(times) if times else None
 
 
 def task_worktrees(root, task_id, row=None):

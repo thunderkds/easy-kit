@@ -85,7 +85,7 @@ Security review: one P0, one P1, three P2 and two P3 findings, all confirmed by 
 | **P2c** docs said "all run in live worktrees" while the code also filed when some ran elsewhere | **Fixed.** `docs/claude-md/tracks.md` `### Auto-mode check (Stop hook)` and `### Known limits`, and the `task_context.py` slot 2b docstring, now state the every-command rule, the forms that block it, and that a main-checkout command blocks the filing. `test_ac6_*` pins the new sentences. |
 | **P3** `DEBATE_TASK` took the first `task=` anywhere, including quoted question text (E9) | **Fixed.** `_debate_task` splits `args` with `shlex` and takes the last whole top-level `task=<ID>` token. Test: `test_p3_*`, run as a subprocess Stop check (so no in-process `main()` waits on stdin). |
 | **P3** `git worktree list --porcelain` without `-z` | **Fixed.** `-z`, fields split on NUL. |
-| **P3** session window (Debates of the whole session count, not only recent ones) | **Skipped, follow-up.** Not part of this round, as the coordinator asked. Today a Debate counts for its named task for the whole session. |
+| **P3** session window (Debates of the whole session count, not only recent ones) | **Fixed in T293.** Was skipped in this round, as the coordinator asked. Since T293 a Debate counts for its named task only from the task's first change in this session (`tasks/TASK_REVIEW_T293.md`). |
 
 Mutation controls for the new guards (each `git diff --stat` = `1 file changed, 1 insertion(+), 1 deletion(-)`, restored with `git checkout`, then green). Run at `4d5a73ed`:
 

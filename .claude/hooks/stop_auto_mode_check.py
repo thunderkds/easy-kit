@@ -69,7 +69,10 @@ the trace filed them; the larger of the two counts is used. Only a call whose `t
 error counts. What keeps another session's calls out: the transcript and sub-agent files are read
 from this session's own path, symlinks are skipped, and an entry whose `sessionId` is not this
 session's is ignored. A file planted under this session's folder with this session's id is still
-read: the transcripts folder is protected only by the `.claude/settings.json` deny rules (T251). (Tests run in a task's worktree
+read: the transcripts folder is protected only by the `.claude/settings.json` deny rules (T251).
+T293: the Skill call and the Advocate call must also be dated at or after the first change of the
+task's files in this session (`session_work.work_start`); a missing or unparsable date does not count.
+A task with no recorded change window keeps the whole-session rule. (Tests run in a task's worktree
 are filed under that task by the trace hook itself, T287 slot 2b in `lib/task_context.py`.)
 """
 import glob
@@ -269,16 +272,18 @@ def _own_session_files(transcript_path):
     return [transcript_path] + [p for p in sorted(glob.glob(pattern)) if not os.path.islink(p)]
 
 
-def _debate_counts(transcript_path):
-    """T287: {task ID: Advocate calls} for this session's Debates, from its transcript and its
-    sub-agents' — each counted for the task the last `resolve-question` Skill call before it, in the
-    same file, named with `task=<ID>`. Stage 4: only an Advocate `tool_use` whose `tool_result` in
-    the same file is not an error counts (P1: a denied call never ran), and only entries whose
-    `sessionId` is this session's are read (P2). {} when the transcript cannot be read."""
-    counts = {}
+def _debate_calls(transcript_path):
+    """T287: `[(task ID, Skill call time, Advocate call time)]` for this session's Debates, from its
+    transcript and its sub-agents' — each Advocate call is credited to the task the last
+    `resolve-question` Skill call before it, in the same file, named with `task=<ID>`. A time is an
+    aware datetime, None when the entry has no readable date (T293). Stage 4: only an Advocate
+    `tool_use` whose `tool_result` in the same file is not an error is listed (P1: a denied call
+    never ran), and only entries whose `sessionId` is this session's are read (P2). [] when the
+    transcript cannot be read."""
+    calls = []
     if (not isinstance(transcript_path, str) or not os.path.isfile(transcript_path)
             or os.path.islink(transcript_path)):
-        return counts
+        return calls
     session_id = os.path.splitext(os.path.basename(transcript_path))[0]
     try:
         for path in _own_session_files(transcript_path):
@@ -308,29 +313,54 @@ def _debate_counts(transcript_path):
                                 and isinstance(block.get("input"), dict)):
                             continue
                         name, tool_input = block.get("name"), block["input"]
+                        at = parse_ts(entry.get("timestamp"))
                         if name == "Skill" and str(tool_input.get("skill", "")).strip() == "resolve-question":
-                            debate = _debate_task(tool_input.get("args"))
-                        elif debate and is_advocate_call({"tool_name": name,
-                                                          "summary": json.dumps(tool_input)}):
-                            pending[block.get("id")] = debate
-            for use_id, task_id in pending.items():
-                if use_id is not None and use_id in ran:
-                    counts[task_id] = counts.get(task_id, 0) + 1
+                            debate = (_debate_task(tool_input.get("args")), at)
+                        elif debate and debate[0] and is_advocate_call(
+                                {"tool_name": name, "summary": json.dumps(tool_input)}):
+                            pending[block.get("id")] = (debate[0], debate[1], at)
+            calls.extend(call for use_id, call in pending.items()
+                         if use_id is not None and use_id in ran)
     except Exception as exc:
         warn(f"cannot read this session's Debates ({type(exc).__name__}) — not counted")
-        return {}
+        return []
+    return calls
+
+
+def _debate_counts(calls, window_start=None):
+    """T287: {task ID: Advocate calls} from `_debate_calls`. T293: `window_start(task ID)` is the
+    start of the task's change window in this session, or None for a task with no recorded window
+    (the whole session counts, as before T293). With a window, an Advocate call counts only when
+    its Skill call and the Advocate call are both dated at or after the start: a call with a
+    missing or unparsable date does not count."""
+    counts, starts = {}, {}
+    for task_id, skill_at, advocate_at in calls:
+        if window_start is not None:
+            if task_id not in starts:
+                starts[task_id] = window_start(task_id)
+            start = starts[task_id]
+            if start is not None and (skill_at is None or advocate_at is None
+                                      or skill_at < start or advocate_at < start):
+                continue
+        counts[task_id] = counts.get(task_id, 0) + 1
     return counts
 
 
-def session_debates(transcript_path):
-    """`advocates(task_id)`: this session's Advocate calls for that task's Debates; the transcript
-    is read once."""
+def session_debates(transcript_path, window=None):
+    """`advocates(task_id, task=None)`: this session's Advocate calls for that task's Debates; the
+    transcript is read once. T293: `window(task)` (`session_window`) is read only for a task that
+    has a Debate; without `task` or `window` the whole session counts."""
     cache = {}
 
-    def advocates(task_id):
-        if "counts" not in cache:
-            cache["counts"] = _debate_counts(transcript_path)
-        return cache["counts"].get(str(task_id).upper(), 0)
+    def advocates(task_id, task=None):
+        if "calls" not in cache:
+            cache["calls"] = _debate_calls(transcript_path)
+        want = str(task_id).upper()
+        mine = [c for c in cache["calls"] if c[0] == want]
+        if not mine:
+            return 0
+        start = (lambda _id: window(task)) if window is not None and task is not None else None
+        return _debate_counts(mine, start).get(want, 0)
     return advocates
 
 
@@ -395,6 +425,15 @@ def traced_test_run(task_id):
         return True
 
 
+def _task_worktrees(sw, task):
+    """The worktrees that hold `task`'s work: its branch's, and its checkout when that is not the
+    main one."""
+    worktrees = sw.task_worktrees(ROOT, task.task_id, task.row)
+    if os.path.normpath(task.checkout) != os.path.normpath(ROOT):
+        worktrees.append(task.checkout)
+    return worktrees
+
+
 def session_owner(transcript_path):
     """T250 G3: `owned(task)` — True/False for "did this session work on the task", None when that
     cannot be told (no transcript, unreadable, any error). The transcript is read once."""
@@ -408,21 +447,42 @@ def session_owner(transcript_path):
             if cache["calls"] is None:
                 return None
             sw = cache["sw"]
-            worktrees = sw.task_worktrees(ROOT, task.task_id, task.row)
-            if os.path.normpath(task.checkout) != os.path.normpath(ROOT):
-                worktrees.append(task.checkout)
-            return sw.worked_on(cache["calls"], task.task_id, worktrees)
+            return sw.worked_on(cache["calls"], task.task_id, _task_worktrees(sw, task))
         except Exception as exc:
             warn(f"{task.task_id}: session ownership unknown ({type(exc).__name__}) — checked")
             return None
     return owned
 
 
+def session_window(transcript_path):
+    """T293: `start(task)` — when this session first changed the task's files (the earliest call
+    `session_work.worked_on` counts), or None when there is no recorded window: nothing readable,
+    no dated change, any error. None keeps the whole-session rule for Debates. The transcript is
+    read once, and only when a task has a Debate."""
+    cache = {}
+
+    def start(task):
+        try:
+            if "entries" not in cache:
+                import session_work  # lazy: a broken module only loses this narrowing
+                cache["sw"] = session_work
+                cache["entries"] = session_work.work_entries(transcript_path)
+            if cache["entries"] is None:
+                return None
+            sw = cache["sw"]
+            return sw.work_start(cache["entries"], task.task_id, _task_worktrees(sw, task))
+        except Exception as exc:
+            warn(f"{task.task_id}: Debate window unknown ({type(exc).__name__}) — whole session counts")
+            return None
+    return start
+
+
 def check_task(task, windows, owned=None, debates=None):
     """The reasons this task's report fails, or [] (also [] when the task is not auto mode).
     `owned(task)` (T250 G3, T252) narrows the check, for an extended-track task marked auto mode or
     any task found in an `[auto]` window, to this session's work; None, or an answer of None, keeps
-    the check. `debates(task_id)` (T287) is this session's Advocate calls for the task's Debates."""
+    the check. `debates(task_id, task)` (T287, T293) is this session's Advocate calls for the task's Debates
+    that fall inside the task's change window."""
     task_id, body = task.task_id, task.body
     if task.minimal:
         risk_text = body
@@ -490,7 +550,7 @@ def check_task(task, windows, owned=None, debates=None):
     debated = [l for l in lines if "DEBATED:" in l]
     have = sum(1 for r in records if is_advocate_call(r))
     if debates is not None:  # T287: the larger count, never the sum — a call is in both when filed right
-        have = max(have, debates(task_id))
+        have = max(have, debates(task_id, task))
     if risk == "High":
         # D10: at Risk High at least one decision is always debated by 3 Advocates; cited RULE
         # lines do not replace it ("This is force for the high risk", D7).
@@ -585,7 +645,8 @@ def main():
     dirs = am.tasks_dirs(ROOT)
     windows = auto_windows(event.get("transcript_path"))
     owned = session_owner(event.get("transcript_path"))
-    debates = session_debates(event.get("transcript_path"))
+    debates = session_debates(event.get("transcript_path"),
+                              session_window(event.get("transcript_path")))
     open_rows = am.board_rows(kanban)
     done = {task_id for task_id, _ in am.board_rows(kanban, ("Done",))}
     tasks = list(open_rows)
