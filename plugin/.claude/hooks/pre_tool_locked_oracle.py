@@ -1,0 +1,1 @@
+../../../.claude/hooks/pre_tool_locked_oracle.py

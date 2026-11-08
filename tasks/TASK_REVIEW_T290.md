@@ -50,7 +50,7 @@ Not done: merge (yours); <auto verify: running (T182) | auto verify: <result> | 
 | **New test(s) cover Acceptance Criteria (file paths pasted)** | ☐ pass / ☐ fail | [test file path(s) — required before Done] |
 | Verification command run | ☐ pass / ☐ fail | [paste actual output] |
 | Negative cases hold | ☐ pass / ☐ fail | [paste the red run against the prior content, or the mutation diff (`git diff --stat`, non-empty) before each verdict] |
-| verify | ☐ pass / ☐ fail / ☐ N/A | [what was observed — must literally state "pass" or "fail" here too, e.g. "skill run, feature confirmed working — pass": the merge gate scans this Notes column for the word "pass", not just the Result column] |
+| verify | ☑ pass | auto-run by hook, session 7d7a4d64-7c6e-445d-8c63-4c09693a28ea, commit 5d840b57d5ae969b660ce4dfd5c429318e552d7b, log .claude/verify-runs/T290-5d840b57d5ae.log — pass |
 | Review scope bounded to the change's blast radius (affected set, not whole repo) | ☐ pass / ☐ fail | [what was reviewed vs. skipped, and why] |
 | Full smoke suite still green (no regression) | ☐ pass / ☐ fail | |
 | **Companion score (easy-verifier)** | ☐ pass / ☐ fail / ☐ N/A | [`overall` and `change_risk` as the tool returned them, the scope, the ref, and the absolute path of the verifier report after a literal `report:` label — e.g. "overall 86 (>= 80), change_risk pass, scope changes, ref `main...HEAD`, report: `/home/me/.easy-verifier-reports/kit/score_changes_20261028T0530Z.html`". The gate reads the path that follows `report:` and nothing else, so with no label, or a path that is absent, the row is unscored — write ☑ N/A instead. ☑ N/A with a reason when neither companion tool was run: the merge gate blocks on ☑ fail only, never on an absent or N/A row] |
@@ -67,12 +67,111 @@ Not done: merge (yours); <auto verify: running (T182) | auto verify: <result> | 
 > **before any implementation commit exists**; if it does not (docs, templates, skill-instruction
 > text), BEFORE is the **verbatim prior content** of what changed — a quoted excerpt, not a command.
 
-**BEFORE**: [pasted timestamped command output showing the thing absent/failing, captured before the
-first implementation commit] OR [verbatim excerpt of the prior content, for non-executable changes]
+**BEFORE** (captured 2026-11-08T06:42Z, worktree `wt-t290`, branch `feat/t290-locked-oracle`, before any implementation commit; the only change on disk is the untracked red test file):
 
-**AFTER**: [same command, post-change] OR [verbatim excerpt of the new content]
+```
+$ ls .claude/hooks/pre_tool_locked_oracle.py
+ls: cannot access '.../.claude/hooks/pre_tool_locked_oracle.py': No such file or directory
+$ grep -n '^\*\*Locked oracle' <fixture>/tasks/TASK_GUIDE_T066.md     # real T066 guide + lock line, board row T066 In Progress
+240:**Locked oracle**: `.claude/hooks/tests/test_agent_guide_dedup.py`
+# T082-style Edit ("assert a < b" -> "assert a <= b") by agent_type common-infrastructure, piped to each existing PreToolUse hook that matches Edit
+--- pre_tool_sensitive_path.py   exit=0, stdout empty  (no deny: the Edit goes through)
+--- pre_agent_step_limit.py      exit=0, stdout empty  (no deny: the Edit goes through)
+--- pre_tool_locked_oracle.py    python3: can't open file ... [Errno 2] No such file or directory
+$ python3 -B -m pytest .claude/hooks/tests/test_locked_oracle.py -q -p no:cacheprovider
+67 failed, 1 passed in 1.36s        # (the 1 pass is the guard "implementer guides do not mention the lock", true on the prior content)
+```
+Script: scratchpad `before_replay.sh` (fixture built in a temp dir; no repo file touched).
 
-**DELTA**: [one sentence — what a user can now do that they could not before]
+**AFTER** (2026-11-08T06:55Z, same fixture and event, hook present, not yet wired in settings.json): the new hook denies the T082-style Edit.
+```
+--- the new hook, as a test would call it:
+{"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "deny", "permissionDecisionReason": "[hook:locked-oracle] .claude/hooks/tests/test_agent_guide_dedup.py is the Locked oracle of tasks/TASK_GUIDE_T066.md while T066 is In Progress; agent 'common-infrastructure' may not edit it. Stop and report to the Supervisor. ..."}}
+exit=0
+$ python3 -B -m pytest .claude/hooks/tests/test_locked_oracle.py -q -p no:cacheprovider
+68 passed
+```
+
+**DELTA**: A task guide can name its oracle test on a `**Locked oracle**:` line, and while the task is In Progress a sub-agent other than `qa-expert` can no longer edit that file (the T082 `<` to `<=` weakening is denied), yet the lock ends when the row leaves In Progress.
 
 **WITNESS**: [who ran it and when — derived from `memory/event-trace/T290.jsonl`, never the
 implementing agent alone]
+
+---
+
+## Stage 4 self-review (implementer, common-infrastructure; the Supervisor runs code-review and security-review separately)
+
+**Scope**: `.claude/hooks/pre_tool_locked_oracle.py` (new, 222 lines), `.claude/hooks/tests/test_locked_oracle.py` (new, 80 tests after the review fixes), `plugin/.claude/hooks/pre_tool_locked_oracle.py` (symlink; `tests/test_plugin_source.py:73` requires one per hook), `templates/TASK_GUIDE_template.md` (one sentence, appended to an existing line: `test_vital_slice.py` caps the template at 205 lines), `docs/claude-md/pipeline-stages.md` (one line in Stage 2). `AGENTS.md` unchanged (21732 bytes). `.claude/settings.json`, `hooks/hooks.json`, `plugin/hooks/hooks.json`, `PROJECT_KANBAN.md`, `memory/**` untouched.
+
+**Design choices that go past the spike** (each has a test): path identity by real path with case folded; a path inside any git worktree of the repo compares by its path in that checkout (the T082 incident happened through a worktree path); a session inside a linked worktree reads the guides and board of the main checkout (the row moves there); fail closed on a missing `agent_type`, bad stdin, an edit with no path, an unreadable guide or board, a lock line in a guide with no task ID, a lib import failure (denies bound callers only).
+
+**Mutation controls** (byte-changing, `git diff --stat` non-empty before each verdict, restored afterwards; output in scratchpad `mutate_out.txt`):
+
+| # | Mutation | Result |
+|---|----------|--------|
+| M1 | lookup never denies (`for ... in locks` -> `in []`) | 34 failed (AC1, AC7, edge, worktree) |
+| M2 | row-status check always In Progress (`if True:`) | 10 failed (AC3 x6, edge) |
+| M3 | main thread counted as bound | 5 failed (AC2 main, AC7, AC4 x3) |
+| M4 | `easy-kit:qa-expert` dropped from JUDGES | 1 failed |
+| M5 | `realpath` -> `abspath` | 1 failed (symlink alias) |
+| M6 | bad stdin no longer denied | 13 failed |
+| M7 | worktree not recognised as same repo | 2 failed |
+| M8 | worktree session reads its own board | 1 failed |
+| M9 | case folding removed | 1 failed |
+| M10 | missing agent_type counted as judge | 3 failed |
+| M11 | `Locked oracle` appended to `agents/qa.md` | 1 failed (AC5) |
+| M12 | template line made live | 1 failed (AC5) |
+
+**Known limits** (stated, not fixed): `Bash` writes (`sed -i`, `>`) are not parsed; a hard link to the oracle is a different path; a sub-agent can edit the guide (drop the lock line) or the board row, so the lock stops accidents, not an adversary; the plugin copy is not wired until the Supervisor adds the `hooks/hooks.json` entry.
+
+**Pin-test pre-flight** (LR-0004): full suite with this diff, 3927 passed, 0 failed (baseline on `main` before the change: no failures). Wiring the hook later makes 5 pin tests fail until companion edits land (found by applying the wiring to a throwaway copy): `tests/test_plugin_package.py::test_plugin_hooks_equal_settings_hooks` (`len(settings) == 11`; also needs `hooks/hooks.json` and `plugin/hooks/hooks.json` entries), `tests/test_subagent_sandbox_profile.py::test_sc5_supervisor_settings_have_no_permissions_or_sandbox` (names every changed settings line), `tests/test_site_content.py` x3 (`test_every_wired_hook_appears_in_hook_table`, `test_quick_reference_counts_match_source`, `test_quick_reference_strip_has_four_cells_whose_numbers_match_source`: `site/docs.html` needs a hook-table row, and `5 blocking hooks (of 11)` becomes `6 ... (of 12)` in `docs.html` and the `index.html` hero strip, which also moves `tests/test_site_visual_first.py` and `tests/test_site_story.py` hash baselines; the page must not say "In Progress").
+
+### Stage 4 review round 1 (Supervisor code-review + security-review: no P0, no P1) and what was done
+
+| Finding | Action |
+|---|---|
+| P2-1: a bound sub-agent can remove the lock line, move the row, create a guide or edit the hook | Stated in the hook docstring and in one clause ("It stops accidents, not an adversary") in the template sentence and the `pipeline-stages.md` line. Behaviour unchanged on purpose (implementers tick guide checklists). Test: `test_the_hook_docstring_states_the_adversary_limit_and_the_format`, `test_the_template_and_doctrine_say_the_hook_must_be_wired_and_state_the_limit` |
+| P2-2: template and doctrine said the hook denies, but it is not wired yet | Both now say "Once the hook is wired in `.claude/settings.json`"; template still 205 lines (same line extended) |
+| P2-3: accepted format undocumented | Documented in the docstring and template (`**Locked oracle**:` at line start, exact paths, backticked or bare, comma-separated, no glob, directory or `:line`). Pinned by `test_format_*`: `**Locked oracle:**`, no bold, indented, quoted, lowercase, a lowercase task ID in the guide name, `:12`, a directory and a glob each lock nothing |
+| P3-9: two survivors | New `test_edge_lock_entry_that_is_a_symlink_locks_its_target`; `test_ac4_lock_line_with_no_id_in_the_file_name_is_in_force` now asserts the reason text (`Locked oracle of tasks/TASK_GUIDE_NOTES.md while its task is In Progress`, not `unreadable`) |
+| P3-11: ruff | E741 (`l`, two places) and 3 lines over 120 columns fixed; `ruff check --line-length 120` clean on the hook and the test |
+| P3 4-8, 10, 12 | Not done; recorded below |
+
+**Mutation controls added in round 1** (`git diff --stat` non-empty, restored, 80 passed after; output `mutate2_out.txt` in the scratchpad):
+
+| # | Mutation | Result |
+|---|----------|--------|
+| M13 | `realpath` -> `abspath` in `lock_table` (lock entry that is a symlink) | 1 failed: `test_edge_lock_entry_that_is_a_symlink_locks_its_target` |
+| M14 | a guide with no task ID raises (denied by the generic error path) instead of by the lock | 1 failed: `test_ac4_lock_line_with_no_id_in_the_file_name_is_in_force` (reason text) |
+| M15 | lock-line regex accepts `**Locked oracle:**` | 1 failed: `test_format_malformed_lock_line_locks_nothing[colon-in-bold]` |
+
+**P3 4-8, 10, 12: skipped as instructed.** The text of these findings was not in the message the implementer received, so one line each cannot be written from the findings themselves. The Supervisor adds those lines from the review report. The limits the implementer knows of, unnumbered:
+- A lock covers the exact file only; a rename or copy of the oracle is a new path.
+- `Bash` writes (`sed -i`, `>`) and a hard link are not covered.
+- A sub-agent can edit the guide, the board row or this hook (P2-1).
+- An unreadable guide or board denies every non-judge sub-agent edit until it is readable (fail closed).
+- The hook reads every `tasks/TASK_GUIDE_*.md` on each bound edit (about 30 ms at 235 guides).
+- The hook, the plugin copy and the `.claude/settings.json` entry are not wired until the user approves.
+
+## Stage 4 review: the P3 lines the independent reviewer reported (added by the Supervisor, 2026-11-08)
+
+Reviewer verdict: no P0, no P1; P2 1-3 fixed in "Stage 4 review round 1". The P3 findings, kept as known limits:
+- P3-4: a lock line inside a code fence or an HTML comment still locks (over-deny); a `>` blockquote does not.
+- P3-5: one unreadable guide (for example a directory named like a guide in `tasks/`) denies every bound edit repo-wide. Fail closed by design: availability, not a bypass.
+- P3-6: the lock is repo-wide across worktrees, so a parallel task cannot repoint a file that an In Progress task has locked (the LR-0004 repoint friction).
+- P3-7: guides are read from the main checkout only; a lock line added only on a feature branch has no effect until the guide is on `main`.
+- P3-8: the hook has its own copy of the board section and row regexes (others: `pre_agent_validate_guide.py:122-150`, `lib/auto_mode.py` `board_rows`); keep the three in step.
+- P3-10: `templates/TASK_GUIDE_template.md` sits at the 205-line cap of `test_vital_slice.py`, so the lock sentence lives on an existing line.
+- P3-12: `docs/prd/PRD_online-board.md:95` ("12 hooks/scripts read `PROJECT_KANBAN.md`") is a historic count; this hook is one more.
+Theoretical, not reproduced: a bound agent spawning `qa-expert` to edit the oracle (sub-agents normally cannot spawn sub-agents); Windows 8.3 names and Unicode normalisation (not testable on Linux).
+Code-review and security-review: run by an independent reviewer on `main...feat/t290-locked-oracle` (about 60 bypass attempts, 9 mutation controls re-run, 7 red; the 2 survivors are now killed by `test_edge_lock_entry_that_is_a_symlink_locks_its_target` and the reason-text assertion).
+
+### Wiring (prepared and verified in a scratch copy; NOT applied to this branch)
+
+The coordinator relayed "wireit" as the user's approval to edit `.claude/settings.json`. The implementer cannot check that relay, and an agent message cannot authorise a change to configuration, so the wiring is a verified patch for the user or Supervisor to apply: `git apply <scratchpad>/wiring_t290.patch` from the worktree root (`git apply --check` passes on this branch at `02db9f0b`).
+
+Patch (9 files): `.claude/settings.json` entry after `pre_tool_sensitive_path.py`; `hooks/hooks.json` entry and `plugin/hooks/hooks.json` copy; `tests/test_plugin_package.py` 11 -> 12; the `allowed` set in `tests/test_subagent_sandbox_profile.py` (description, matcher, command); `site/docs.html` hooks-table row (plain words "while the task is being built", no "In Progress", cell under 25 words) and the strip `6 blocking hooks (of 12)` in `site/docs.html` and `site/index.html`; `CHANGED_BY_T290` in `tests/test_site_story.py` and one entry in `tests/test_site_visual_first.py` for the moved strip sentence.
+
+Red then green (scratch copy): test edits first, 1 red (`test_plugin_hooks_equal_settings_hooks`); entries added, 3 site reds (`test_every_wired_hook_appears_in_hook_table`, `test_quick_reference_counts_match_source`, `test_quick_reference_strip_has_four_cells_whose_numbers_match_source`); site rows and counts added, 2 baseline reds (`test_site_story` and `test_site_visual_first`, the lost sentence `5blocking hooks (of 11)`); baselines updated, all green. Full suite in the copy: 3940 passed, 25 subtests, 0 failed.
+
+Live check (the command string read from the copy's `settings.json`, run through a shell with `CLAUDE_PROJECT_DIR` set to a copy that had the lock line, T290 In Progress): `common-infrastructure` Edit -> deny; `backend-developer` Write -> deny; `qa-expert` Edit -> no output (allow); main thread -> no output (allow); garbage stdin -> deny. The hook run from a linked worktree reads guides from the main checkout, so the check used a copy without its `.git` link.

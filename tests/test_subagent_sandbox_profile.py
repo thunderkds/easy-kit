@@ -165,6 +165,12 @@ def test_sc5_supervisor_settings_have_no_permissions_or_sandbox():
                     'verify row and its record"',
                     '"command": "python3 \\"$CLAUDE_PROJECT_DIR\\"/.claude/hooks/'
                     'stop_auto_verify.py"'}
+        # T290: one PreToolUse hook entry (the locked-oracle check), likewise named line by line.
+        allowed |= {'"description": "Deny a sub-agent other than qa-expert an Edit or Write to a task '
+                    'guide\'s Locked oracle files while that task\'s board row is In Progress"',
+                    '"matcher": "Edit|Write|MultiEdit|NotebookEdit"',
+                    '"command": "python3 \\"$CLAUDE_PROJECT_DIR\\"/.claude/hooks/'
+                    'pre_tool_locked_oracle.py"'}
         assert set(changed) <= allowed, set(changed) - allowed
 
 
