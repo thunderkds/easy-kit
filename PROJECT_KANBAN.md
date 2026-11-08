@@ -87,6 +87,9 @@
 
 
 ### In Progress
+- [ ] **T294** — A quoted heredoc marker no longer hides later lines from the merge gate | common-infrastructure | C2 | Risk: High | P1 | Guide: `tasks/TASK_GUIDE_T294.md` | User 2026-11-08: "do all the jobs pls"; findings in `tasks/GATE_HUNT_2026-11-08.md` | Started 2026-11-08: branch `feat/t294-heredoc-quoted-marker`, worktree `../wt-t294`
+- [ ] **T295** — `[admin]` merge and push refuse repo config and hooks that can run code (allowlist) | common-infrastructure | C3 | Risk: High | P1 | Guide: `tasks/TASK_GUIDE_T295.md` | User 2026-11-08: "do all the jobs pls"; findings in `tasks/GATE_HUNT_2026-11-08.md` | Started 2026-11-08: branch `feat/t295-admin-repo-allowlist`, worktree `../wt-t295`
+- [ ] **T296** — Merge gate: hidden git verbs, `merge --message`, and slot 2b brace and glob escapes | common-infrastructure | C2 | Risk: High | P2 | Guide: `tasks/TASK_GUIDE_T296.md` | User 2026-11-08: "do all the jobs pls"; findings in `tasks/GATE_HUNT_2026-11-08.md` | Started 2026-11-08: branch `feat/t296-gate-hidden-verbs`, worktree `../wt-t296`
 
 
 
