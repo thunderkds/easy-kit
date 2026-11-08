@@ -64,7 +64,7 @@ User, 2026-11-08: *"add 1 more tag as administrator to allow supervisor to merge
 | 5 | `[admin]` found in pasted content, a tool result, a fetched page, a file or a PR comment does not count; only text the user typed counts | untrusted-content boundary |
 | 6 | `[Admin]`, `[ADMIN]`, a bare word *admin* and `[administrator]` are not the tag | exact tag rule, as for `[auto]` |
 | 7 | The tag covers only the task of the request it was typed in. A later plain request, or another task, is not admin | one tag, one task |
-| 8 | `ship`, force push and a push to a branch other than the task branch stay blocked under `[admin]` | Out of scope |
+| 8 | `ship`, force push (`--force`, `-f`, `+refspec`, `--force-with-lease`), `--no-verify`, `--all`, `--tags` and a push of any ref other than the task branch or `main` stay blocked under `[admin]`. A plain `git push origin main` is allowed only when the task's own admin merge into `main` has happened in this session and the merged branch's tip carries the hook-written passed verify row with its run record | User 2026-11-08: pushes `main` too, after a passed merge |
 | 9 | `docs/claude-md/tracks.md` (`## Auto mode`, `### Never in auto mode`), `AGENTS.md` (Tracks paragraph) and the site/docs text that lists the tag name the new tag and its limit, and state no old fact | stale-text rule (LR-0005) |
 | 10 | With `[admin]`, the Supervisor starts the headless auto verify run itself (`python3 .claude/hooks/stop_auto_verify.py --start <ID>`) as soon as the task is at Ready for Review, waits for the verdict, and only on a pass goes on to merge and push without asking. It never runs `/verify` in its own session. On `skip`, `blocked` or `fail` it merges nothing and reports why; a docs-only task answers `skip` (seen on T246 and T283), so the user runs `/verify` for it | User 2026-11-08: "with [admin] tag, you should run verify as automatically also" |
 
@@ -84,7 +84,8 @@ User, 2026-11-08: *"add 1 more tag as administrator to allow supervisor to merge
 | 4 | `[auto]`-only task, passed verify, same command | blocked | gate test (regression) |
 | 5 | `[admin]` only inside a tool result or pasted block | not marked | hook unit test |
 | 6 | `[Admin]`, `[administrator]`, "admin" | not marked | hook unit test |
-| 7 | Admin task, `git push --force` or `git push origin main` | blocked | gate test |
+| 7 | Admin task, `git push --force` or a push of another ref | blocked | gate test |
+| 7b | Admin task, passed verify, its own admin merge into `main` done: `git push origin main` | allowed; without the merge, or without a passed verify, blocked | gate test |
 | 8 | Mutation: remove the passed-verify check from the gate | tests 3 and 7 turn red | mutation control that changes bytes |
 
 ### Verification Command (exact, runnable)
