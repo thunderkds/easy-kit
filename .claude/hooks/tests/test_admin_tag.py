@@ -416,7 +416,8 @@ def test_ac10_a_skip_falls_back_to_the_user_and_the_paste_limit_is_stated():
 def test_ac8_admin_tag_states_the_main_push_rule():
     body = admin_tag_section()
     for needle in ("It may also push `main`", "own `[admin]` merge of the task branch into `main`",
-                   "`main` holds that branch's tip", "a `main` push with no such merge"):
+                   "must carry only that merge", "a `main` push with no such merge", "the rule names `main` only",
+                   "on the remote `origin` only"):
         assert needle in body, needle
 
 

@@ -22,7 +22,7 @@
 <track> is `minimal`. When the user set the track against the rule, the first `Decisions:` line says
 so: `- Track minimal — track set by the user; <the risk, in one line>`.
 
-In auto mode (the user's `[auto]` tag, `docs/claude-md/tracks.md` `## Auto mode`) the record is the final
+In auto mode (the user's `[auto]` or `[admin]` tag, `docs/claude-md/tracks.md` `## Auto mode`; with `[admin]`, `**Not done:**` names `merge (admin: after the auto verify pass)`) the record is the final
 report. Write it to its file before the run ends; the chat message is a copy, not the report.
 `Mode: auto` is the line right under the heading, exactly as written: T182's hook reads it. Each
 decision says how it was made. A Debate, safer-option or taste decision ends with the flag. Write `DEBATED`
@@ -42,7 +42,7 @@ auto verify slot with its result, and `**Not done:**` naming the merge — no `<
 
 ## <ID> — <title> · minimal
 Mode: auto
-**Asked:** "<the request, verbatim, with its [auto] tag>"
+**Asked:** "<the request, verbatim, with its [auto] or [admin] tag>"
 **Decisions:**
 1. <what was decided> — RULE: <the rule>
 2. <what was decided> — FACT: <path>:<line> "<quoted text>"

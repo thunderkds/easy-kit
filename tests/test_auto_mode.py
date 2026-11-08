@@ -264,7 +264,9 @@ def test_ac1_d6_never_in_auto_mode():
     raw = _subsection(_auto(), "Never in auto mode")
     for item in D6_NEVER:
         assert re.search(item, raw, re.M), item
-    assert [l for l in raw.splitlines() if l.startswith("- ")] == ["- merge;", "- push;", "- `ship`."]
+    # T284: `pull` joins the list (the gate blocks it under `[auto]` too).
+    assert [l for l in raw.splitlines() if l.startswith("- ")] == ["- merge;", "- pull;", "- push;",
+                                                                    "- `ship`."]
     sub = _norm(_subsection(_auto(), "The Supervisor never"))
     for item in D6_SUPERVISOR_NEVER:
         assert re.search(item, sub), item
@@ -292,7 +294,7 @@ def test_ac1_agents_md_pointer_sits_in_the_tracks_paragraph():
     assert "`## Auto mode`" in para and "`docs/claude-md/tracks.md`" in para
     assert f"`Track: <track> · auto — <reasons>. {TRACK_LINE_TAIL}`" in para
     assert re.search(r"bare word \*auto\* is not the tag", para)
-    assert re.search(r"never merges, pushes, moves a task to Done or runs `/verify`", para)
+    assert re.search(r"never merges, pulls, pushes, moves a task to Done or runs `/verify`", para)  # T284
     # D7 / AC 6 re-run 1 (task 5 wrote its report only in chat): the file is the report.
     assert "final report, written to its file before the run ends (the chat message is a copy)" in para
 

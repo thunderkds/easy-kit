@@ -90,7 +90,7 @@ Asking whether to commit is not a stop either: step 7 commits.
 **Backups.** A backup must sit inside the project or in a path the user named, never in `/tmp`: a temp
 directory can be gone by the time the user needs it.
 
-**Merge is never automatic.** The row stays in Ready for Review, so the merge gate blocks every merge, and
+**Merge is automatic only under `[admin]`.** The row stays in Ready for Review, so the merge gate blocks every merge, and
 every push of the task's own branch, while it is there. The branch merges only when the user asks, or
 when the request carried `[admin]` and the auto verify run passed (`### Admin tag`). Stage 5 verify is still mandatory before
 any merge: the Supervisor starts the headless auto verify run and reports its verdict
@@ -463,6 +463,7 @@ The pause also goes in the final report, on its `Paused:` line.
 With `[auto]`, these stay the user's:
 
 - merge;
+- pull;
 - push;
 - `ship`.
 
@@ -486,13 +487,19 @@ command, from this session's transcript. It allows a `git merge` or `git push` o
    a commit message or a sub-agent's prompt does not count. A later request without the tag ends it. A
    tag typed in another session does not count.
 2. The command merges one task branch (`git merge <branch>`), or pushes a branch to the same branch name
-   (`git push origin <branch>`, `git push -u origin HEAD`). It may also push `main` (`git push origin
-   main`), but only after this session's own `[admin]` merge of the task branch into `main`, read from the
-   transcript, and only when `main` holds that branch's tip. A force push (`-f`, `--force`,
-   `--force-with-lease`, `+<branch>`), a push of any other ref or to another branch, a `main` push with no
-   such merge, `--no-verify`, `--all`, `--tags`, a `git pull` and an octopus merge stay blocked.
-3. The branch names the task of the request: the request names the task ID, or this session (or one of its
-   sub-agents) worked on the task after the request.
+   (`git push origin <branch>`, `git push -u origin HEAD`), on the remote `origin` only (for a bare
+   `git push`, `branch.<b>.pushRemote`, `remote.pushDefault` and `branch.<b>.remote` are unset or
+   `origin`). It may also push `main` (`git push origin main`; the rule names `main` only), but only after
+   this session's own `[admin]` merge of the task branch into `main`: the merge call is in the transcript
+   after the request and its result is not an error. The pushed `main` must carry only that merge: either
+   a fast-forward to commits of the task branch, or exactly one merge commit whose parents are
+   `origin/main` and the branch tip. A force push (`-f`, `--force`, `--force-with-lease`, `+<branch>`), a
+   push of any other ref, another remote, a `main` push with no such merge or with any other commit on it,
+   `--no-verify`, `--all`, `--tags`, a `git pull` and an octopus merge stay blocked.
+3. The branch names the task of the request: the request text names the task ID, and no negation such as
+   "not" or "don't" stands before it in its clause; or the task is the one task whose
+   `tasks/TASK_GUIDE_<ID>.md` was first added to the repo after the request. Work that only names an
+   existing task (an edit, a `touch`, an `Agent` spawn) does not make it the request's task.
 4. The branch tip commits the hook-written `auto-run by hook` verify result for the task, with its run
    record for that commit, and the result says pass. A hand-typed pass row does not count.
 
@@ -507,8 +514,20 @@ With `[auto]` alone, the same gate blocks every merge, push and pull while that 
 one. A `git rebase` is not part of this rule. A session with no readable transcript has no known request,
 so this rule does not apply and the gate works as before.
 
-Known limit: the gate cannot tell typed text from pasted text inside your own message. An `[admin]` in
-text you paste without a code fence or a `>` quote is part of your message, so it counts.
+Known limits:
+
+- The gate cannot tell typed text from pasted text inside your own message. An `[admin]` in text you
+  paste without a code fence or a `>` quote is part of your message, so it counts.
+- **An agent can still forge the transcript that carries `[admin]`.** The gate reads the tag from this
+  session's `<id>.jsonl` in the transcripts folder, so an agent that appends a human-origin line to it can
+  forge the request. This is the same trust root as the transcript that proves your `/verify`
+  (`### Known limits`): `.claude/settings.json` denies agents `Edit(~/.claude/projects/**/*.jsonl)` and
+  `Bash(*.claude/projects/*)`, which raises the bar and is not a proof.
+- The negation check is a plain reading of the clause before a task ID, not a parser: "do NOT merge
+  T900" does not bind T900, but a negation phrased another way may be missed. Name only the task you
+  want merged.
+- For the gate, only an entry marked as typed by a human is a request: an entry with no origin, or a
+  sub-agent's prompt, neither ends an `[auto]` request nor carries `[admin]`.
 
 ### The Supervisor never
 

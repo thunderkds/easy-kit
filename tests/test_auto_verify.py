@@ -1779,7 +1779,8 @@ def test_t189_ac9_row_19_and_the_never_list_name_only_merge_push_and_ship():
     assert re.search(r"Merge, push and `ship`: never in auto mode", rule), rule
     assert "`### Auto close-out`" in rule and "`Memory:`" in rule
     never = _tracks_subsection("Never in auto mode")
-    assert [l for l in never.splitlines() if l.startswith("- ")] == ["- merge;", "- push;", "- `ship`."]
+    assert [l for l in never.splitlines() if l.startswith("- ")] == ["- merge;", "- pull;", "- push;",
+                                                                      "- `ship`."]  # T284: pull
     assert "Done" not in [w.strip(".;") for w in " ".join(
         l for l in never.splitlines() if l.startswith("- ")).split()]
 

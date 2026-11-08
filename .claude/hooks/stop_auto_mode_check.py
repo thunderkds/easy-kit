@@ -152,8 +152,8 @@ request_text = am.request_text
 
 def auto_windows(transcript_path):
     """(start, end) spans the session's `[auto]` requests cover (T229). A request carrying `[auto]`
-    (or `[admin]`, T284) outside code spans opens a span; the next request without it closes the span (end None: still
-    open). Before T229 the first `[auto]` request covered the rest of the session, so a task done
+    (or `[admin]`, T284) outside code spans opens a span; the next request without it closes the
+    span (end None: still open). Before T229 the first `[auto]` request covered the rest of the session, so a task done
     in normal mode later was checked as an auto-mode task."""
     if not transcript_path or not os.path.isfile(transcript_path):
         return []

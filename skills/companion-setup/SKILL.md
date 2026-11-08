@@ -49,7 +49,7 @@ The user installs it. Do not run any install step, and do not check the result f
 If the pick is easy-verifier, warn: its server listens on `127.0.0.1:8766` with no authentication,
 so any process on this machine can call it. The user decides whether to run it.
 
-### Auto mode (`[auto]`)
+### Auto mode (`[auto]`/`[admin]`)
 
 Ask no question. Run Step 1 only. Change nothing. In the final report, under `Not done:`, put one
 line: `companion-setup: nothing installed, offer not asked — yours to choose (/companion-setup)`.

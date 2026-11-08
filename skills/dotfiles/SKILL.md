@@ -92,7 +92,7 @@ python3 "${CLAUDE_SKILL_DIR}/scripts/dotfiles.py" status --source <dir> --claude
 Exit 0 means in sync. Exit 1 means drift or a conflict. Exit 2 means a folder was refused, or the
 source or a chosen folder is missing. A rule that exists only in the target is not drift.
 
-### Auto mode (`[auto]`)
+### Auto mode (`[auto]`/`[admin]`)
 
 Ask no question. Run `plan` with no target folder, and write nothing. Name no folder for the user.
 In the final report put one line: `Not done: dotfiles apply — yours to approve`, then the
