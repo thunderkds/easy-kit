@@ -1287,6 +1287,9 @@ def session_owned_in_progress(rows, command, cwd, transcript_path):
 #   * the branch tip commits the hook's own `auto-run by hook` verify result for the task, confirmed
 #     by its run record for that commit (`committed_verify_row(..., hook_only=True)`): a hand-typed
 #     pass row never counts.
+#   * round 3: one git write per command; push and merge in the same repository; no executable
+#     merge/push hook and no repo config that can run a command; `-c` refused anywhere before the
+#     verb; a hidden git verb (quotes, `${IFS}`, `$(…)`, backticks, `eval`) is a block in auto mode.
 # The gate's other checks then still run. No transcript, or one that cannot be read, means no
 # request is known: the rule does not apply and the gate is exactly as before T284.
 AUTO_MODE_PATTERNS = [p for p in BLOCKED_PATTERNS if not p.endswith(r"rebase\b")]
@@ -1296,6 +1299,20 @@ ADMIN_REMOTE = "origin"     # P2: the one remote `[admin]` may push to
 NEGATION = re.compile(r"\b(?:not|never|no|without|except|skip|leave|don't|dont|hold|wait|later|"
                       r"postpone)\b|n't\b", re.I)
 LS_REMOTE_TIMEOUT_S = 10
+# Round 3 (N1): the only git subcommands that may share an `[admin]` command with its one merge/push.
+ADMIN_READ_ONLY_GIT = frozenset({"status", "log", "diff", "show", "rev-parse"})
+GIT_OPTION_ARGS = ("-C", "-c", "--git-dir", "--work-tree", "--namespace", "--config-env")
+# Round 3 (N3): hooks a merge or push can run; any executable one (not `.sample`) refuses `[admin]`.
+ADMIN_HOOKS = ("pre-push", "pre-merge-commit", "post-merge", "pre-commit", "commit-msg",
+               "prepare-commit-msg", "post-commit", "post-checkout", "reference-transaction")
+# Round 3 (N4): repo/worktree config keys that can run a command or send git elsewhere.
+ADMIN_DENY_CONFIG = re.compile(
+    r"^(include\.|includeif\.|url\.|receive\.|core\.(sshcommand|gitproxy|hookspath)$"
+    r"|remote\..*\.(proxy|uploadpack|receivepack|vcs|pushurl)$"
+    r"|push\.(recursesubmodules|pushoption|followtags)$|transfer\.hiderefs$)")
+# Round 3 (N5): shell forms that hide which word is `git` or its verb.
+OBFUSCATION = re.compile(r"\$\{?IFS\b|\$\(|`|\beval\b")
+SHELL_WRAPPERS = frozenset({"command", "env", "sudo", "nohup", "time", "exec"})
 FUTURE_SLACK_S = 60  # B11: a commit dated later than now + this is not trusted as "added after"
 # B7: config that can send an `[admin]` push somewhere else or run code during it.
 ADMIN_PUSH_CONFIG_KEYS = (r"^(push\.default|remote\..*\.(push|mirror)|push\.followtags|core\.hookspath"
@@ -1377,13 +1394,88 @@ def _session_admin_merges(transcript_path, when, id_regex):
     return found
 
 
+def _git_verb(tokens):
+    """The git subcommand of a `git …` token list, past git's global options; None if absent."""
+    i = 1
+    while i < len(tokens) and tokens[i].startswith("-"):
+        i += 2 if tokens[i] in GIT_OPTION_ARGS else 1
+    return tokens[i] if i < len(tokens) else None
+
+
+def _common_dir(where):
+    """The absolute, resolved `git rev-parse --git-common-dir` of `where`, or None."""
+    done = _git(where, "rev-parse", "--path-format=absolute", "--git-common-dir")
+    path = done.stdout.strip() if done is not None and done.returncode == 0 else ""
+    return os.path.realpath(path) if path else None
+
+
+def _admin_repo_refusal(where):
+    """Round 3 (N3, N4): why the repository at `where` may not run an `[admin]` merge or push, or
+    None. An executable hook it could run, or repo/worktree config that can run a command or send git
+    elsewhere, refuses. User-global and system config are trusted (not read here)."""
+    common = _common_dir(where)
+    if common is None:
+        return f"cannot read the repository at {where}"
+    for name in ADMIN_HOOKS:
+        path = os.path.join(common, "hooks", name)
+        if os.path.isfile(path) and os.access(path, os.X_OK):
+            return f"the repository has an executable `{name}` hook, which this merge or push could run"
+    done = _git(where, "config", "--list", "--show-scope")
+    if done is None or done.returncode not in (0, 1):
+        return "cannot read the repository config"
+    for line in done.stdout.splitlines():
+        scope, _, entry = line.partition("\t")
+        if scope not in ("local", "worktree"):
+            continue
+        key, _, value = entry.partition("=")
+        key, value = key.lower(), value.strip()
+        if (ADMIN_DENY_CONFIG.match(key)
+                or (key == "core.fsmonitor" and value.lower() not in ("", "true", "false"))
+                or ((key.startswith("credential.") or key.startswith("alias."))
+                    and value.startswith("!"))):
+            return f"repo config `{key}` can run a command or redirect git, so `[admin]` refuses"
+    return None
+
+
+def hidden_git_verb(command):
+    """Round 3 (N5): True when `command` may run git push/merge/pull in a form the patterns do not
+    read — a quote-split word (`git "push"`, `g''it push`, `git p\\ush`) or `${IFS}`, `$(…)`, a
+    backtick or `eval` in a segment that names git. Used only in auto mode (a block on doubt)."""
+    text = strip_heredoc_bodies(command)
+    for segment in re.split(r"[;&|\n]+", QUOTED_SPAN_PATTERN.sub(" ", text)):
+        if re.search(r"git", segment, re.I) and OBFUSCATION.search(segment):
+            return True
+    lexer = shlex.shlex(text.replace("\n", " ; "), posix=True, punctuation_chars=True)
+    lexer.whitespace_split = True
+    lexer.commenters = ""
+    try:
+        tokens = list(lexer)
+    except ValueError:
+        return "git" in text.lower()
+    words = []
+    for token in tokens + [";"]:
+        if token in PUSH_SEPARATORS or set(token) <= SHELL_PUNCTUATION:
+            while words and (words[0] in SHELL_WRAPPERS or ENV_ASSIGNMENT_PREFIX.match(words[0] + " ")):
+                words = words[1:]
+            if words and words[0] == "git" and _git_verb(words) in ("push", "merge", "pull"):
+                return True
+            words = []
+        else:
+            words.append(token)
+    return False
+
+
 def _remote_main(where):
     """Round 2: the remote's real `main` sha from `git ls-remote origin refs/heads/main` (argv, no
     shell, a 10 s timeout, no prompt), never the local `refs/remotes/origin/main` the model can move.
     None on any failure, a timeout or no answer."""
     try:
         done = subprocess.run(
-            ["git", "-C", where, "ls-remote", ADMIN_REMOTE, f"refs/heads/{ADMIN_MAIN_BRANCH}"],
+            # Round 3 (N4): the gate's own call never runs a repo-set upload-pack (an explicit
+            # `--upload-pack` wins over `remote.origin.uploadpack`; a `-c` override does not, tested)
+            # nor a repo-set proxy. Repo-local `core.sshCommand` was already refused above.
+            ["git", "-c", "remote.origin.proxy=", "-C", where, "ls-remote",
+             "--upload-pack=git-upload-pack", ADMIN_REMOTE, f"refs/heads/{ADMIN_MAIN_BRANCH}"],
             capture_output=True, text=True, timeout=LS_REMOTE_TIMEOUT_S,
             env={**os.environ, "GIT_TERMINAL_PROMPT": "0"})
     except Exception:
@@ -1408,7 +1500,10 @@ def _main_push_refusal(where, merged):
     if remote is None:
         return ("cannot read the remote's real `main`: `git ls-remote origin refs/heads/main` "
                 "failed, timed out or returned nothing")
-    tip, main_sha = _rev(where, f"{merged}^{{commit}}"), _rev(where, f"{ADMIN_MAIN_BRANCH}^{{commit}}")
+    # Round 3 (N8): always the branch, never a tag of the same name.
+    merged = merged if merged.startswith("refs/") else f"refs/heads/{merged}"
+    tip = _rev(where, f"{merged}^{{commit}}")
+    main_sha = _rev(where, f"refs/heads/{ADMIN_MAIN_BRANCH}^{{commit}}")
     if tip is None or main_sha is None:
         return f"cannot resolve `main` or {merged}"
     if main_sha == tip:
@@ -1472,13 +1567,20 @@ def admin_refusal(command, cwd, transcript_path, admin):
         when, text = admin
         # Round 2: any `git -c <k>=<v>` (or `--config-env`) before the verb can change what a merge
         # or push runs (`core.hooksPath`) or where it goes, so `[admin]` refuses it.
+        writes = 0
         for tokens, _, _ in _command_segments(command) or []:
             if tokens and tokens[0] == "git":
-                for token in tokens[1:]:
-                    if not token.startswith("-"):
-                        break
-                    if token.startswith(("-c", "--config-env")):
+                i = 1  # Round 3 (N7): every global option up to the verb, past `-C <dir>` too
+                while i < len(tokens) and tokens[i].startswith("-"):
+                    if tokens[i].startswith(("-c", "--config-env")):
                         return "`[admin]` refuses `git -c` (or `--config-env`) before merge or push"
+                    i += 2 if tokens[i] in GIT_OPTION_ARGS else 1
+                writes += _git_verb(tokens) not in ADMIN_READ_ONLY_GIT
+        # Round 3 (N1): a chained `git add`/`commit`/`reset`/… runs after this check and could change
+        # what the push publishes, so the command holds exactly one git write: its merge or push.
+        if writes != 1:
+            return ("an `[admin]` command holds exactly one git merge or push, and no other git write "
+                    "(run the others in their own command)")
         actions = _git_actions(command, cwd)
         if not actions:
             return "cannot tell which branch this command merges or pushes"
@@ -1487,6 +1589,9 @@ def admin_refusal(command, cwd, transcript_path, admin):
         for args, where in actions:
             if where is None:
                 return "cannot tell which directory this command runs in"
+            repo_refusal = _admin_repo_refusal(where)
+            if repo_refusal:
+                return repo_refusal
             if args[0] == "merge":
                 names = [name for _, name in _merge_sources(args[1:], where)]
                 if len(names) != 1:
@@ -1506,8 +1611,13 @@ def admin_refusal(command, cwd, transcript_path, admin):
                         return ("a push of `main` needs the task's own `[admin]` merge into `main` "
                                 "in this session, after the request")
                     for task_id, merged, merge_where in merges:
-                        held = _git(where, "merge-base", "--is-ancestor", f"{merged}^{{commit}}",
-                                    f"{ADMIN_MAIN_BRANCH}^{{commit}}")
+                        # Round 3 (N2): the push and the merge are in the same repository.
+                        if _common_dir(where) is None or _common_dir(where) != _common_dir(merge_where):
+                            return ("the push of `main` and the task's merge are not in the same "
+                                    "repository")
+                        held = _git(where, "merge-base", "--is-ancestor",
+                                    f"refs/heads/{merged}^{{commit}}",
+                                    f"refs/heads/{ADMIN_MAIN_BRANCH}^{{commit}}")
                         if held is None or held.returncode != 0:
                             return f"`main` does not hold the merged branch {merged}"
                         refusal = _main_push_refusal(where, merged)
@@ -1649,6 +1759,15 @@ def main():
     scannable = strip_quoted_spans(strip_heredoc_bodies(command))
     if (not any(re.search(p, scannable) for p in BLOCKED_PATTERNS)
             and not defines_git_alias(scannable)):
+        # T284 round 3 (N5): in auto mode a git verb hidden by quotes or expansion is a block on
+        # doubt. Outside auto mode nothing changes.
+        if hidden_git_verb(command):
+            latest = auto_mode.latest_request(transcript_path)
+            if latest is not None and auto_mode.auto_tagged(latest[1]):
+                print(json.dumps({"decision": "block", "reason": (
+                    "[hook:pre_bash] Auto-mode gate — cannot push/merge:\n  • cannot tell: the "
+                    "command may run git push, merge or pull in a hidden form (quotes inside the "
+                    "word, `${IFS}`, `$(…)`, backticks or `eval`)\n" + AUTO_MODE_LIMIT)}))
         sys.exit(0)
 
     # T284: in auto mode a merge, push or pull is the user's, unless `[admin]` allows this one.

@@ -491,10 +491,21 @@ command, from this session's transcript. It allows a `git merge` or `git push` o
    `git push`, `branch.<b>.pushRemote`, `remote.pushDefault` and `branch.<b>.remote` are unset or
    `origin`). The push URL of `origin` must equal its fetch URL, and no `url.<x>.insteadOf`,
    `url.<x>.pushInsteadOf`, `remote.<name>.pushurl`, `remote.<name>.receivepack`, `push.followTags` or
-   `core.hooksPath` may be set. Any `git -c <key>=<value>` (or `--config-env`) before the verb is refused.
+   `core.hooksPath` may be set. Any `git -c <key>=<value>` (or `--config-env`) anywhere before the verb,
+   also after `-C <dir>`, is refused. The command holds exactly one git write, its merge or its push:
+   a chained `git add`, `commit`, `reset`, `tag`, `checkout` or any other git write is refused, while
+   `git status`, `log`, `diff`, `show`, `rev-parse` and `cd <dir> &&` may stay. The repository must have
+   no executable hook (not `.sample`) for `pre-push`, `pre-merge-commit`, `post-merge`, `pre-commit`,
+   `commit-msg`, `prepare-commit-msg`, `post-commit`, `post-checkout` or `reference-transaction`, and no
+   repo or worktree config that can run a command or send git elsewhere (`include.*`, `includeIf.*`,
+   `url.*`, `receive.*`, `core.sshCommand`, `core.gitProxy`, `core.fsmonitor` set to a command,
+   `remote.*.proxy`, `remote.*.uploadpack`, `remote.*.vcs`, `push.recurseSubmodules`, `push.pushOption`,
+   `transfer.hideRefs`, a `credential.*` or `alias.*` value starting with `!`). User-global and system
+   config are trusted and not read.
    It may also push `main` (`git push origin main`; the rule names `main` only), but only after this
    session's own `[admin]` merge of the task branch: the merge call is in the transcript after the
-   request, its result is not an error, and it ran with `main` checked out. The gate then reads the
+   request, its result is not an error, it ran with `main` checked out, and it ran in the same
+   repository as the push (the same `git rev-parse --git-common-dir`). The gate then reads the
    remote's real `main` with `git ls-remote origin refs/heads/main` (never the local `origin/main` ref)
    and allows only two shapes: `main` is the branch tip and contains the remote's `main` (a
    fast-forward), or `main` is one merge commit whose parents are the remote's `main` and the branch tip
@@ -544,7 +555,15 @@ Known limits:
 - `git merge -s ours` publishes nothing unverified, but it drops the task's changes from `main`.
 - A `tool_result` with no `is_error` field counts as a result that is not an error.
 - The remote `origin` itself is trusted: the gate checks that its push URL equals its fetch URL, not
-  that the URL is the one you meant.
+  that the URL is the one you meant. `git remote set-url origin <other>` changes both, so it passes.
+- In auto mode (`[auto]` or `[admin]`), a command that may hide its git verb — a quote inside the word
+  (`git "push"`, `g''it push`, `git p\ush`), `${IFS}`, `$(…)`, a backtick or `eval` in a segment that
+  names git — is blocked, because the gate cannot tell what it runs. Outside auto mode these forms
+  behave as before. A git alias set in config (`git pp`), a script (`bash push.sh`) and `python3 -c`
+  still go unseen.
+- The gate is a static check of the command text and of the repo config at the time of the command. It
+  is not an airtight security boundary: user-global config, a script that calls git, and a hook or
+  config added between the check and the push are out of its reach.
 
 ### The Supervisor never
 

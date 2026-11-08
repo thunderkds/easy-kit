@@ -778,7 +778,8 @@ def test_mutant_c_a_command_for_two_tasks_is_refused(gate, tmp_path):
     git(fx.main, "branch", "feat/t901-y")
     text = reason(MERGE + " feat/t900-x && " + MERGE + " feat/t901-y", fx.main,
                   session(tmp_path, fx, "merge T900 and T901 [admin]"))
-    assert text is not None and "one task only" in text, text
+    # Round 3: two git writes in one command are now refused before the task count is read.
+    assert text is not None and ("one task only" in text or "one git merge or push" in text), text
 
 
 def test_mutant_d_every_branch_of_the_command_needs_its_verify(gate, tmp_path):
@@ -787,7 +788,7 @@ def test_mutant_d_every_branch_of_the_command_needs_its_verify(gate, tmp_path):
     git(fx.main, "branch", "feat/t900-y")  # names T900, carries no verify row
     text = reason(MERGE + " feat/t900-x && " + PUSH + " origin feat/t900-y", fx.main,
                   session(tmp_path, fx, "do it [admin]"))
-    assert text is not None and "feat/t900-y" in text, text
+    assert text is not None, text  # round 3: refused as a chained write
 
 
 @pytest.mark.parametrize("stamp", ["garbage", None, ""])
@@ -974,3 +975,177 @@ def test_r2_b7_the_push_url_check_holds_on_its_own(gate, tmp_path, monkeypatch):
     assert reason(PUSH + " origin feat/t900-x", fx.wt, path) is None  # control
     git(fx.main, "config", "remote.origin.pushurl", "https://attacker.example/x.git")
     assert reason(PUSH + " origin feat/t900-x", fx.wt, path) is not None
+
+
+
+# ── Stage 4 fix round 3 (security review 3, N1-N8) ──────────────────────────────────────────
+import subprocess  # noqa: E402
+
+
+def legit(gate, tmp_path):
+    """A legit admin session: the verified branch merged into main (--no-ff), the call in the
+    transcript with a successful result."""
+    fx = gate(kanban(done=("T900",)))
+    auto_verified(fx)
+    git(fx.main, "merge", "-q", "--no-ff", "-m", "T900 merge", "feat/t900-x")
+    return fx, admin_session(tmp_path, fx, merge_cmd=NO_FF)
+
+
+def common_dir(repo):
+    return git(repo, "rev-parse", "--path-format=absolute", "--git-common-dir")
+
+
+@pytest.mark.parametrize("chain", [
+    G + "add -A && " + G + "commit -m sneaky && " + PUSH + " origin main",
+    G + "add -A && " + G + "commit -q --amend --no-edit && " + PUSH + " origin main",
+    G + "reset -q --hard HEAD~1 && " + PUSH + " origin main",
+    G + "tag x && " + PUSH + " origin main",
+], ids=["commit", "amend", "reset", "tag"])
+def test_r3_n1_a_git_write_chained_with_the_main_push_is_refused(gate, tmp_path, chain):
+    fx, path = legit(gate, tmp_path)
+    write(os.path.join(fx.main, "backdoor.py"), "evil=1\n")
+    text = reason(chain, fx.main, path)
+    assert text is not None and "one git merge or push" in text, text
+
+
+def test_r3_n1c_a_commit_chained_with_the_task_branch_push_is_refused(gate, tmp_path):
+    fx = gate(kanban(ready=("T900",)))
+    auto_verified(fx)
+    path = session(tmp_path, fx, "do T900 [admin]")
+    cmd = G + "add -A && " + G + "commit -m sneaky && " + PUSH + " origin feat/t900-x"
+    assert reason(cmd, fx.wt, path) is not None
+
+
+@pytest.mark.parametrize("chain", [G + "status && " + PUSH + " origin main",
+                                   G + "log --oneline -1 && " + PUSH + " origin main",
+                                   "cd {main} && " + PUSH + " origin main"],
+                         ids=["status", "log", "cd"])
+def test_r3_n1_read_only_segments_stay_allowed(gate, tmp_path, chain):
+    fx, path = legit(gate, tmp_path)
+    assert reason(chain.format(main=fx.main), fx.main, path) is None
+
+
+@pytest.mark.parametrize("form", ["cd", "-C"])
+def test_r3_n2_a_push_from_another_repository_is_refused(gate, tmp_path, form):
+    fx, path = legit(gate, tmp_path)
+    clone = os.path.join(fx.root, "evilclone")
+    git(fx.root, "clone", "-q", "-b", "main", os.path.join(fx.root, "origin.git"), clone)
+    git(clone, "checkout", "-q", "-b", "feat/t900-x")
+    write(os.path.join(clone, "backdoor.py"), "evil=1\n")
+    git(clone, "add", "-A")
+    git(clone, "commit", "-qm", "evil")
+    git(clone, "checkout", "-q", "main")
+    git(clone, "merge", "-q", "--no-ff", "-m", "T900 merge", "feat/t900-x")
+    cmd = ("cd " + clone + " && " + PUSH + " origin main") if form == "cd" else (
+        G + "-C " + clone + " push origin main")
+    text = reason(cmd, fx.main, path)
+    assert text is not None and "same repository" in text, text
+
+
+@pytest.mark.parametrize("hook,command", [("pre-push", "push"), ("post-merge", "merge"),
+                                          ("reference-transaction", "push")])
+def test_r3_n3_a_planted_hook_is_refused(gate, tmp_path, hook, command):
+    fx, path = legit(gate, tmp_path)
+    if command == "merge":
+        fx = gate(kanban(ready=("T900",))) if False else fx
+        path = session(tmp_path, fx, "do it [admin]")
+        git(fx.main, "reset", "-q", "--hard", "HEAD~1")  # undo the legit merge: merge again below
+    target = os.path.join(common_dir(fx.main), "hooks", hook)
+    cmd, cwd = (PUSH + " origin main", fx.main) if command == "push" else (MERGE + " feat/t900-x", fx.main)
+    assert reason(cmd, cwd, path) is None  # control: no hook yet
+    write(target, "#!/bin/sh\nexit 0\n")
+    os.chmod(target, 0o755)
+    text = reason(cmd, cwd, path)
+    assert text is not None and hook in text, text
+
+
+def test_r3_n3_a_sample_hook_does_not_block(gate, tmp_path):
+    fx, path = legit(gate, tmp_path)
+    target = os.path.join(common_dir(fx.main), "hooks", "pre-push.sample")
+    write(target, "#!/bin/sh\nexit 0\n")
+    os.chmod(target, 0o755)
+    assert reason(PUSH + " origin main", fx.main, path) is None
+
+
+@pytest.mark.parametrize("key,value", [
+    ("remote.origin.uploadpack", "/bin/true"), ("core.sshCommand", "/bin/true"),
+    ("core.fsmonitor", "/bin/true"), ("credential.helper", "!true"),
+    ("push.recurseSubmodules", "on-demand"), ("remote.origin.vcs", "x"),
+    ("push.pushOption", "x"), ("core.gitProxy", "/bin/true"), ("include.path", "/tmp/nothing"),
+    ("includeIf.gitdir:/x/.path", "/tmp/nothing"), ("transfer.hideRefs", "refs/heads"),
+    ("remote.origin.proxy", "http://x"), ("alias.pp", "!sh -c x"), ("receive.denyDeletes", "true"),
+])
+def test_r3_n4_repo_config_that_can_run_code_is_refused(gate, tmp_path, key, value):
+    fx, path = legit(gate, tmp_path)
+    git(fx.main, "config", key, value)
+    text = reason(PUSH + " origin main", fx.main, path)
+    assert text is not None and "config" in text, (key, text)
+
+
+@pytest.mark.parametrize("key,value", [("core.fsmonitor", "false"), ("credential.helper", "store"),
+                                       ("alias.st", "status")])
+def test_r3_n4_harmless_values_of_those_keys_stay_allowed(gate, tmp_path, key, value):
+    fx, path = legit(gate, tmp_path)
+    git(fx.main, "config", key, value)
+    assert reason(PUSH + " origin main", fx.main, path) is None
+
+
+def test_r3_n4_the_gates_own_ls_remote_never_runs_a_repo_uploadpack(gate, tmp_path):
+    fx, path = legit(gate, tmp_path)
+    marker = os.path.join(fx.root, "UPLOADPACK_RAN")
+    wrapper = os.path.join(fx.root, "up.sh")
+    write(wrapper, "#!/bin/sh\ntouch %s\nexec git-upload-pack \"$@\"\n" % marker)
+    os.chmod(wrapper, 0o755)
+    git(fx.main, "config", "remote.origin.uploadpack", wrapper)
+    assert reason(PUSH + " origin main", fx.main, path) is not None
+    assert not os.path.exists(marker)
+    assert merge_gate._remote_main(fx.main) is not None and not os.path.exists(marker)
+
+
+def test_r3_n7_dash_c_after_dash_C_is_refused(gate, tmp_path):
+    fx = gate(kanban(done=("T900",)))
+    auto_verified(fx)
+    path = admin_session(tmp_path, fx)
+    cmd = G + "-C " + fx.main + " -c core.hooksPath=/tmp/h merge --no-ff -m m feat/t900-x"
+    text = reason(cmd, fx.root, path)
+    assert text is not None and "-c" in text, text
+
+
+OBFUSCATED = ['git "push" origin main', "git 'push' origin main", 'git pu""sh origin main',
+              "git p\\ush origin main", '"git" push origin main', "g''it push origin main",
+              "git ${IFS}push origin main", "$(echo git) push origin main", "`echo git` push origin main",
+              "eval git push origin main", 'git "merge" feat/t900-x']
+
+
+@pytest.mark.parametrize("command", OBFUSCATED)
+@pytest.mark.parametrize("tag", ["[admin]", "[auto]"])
+def test_r3_n5_an_obfuscated_verb_is_blocked_in_auto_mode(gate, tmp_path, command, tag):
+    fx, _ = legit(gate, tmp_path)
+    path = transcript(tmp_path, [human("merge and push T900 " + tag, AFTER)])
+    assert reason(command, fx.main, path) is not None, command
+
+
+@pytest.mark.parametrize("command", OBFUSCATED[:6])
+def test_r3_n5_without_a_tag_the_obfuscated_forms_behave_as_before(gate, tmp_path, command):
+    fx = gate(kanban(done=("T900",)))
+    assert reason(command, fx.main, transcript(tmp_path, [human("thanks", AFTER)])) is None
+    assert reason(command, fx.main, None) is None
+
+
+@pytest.mark.parametrize("command", ['grep -n "git push" notes.md',
+                                     'git commit -m "$(cat <<\'EOF\'\nmsg\nEOF\n)"',
+                                     "echo done"])
+def test_r3_n5_auto_mode_data_and_commits_stay_allowed(gate, tmp_path, command):
+    fx, _ = legit(gate, tmp_path)
+    assert reason(command, fx.main, transcript(tmp_path, [human("go [auto]", AFTER)])) is None
+
+
+@pytest.mark.parametrize("spec", ["main", "refs/heads/main", "refs/heads/main:refs/heads/main"])
+def test_r3_n8_a_tag_named_main_does_not_shadow_the_branch(gate, tmp_path, spec):
+    fx, path = legit(gate, tmp_path)
+    good = git(fx.main, "rev-parse", "main")
+    write(os.path.join(fx.main, "backdoor.py"), "evil=1\n")
+    git(fx.main, "add", "-A")
+    git(fx.main, "commit", "-qm", "sneaky")
+    git(fx.main, "tag", "main", good)
+    assert reason(PUSH + " origin " + spec, fx.main, path) is not None, spec
