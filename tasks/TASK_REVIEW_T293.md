@@ -51,9 +51,9 @@ Not done: merge (yours); <auto verify: running (T182) | auto verify: <result> | 
 | Verification command run | ☑ pass | `python3 -m pytest .claude/hooks/tests/test_debate_window.py -q -p no:cacheprovider` -> `35 passed in 7.20s`; `python3 -m pytest .claude/hooks/tests -q -k "debate or stop_auto or session_work"` covered by the full run below. |
 | Negative cases hold | ☑ pass | Nine mutation controls (table below), each with a non-empty `git diff --stat` before its verdict; every one turns at least one test red, and the restored tree is `21 passed`. |
 | verify | ☐ pass / ☐ fail / ☐ N/A | [left for the auto verify run / Supervisor; not run by the implementing agent] |
-| Review scope bounded to the change's blast radius (affected set, not whole repo) | ☑ pass | Reviewed: `session_work.py` (callers `load_work`, `worked_on`: `pre_bash_block_unsafe_merge.py`, `stop_auto_mode_check.py`, T250/T252 tests), `stop_auto_mode_check.py` (`check_task`, `main`), `tracks.md`. Skipped: the other Stop checks, the report format, the 6-hour `_untagged.jsonl` fallback (cut list). |
+| Review scope bounded to the change's blast radius (affected set, not whole repo) | ☑ pass | Reviewed: `session_work.py` (callers `load_work`, `worked_on`: `pre_bash_block_unsafe_merge.py`, `stop_auto_mode_check.py`, T250/T252 tests), `stop_auto_mode_check.py` (`check_task`, `main`), `tracks.md`. Skipped: the other Stop checks, the report format, the 6-hour `_untagged.jsonl` fallback (cut list). Independent Stage 4 code and security review (read-only): round 1 found no P0 or P1 and 3 P2 (trace count unwindowed, planted transcript revives an old Debate, workaround wording) and P3-1 fallback tests; round 2 re-review of `git diff 7d2372aa..ed7b6a08` found no P0, P1 or P2 and 3 test gaps, closed in 8e0dd4ae (mutants R1-R3 red). The planted-transcript limit (P2-2) is documented, not fixed. |
 | Full smoke suite still green (no regression) | ☑ pass | `python3 -m pytest .claude/hooks/tests tests -p no:cacheprovider` after round 3 (clean tree, no edits during the run) -> `4197 passed in 283.13s (0:04:43)` (round 2: `4194 passed`). (One earlier run showed 1 failure, `test_memory_usage_report.py::test_script_does_not_touch_the_real_repository`, because this review file was edited while the suite ran; it passes alone and in the clean rerun.) |
-| **Companion score (easy-verifier)** | ☑ N/A | Companion tool not run by the implementing agent. |
+| **Companion score (easy-verifier)** | ☑ N/A | Not run: Medium-risk change to one hook; two independent Stage 4 reviews (round 1 and round 2 re-review) cover it |
 | **UI: Visual regression (diff or verdict pasted)** | ☑ N/A | No UI component. |
 | **UI: Design-system compliance (tokens/colors/typography verified)** | ☑ N/A | No UI component. |
 | **UI: Responsiveness at target viewports** | ☑ N/A | No UI component. |
@@ -89,7 +89,7 @@ Stop check          : paused: [hook:stop_auto_mode_check] Auto-mode final report
 
 **DELTA**: A Debate that is older than a task's first change in the session no longer satisfies the Stop check for that task, so an old Debate cannot cover work done much later.
 
-**WITNESS**: the implementing agent ran both captures; the reviewer reruns `python3 -m pytest .claude/hooks/tests/test_debate_window.py -q`. The trace `memory/event-trace/T293.jsonl` holds the counted test runs.
+**WITNESS**: the implementing agent ran both captures; the Supervisor's independent reviewer reran the suites and the repros (reports in `memory/event-trace/T293.jsonl`); the reviewer reruns `python3 -m pytest .claude/hooks/tests/test_debate_window.py -q`. The trace `memory/event-trace/T293.jsonl` holds the counted test runs.
 
 ---
 
