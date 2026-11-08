@@ -95,6 +95,12 @@ def test_ac1_a_trace_whose_only_run_has_the_flag_verifies(tmp_path, monkeypatch)
     "python3 -m json.tool -B -m pytest",
     "python3 -B pytest",
     "python3 -B -m pytestx",
+    "python3 -B-m pytest",           # no space before -m
+    "python3-m pytest",
+    "python3-B -m pytest",           # no space before a flag
+    "python3 -B-B -m pytest",
+    "/usr/bin/python3 -B -m pytest", # only the bare interpreter names count
+    "python3.12 -B -m pytest",
     "python3 -B -m pytest_cov_report",
     "python3 -B -mpytest",
     "python3 - -m pytest",
