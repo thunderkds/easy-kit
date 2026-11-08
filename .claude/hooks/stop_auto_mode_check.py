@@ -147,12 +147,7 @@ def window_s():
         return WINDOW_DEFAULT_S
 
 
-def parse_ts(value):
-    try:
-        ts = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
-        return ts if ts.tzinfo else ts.replace(tzinfo=timezone.utc)
-    except Exception:
-        return None
+parse_ts = am.parse_ts  # T292: the one copy, in `lib/auto_mode.py`
 
 
 # T229: what a user request is, and T284: which tags it carries — read by `lib/auto_mode.py`, the

@@ -63,6 +63,18 @@ GUIDE_PREFIX = "TASK_GUIDE_"
 REVIEW_PREFIX = "TASK_REVIEW_"
 MINIMAL_ROW_STANDIN = "| Track: minimal"  # for a task found from its file, not from a board row
 
+
+def parse_ts(value):
+    """T292: the one ISO timestamp parser of the hooks (`stop_auto_mode_check.py` and
+    `session_work.py` bind it). An aware datetime from a transcript or trace timestamp, a naive one
+    read as UTC; None for anything else."""
+    try:
+        ts = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except Exception:
+        return None
+    return ts if ts.tzinfo else ts.replace(tzinfo=timezone.utc)
+
+
 COMMENT = re.compile(r"<!--.*?-->", re.S)
 ROW_ID = re.compile(r"\*\*([A-Za-z]+-?\d+)\*\*")
 MINIMAL_ROW = re.compile(r"\|\s*Track: minimal\b")
