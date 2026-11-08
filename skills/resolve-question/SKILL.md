@@ -55,8 +55,8 @@ in one place. Identical prompts err together, so the starting areas differ:
 
 The prompt carries the question only, never the asking task's ID or guide path:
 `pre_agent_validate_guide.py` and `pre_agent_step_limit.py` would attribute the spawn to that
-task. The session file `.claude/hooks/.state/active_task.d/<sid>` can still count Scanner calls
-against the task's step budget; a Scanner at the step limit answers "not found".
+task. The session file `.claude/hooks/.state/active_task.d/<sid>` can still tie Scanner calls to
+it; each run has its own step budget. A Scanner at the step limit answers "not found".
 
 Scanner prompt template (fill `{question}` and `{area}` only):
 
