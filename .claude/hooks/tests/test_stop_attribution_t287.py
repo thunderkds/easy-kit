@@ -200,10 +200,13 @@ def test_ac2_t120_relative_cd_and_a_later_segment_are_found(tmp_path):
     s = Session(project, tmp_path)
     s.request("start [auto]")
     s.point_at("T119")  # as at 10:53:57
+    # (A `for …; do python3 -m pytest; done` loop is filed under T120 too, but the merge gate's own
+    # `invokes_test_runner` does not count a `do` body as a test run: the gate's rule, unchanged.)
     s.call("Bash", {"command": f"cd {project}; printf 'x\\n' > /dev/null; cd ../wt-t120 && "
-                               "for i in 1 2 3; do python3 -m pytest -q; done"})
+                               "python3 -m pytest -q 2>&1 | tail -3"})
     reason, _ = s.stop()
     assert reason is None, reason
+    assert len(trace(project, "T120")) == 1 and trace(project, "T119") == []
 
 
 def test_ac3_t120_without_a_test_run_still_pauses_with_todays_message(tmp_path):
@@ -248,6 +251,21 @@ def test_ac4_a_command_in_two_tasks_worktrees_keeps_the_pointer(tmp_path):
     s.call("Bash", {"command": f"cd {tmp_path / 'wt-t121'} && git log -1; "
                                f"cd {tmp_path / 'wt-t120'} && python3 -m pytest -q"})
     assert len(trace(project, "T250")) == 1
+
+
+def test_ac4_a_bound_sub_agent_keeps_its_spawn_binding_in_another_worktree(tmp_path):
+    """Slot 2 (T196) stays first: a sub-agent spawned for T121 that runs tests in T120's worktree
+    is still filed under T121."""
+    project = t120_project(tmp_path)
+    s = Session(project, tmp_path)
+    sub = s.transcript.parent / SID / "subagents" / "agent-a1.jsonl"
+    sub.parent.mkdir(parents=True)
+    sub.write_text(json.dumps({"type": "user", "message": {"role": "user", "content":
+                                                           "Task ID: T121\nGuide: x\n"}}) + "\n")
+    event = {"session_id": SID, "agent_id": "a1", "transcript_path": str(s.transcript),
+             "cwd": str(project), "tool_name": "Bash", "tool_input": {
+                 "command": f"cd {tmp_path / 'wt-t120'} && python3 -m pytest -q"}}
+    assert resolve_in(project, tmp_path, event, per_call=True) == "T121"
 
 
 def test_ac4_a_directory_that_is_no_worktree_keeps_the_pointer(tmp_path):
@@ -327,6 +345,39 @@ def test_ac3_t242_one_advocate_is_still_too_few(tmp_path):
     assert reason and "the trace has 1" in reason, reason
 
 
+def test_ac3_an_advocate_filed_right_is_not_counted_twice(tmp_path):
+    """With the pointer on T242, its one Advocate is both in `T242.jsonl` and in the transcript:
+    it counts once, so one Advocate is still too few."""
+    project = t242_project(tmp_path)
+    s = Session(project, tmp_path)
+    s.request("run T242 [auto]")
+    s.point_at("T242")
+    s.call("Skill", {"skill": "resolve-question", "args": "task=T242 risk=Medium"})
+    s.call("Agent", advocate_input(1))
+    s.call("Write", {"file_path": str(project / "tasks" / "TASK_REVIEW_T242.md"), "content": "x"})
+    s.call("Bash", {"command": "python3 -m pytest -q"})
+    s.call("Skill", {"skill": "code-review", "args": "task=T242"})
+    s.call("Skill", {"skill": "security-review"})
+    reason, _ = s.stop()
+    assert reason and "the trace has 1" in reason, reason
+
+
+def test_ac3_an_unreadable_transcript_counts_no_session_advocates(tmp_path):
+    """Fail closed: when the session's transcript cannot be read, its Debates count nothing and
+    the task is paused as before T287."""
+    project = t242_project(tmp_path)
+    s = t242_run(project, tmp_path)
+    s.transcript.chmod(0)
+    try:
+        if os.access(s.transcript, os.R_OK):
+            import pytest
+            pytest.skip("running as a user that reads mode-0 files")
+        reason, _ = s.stop()
+        assert reason and T242_PAUSE in reason, reason
+    finally:
+        s.transcript.chmod(0o600)
+
+
 def test_ac4_advocates_of_a_debate_for_another_task_are_not_credited(tmp_path):
     project = t242_project(tmp_path)
     reason, _ = t242_run(project, tmp_path, debate_task="T241").stop()
@@ -361,6 +412,23 @@ def test_ac5_the_stops_that_stay_are_unchanged():
     section = text.split("\n### Stops that stay\n", 1)[1].split("\n### ", 1)[0]
     bullets = tuple(l for l in section.splitlines() if l.startswith("- "))
     assert bullets == STOPS_THAT_STAY
+
+
+def _tracks_section(heading):
+    text = (ROOT / "docs" / "claude-md" / "tracks.md").read_text(encoding="utf-8")
+    return " ".join(text.split(f"\n### {heading}\n", 1)[1].split("\n### ", 1)[0].split())
+
+
+def test_ac6_tracks_md_states_the_new_attribution():
+    check = _tracks_section("Auto-mode check (Stop hook)")
+    assert ("the trace hook files a `Bash` call that runs in a task's worktree under that task, "
+            "before the session's active-task file") in check, check
+    assert ("count the Advocate calls this session made after a `resolve-question` Skill call with "
+            "`task=<ID>`, wherever the trace filed them") in check, check
+    assert "It does not read another session's calls." in check, check
+    limits = _tracks_section("Known limits")
+    assert "The Stop check finds misfiled work by two signals only (T287)." in limits, limits
+    assert "Other work filed under another task is still not found." in limits, limits
 
 
 def resolve_in(project, tmp_path, event, **kwargs):

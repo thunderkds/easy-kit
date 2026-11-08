@@ -311,6 +311,11 @@ results, task notifications and `!` commands are not requests). Since T250, a ta
 row, else Low; a Decision record is Risk Low unless it says otherwise. The trace is `memory/event-trace/<ID>.jsonl` plus the last 6 hours of
 `memory/event-trace/_untagged.jsonl` (`CLAUDE_AUTO_CHECK_WINDOW_S`): Advocate prompts carry no task ID, so
 their calls land in `_untagged.jsonl` unless the active-task state file is set.
+Since T287, two more signals find the work. First, the trace hook files a `Bash` call that runs in a task's
+worktree under that task, before the session's active-task file. The worktree's branch must name the task
+(`fix/t120-x`). So a test run there counts for item 7 and for the auto close-out. Second, items 3 and 5 also
+count the Advocate calls this session made after a `resolve-question` Skill call with `task=<ID>`, wherever
+the trace filed them. The check uses the larger count. It does not read another session's calls.
 
 It never loops: on the second fire (`stop_hook_active`) it allows the stop and appends
 `Paused: auto-mode check failed — <reasons>` to the report, ending in a stamp, `[report <stamp>]`. The
@@ -541,6 +546,13 @@ Read these before you rely on `[auto]`. T180 left them open, on purpose. T186 re
 - **Two auto tasks in one session can share evidence.** The auto-mode check counts the Advocate and
   Skill calls in `memory/event-trace/_untagged.jsonl` from the last 6 hours for every task. Advocate
   prompts carry no task ID. A second task can be credited with the first task's Advocates or reviews.
+- **The Stop check finds misfiled work by two signals only (T287).** A test run in the task's worktree
+  is filed under the task. An Advocate call counts for the task that the Debate's `resolve-question` call
+  names with `task=<ID>`. Other work filed under another task is still not found. Examples: a test run in the
+  main checkout while the session's active-task file names another task; a `code-review` or
+  `security-review` Skill call made then; a Debate whose `resolve-question` call names no task. A test loop
+  (`for …; do python3 -m pytest; done`) is filed under the task, but the merge gate does not count a loop body
+  as a test run. Point the session at the task (minimal-track step 1) before you work on it.
 - **A hand-typed `☑ pass` in the `verify` row ends the check.** The auto-mode check skips a review file
   whose `verify` row says `☑ pass`, so an agent that types that row ends the run unchecked. The merge
   gate still blocks a hand-typed row at merge: it accepts only a row with an `auto-run by hook` run

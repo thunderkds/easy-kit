@@ -41,6 +41,19 @@ Precedence — first match wins:
      re-read the transcript. That transcript layout is internal to Claude Code
      and undocumented (measured on 2.1.312, `tasks/TASK_GUIDE_T196.md` F1–F3):
      if it moves, this slot yields nothing and resolution falls through.
+  2b. **The worktree a ``Bash`` call runs in** (T287) — only when the caller
+     passes ``per_call=True``, which ``post_tool_trace.py`` alone does. The
+     directory each simple command runs in comes from the event's ``cwd`` and
+     each ``cd <dir>`` before it. When the commands that run outside the main
+     checkout all run in live worktrees of this repo whose branches name one
+     task (``fix/t120-x`` names T120), the call is filed under it. Anything
+     else says nothing: a directory that is no worktree, ``cd $DIR`` or ``cd ~``
+     (not known), a branch that names no task or two, two tasks' worktrees in
+     one command. Why: on 2026-11-04 the Supervisor ran T120's tests in
+     ``wt-t120`` while the session's one pointer (slot 3) named T250, so they
+     were filed under T250 and the Stop check paused T120 (T283 spike 6).
+     The step limit and the sensitive-path hook keep the slots below: a
+     safety stop sees the task it saw before T287.
   3. **The per-session state file** (T196; replaces T047's shared file),
      ``.claude/hooks/.state/active_task.d/<session_id>`` — a plain two-line file
      (``Txxx`` on line 1, an ISO-8601 UTC "written at" timestamp on line 2)
@@ -61,7 +74,9 @@ Precedence — first match wins:
      parent's ``session_id`` — slot 2 is what separates sibling sub-agents.
      **The shared file is no longer read** (D2): a file left there is ignored.
      **Residual:** two sub-agents of one session spawned *without* a structural
-     ID in their prompt both fall through to that session's file.
+     ID in their prompt both fall through to that session's file. The file
+     names one task, but the main session may work on several: T287 slot 2b
+     files a ``Bash`` call by the worktree it runs in first (trace only).
 
      **Path resolution (T047 Stage 4 fix — see `_resolve_root`).** The state
      root is ``$CLAUDE_PROJECT_DIR`` when set, never ``__file__`` arithmetic
@@ -89,10 +104,13 @@ Precedence — first match wins:
 
 Deliberate decisions:
 
-* **A ``Bash`` ``command`` string is never scanned**, even when it legitimately
-  contains a guide path (``cat tasks/TASK_GUIDE_T012.md``). Command text is free
-  text that can quote arbitrary file content; scanning it is the same class of
-  guess this module exists to remove. Such a call is unattributed.
+* **A ``Bash`` ``command`` string is never scanned for task IDs**, even when it
+  legitimately contains a guide path (``cat tasks/TASK_GUIDE_T012.md``). Command
+  text is free text that can quote arbitrary file content; scanning it is the
+  same class of guess this module exists to remove. Such a call is
+  unattributed. Slot 2b (T287) reads only the ``cd`` targets — where the work
+  runs, not what it mentions — and takes the task from the worktree's branch,
+  never from the command text.
 * **``tool_response`` is never read.** A tool's *output* describes what a file
   says, not what the agent is working on. The one file slot 2 reads is the
   sub-agent's own transcript, and only its first line: the spawn prompt, which
@@ -106,6 +124,7 @@ a hook that runs on every tool call in the repo can never crash or block on it.
 import json
 import os
 import re
+import subprocess
 import sys
 from datetime import datetime, timezone
 
@@ -344,6 +363,79 @@ def _task_id_from_state_file(event):
         return None
 
 
+GIT_TIMEOUT_S = 5
+
+
+def _run_dirs(command, cwd):
+    """Slot 2b: the directory each simple command of `command` runs in — the event's `cwd`, then
+    each `cd <dir>` before it — or None for one that cannot be known (`cd $D`, `cd ~`, a relative
+    `cd` from an unknown directory). [None] when the text does not tokenize."""
+    import session_work  # lazy: it imports this module, and only slot 2b needs its tokenizer
+    segments = session_work._segments(command)
+    if segments is None:
+        return [None]
+    directory = cwd if isinstance(cwd, str) and os.path.isabs(cwd) else None
+    dirs = []
+    for tokens in segments:
+        if os.path.basename(tokens[0]) == "cd":
+            target = tokens[1] if len(tokens) == 2 else None
+            known = (target and "$" not in target and "`" not in target
+                     and not target.startswith("~") and (directory or os.path.isabs(target)))
+            directory = os.path.normpath(os.path.join(directory or "", target)) if known else None
+            continue
+        dirs.append(directory)
+    return dirs
+
+
+def _worktree_branches(root):
+    """[(real path, branch)] of each live worktree of the repo at `root`, the main checkout and
+    detached worktrees excluded; [] on any failure."""
+    done = subprocess.run(["git", "worktree", "list", "--porcelain"], cwd=root,
+                          capture_output=True, text=True, timeout=GIT_TIMEOUT_S)
+    if done.returncode != 0:
+        return []
+    found, path = [], None
+    for line in done.stdout.splitlines():
+        if line.startswith("worktree "):
+            path = os.path.realpath(line[len("worktree "):].strip())
+        elif line.startswith("branch refs/heads/") and path and path != root:
+            found.append((path, line[len("branch refs/heads/"):].strip()))
+    return found
+
+
+def _task_id_from_worktree(event):
+    """Slot 2b (T287): the one task whose worktree this `Bash` call runs in, or None."""
+    if event.get("tool_name") != "Bash":
+        return None
+    tool_input = event.get("tool_input")
+    command = tool_input.get("command") if isinstance(tool_input, dict) else None
+    if not isinstance(command, str):
+        return None
+    root = os.path.realpath(_resolve_root())
+    cwd = event.get("cwd")
+    if "cd" not in command and isinstance(cwd, str) and os.path.realpath(cwd) == root:
+        return None  # the usual call: runs in the main checkout, no tokenizer, no `git`
+    dirs = _run_dirs(command, cwd)
+    if None in dirs:
+        return None
+    real = [os.path.realpath(d) for d in dirs]
+    if all(d == root for d in real):
+        return None  # the usual case: no `git` call
+    worktrees = _worktree_branches(root)
+    branch_task = re.compile(task_id_pattern(root, bounded=True), re.IGNORECASE)
+    tasks = set()
+    for d in real:
+        hits = [(p, b) for p, b in worktrees if d == p or d.startswith(p + os.sep)]
+        if not hits:
+            continue  # the main checkout, or a directory that is no worktree: says nothing
+        branch = max(hits, key=lambda hit: len(hit[0]))[1]
+        named = {normalize_task_id(m) for m in branch_task.findall(branch)}
+        if len(named) != 1 or None in named:
+            return None
+        tasks |= named
+    return tasks.pop() if len(tasks) == 1 else None
+
+
 def _task_id_from_path_fields(tool_input):
     for field in PATH_FIELDS:
         value = tool_input.get(field)
@@ -366,9 +458,10 @@ def _task_id_from_agent_prompt(tool_input):
     return None
 
 
-def resolve_task_id(event):
+def resolve_task_id(event, per_call=False):
     """Return the Task ID (`Txxx`) this hook event structurally belongs to, or
-    None when nothing structural says which task it is. Never raises."""
+    None when nothing structural says which task it is. `per_call` (T287, the
+    trace hook only) adds slot 2b. Never raises."""
     try:
         task_id = _task_id_from_env()
         if task_id:
@@ -380,6 +473,11 @@ def resolve_task_id(event):
         task_id = _task_id_from_spawn_binding(event)
         if task_id:
             return task_id
+
+        if per_call:
+            task_id = _task_id_from_worktree(event)
+            if task_id:
+                return task_id
 
         task_id = _task_id_from_state_file(event)
         if task_id:

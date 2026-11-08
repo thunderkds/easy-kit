@@ -62,7 +62,11 @@ broken import: it blocks the first stop, and allows a second fire with one stder
 Trace: `memory/event-trace/<ID>.jsonl` (all records) plus `memory/event-trace/_untagged.jsonl`
 records from the last CLAUDE_AUTO_CHECK_WINDOW_S seconds (default 6h). Advocate and Scanner
 prompts carry no task ID, so their calls land in `_untagged.jsonl` unless the active-task state
-file is set.
+file is set — and then under whichever task it names. T287: check (3) and (5) therefore also count
+the Advocate calls this session (or a sub-agent of it) made after a `resolve-question` Skill call
+whose `args` say `task=<ID>`, up to the next such call, wherever the trace filed them; the larger
+of the two counts is used. Another session's calls are never read. (Tests run in a task's worktree
+are filed under that task by the trace hook itself, T287 slot 2b in `lib/task_context.py`.)
 """
 import hashlib
 import json
@@ -235,6 +239,61 @@ def is_advocate_call(record):
                 and field(summary, "prompt").startswith(ADVOCATE_PROMPT_PREFIX))
 
 
+DEBATE_TASK = re.compile(r"(?<![A-Za-z0-9_])task=([A-Za-z0-9_-]+)", re.I)
+
+
+def _debate_counts(transcript_path):
+    """T287: {task ID: Advocate calls} for this session's Debates, from its transcript and its
+    sub-agents' — each counted for the task the last `resolve-question` Skill call before it, in the
+    same file, named with `task=<ID>`. {} when the transcript cannot be read (counts nothing)."""
+    counts = {}
+    if not isinstance(transcript_path, str) or not os.path.isfile(transcript_path):
+        return counts
+    try:
+        import session_work  # lazy, as in session_owner
+        for path in session_work._session_files(transcript_path):
+            debate = None
+            with open(path, encoding="utf-8") as f:
+                for line in f:
+                    if '"tool_use"' not in line:
+                        continue
+                    try:
+                        entry = json.loads(line)
+                    except Exception:
+                        continue
+                    message = entry.get("message") if isinstance(entry, dict) else None
+                    content = message.get("content") if isinstance(message, dict) else None
+                    if entry.get("type") != "assistant" or not isinstance(content, list):
+                        continue
+                    for block in content:
+                        if not (isinstance(block, dict) and block.get("type") == "tool_use"
+                                and isinstance(block.get("input"), dict)):
+                            continue
+                        name, tool_input = block.get("name"), block["input"]
+                        if name == "Skill" and str(tool_input.get("skill", "")).strip() == "resolve-question":
+                            hit = DEBATE_TASK.search(str(tool_input.get("args") or ""))
+                            debate = hit.group(1).upper() if hit else None
+                        elif debate and is_advocate_call({"tool_name": name,
+                                                          "summary": json.dumps(tool_input)}):
+                            counts[debate] = counts.get(debate, 0) + 1
+    except Exception as exc:
+        warn(f"cannot read this session's Debates ({type(exc).__name__}) — not counted")
+        return {}
+    return counts
+
+
+def session_debates(transcript_path):
+    """`advocates(task_id)`: this session's Advocate calls for that task's Debates; the transcript
+    is read once."""
+    cache = {}
+
+    def advocates(task_id):
+        if "counts" not in cache:
+            cache["counts"] = _debate_counts(transcript_path)
+        return cache["counts"].get(str(task_id).upper(), 0)
+    return advocates
+
+
 def report_stamp(body):
     """T186: a hash of the report block as the checks read it."""
     lines = [l.strip() for l in am.COMMENT.sub("", body).splitlines()]
@@ -319,11 +378,11 @@ def session_owner(transcript_path):
     return owned
 
 
-def check_task(task, windows, owned=None):
+def check_task(task, windows, owned=None, debates=None):
     """The reasons this task's report fails, or [] (also [] when the task is not auto mode).
     `owned(task)` (T250 G3, T252) narrows the check, for an extended-track task marked auto mode or
     any task found in an `[auto]` window, to this session's work; None, or an answer of None, keeps
-    the check."""
+    the check. `debates(task_id)` (T287) is this session's Advocate calls for the task's Debates."""
     task_id, body = task.task_id, task.body
     if task.minimal:
         risk_text = body
@@ -390,6 +449,8 @@ def check_task(task, windows, owned=None):
     records = trace_records(task_id)
     debated = [l for l in lines if "DEBATED:" in l]
     have = sum(1 for r in records if is_advocate_call(r))
+    if debates is not None:  # T287: the larger count, never the sum — a call is in both when filed right
+        have = max(have, debates(task_id))
     if risk == "High":
         # D10: at Risk High at least one decision is always debated by 3 Advocates; cited RULE
         # lines do not replace it ("This is force for the high risk", D7).
@@ -484,6 +545,7 @@ def main():
     dirs = am.tasks_dirs(ROOT)
     windows = auto_windows(event.get("transcript_path"))
     owned = session_owner(event.get("transcript_path"))
+    debates = session_debates(event.get("transcript_path"))
     open_rows = am.board_rows(kanban)
     done = {task_id for task_id, _ in am.board_rows(kanban, ("Done",))}
     tasks = list(open_rows)
@@ -496,7 +558,7 @@ def main():
     for task_id, row in tasks:
         try:
             task = am.resolve(task_id, row, dirs)
-            for report_path, minimal, reason, stamp in check_task(task, windows, owned):
+            for report_path, minimal, reason, stamp in check_task(task, windows, owned, debates):
                 failures.setdefault(task_id, (report_path, minimal, [], stamp))[2].append(reason)
         except am.Unreadable as exc:
             warn(f"{exc} — auto-mode check skipped for {task_id}")
