@@ -67,8 +67,16 @@ Not done: merge (yours); <auto verify: running (T182) | auto verify: <result> | 
 > **before any implementation commit exists**; if it does not (docs, templates, skill-instruction
 > text), BEFORE is the **verbatim prior content** of what changed — a quoted excerpt, not a command.
 
-**BEFORE**: [pasted timestamped command output showing the thing absent/failing, captured before the
-first implementation commit] OR [verbatim excerpt of the prior content, for non-executable changes]
+**BEFORE** (captured 2026-11-08T08:49:38Z at `eb85573c`, before any implementation commit; the fixture is the T287 `t242_reviewed` session plus a Debate dated 5 hours before T242's first change; the script drives the real Stop hook):
+
+```
+now                 : 2026-11-08T08:49:38.138031+00:00
+T242 first change   : 2026-11-08T08:49:38.026606+00:00
+Debate (Skill call) : 2026-11-08T03:49:38.026606+00:00 task=T242, 2 Advocates
+Stop check          : NOT paused: the old Debate was counted
+```
+
+Red tests run at 2026-11-08T08:49:20Z on the unchanged hooks: `16 failed, 5 passed` in `.claude/hooks/tests/test_debate_window.py` (the 5 that pass are today's behaviour: AC 1 x3, AC 4 x2). Example: `test_ac2_a_debate_dated_before_the_window_does_not_count` -> `AssertionError: None` (no pause).
 
 **AFTER**: [same command, post-change] OR [verbatim excerpt of the new content]
 
