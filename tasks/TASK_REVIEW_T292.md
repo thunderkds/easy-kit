@@ -67,8 +67,36 @@ Not done: merge (yours); <auto verify: running (T182) | auto verify: <result> | 
 > **before any implementation commit exists**; if it does not (docs, templates, skill-instruction
 > text), BEFORE is the **verbatim prior content** of what changed — a quoted excerpt, not a command.
 
-**BEFORE**: [pasted timestamped command output showing the thing absent/failing, captured before the
-first implementation commit] OR [verbatim excerpt of the prior content, for non-executable changes]
+**BEFORE**:
+
+```
+# captured 2026-11-08T08:46:47Z in wt-t292 at eb85573c, before any implementation commit
+$ grep -rn "def parse_ts" .claude/hooks
+.claude/hooks/stop_auto_mode_check.py:150:def parse_ts(value):
+.claude/hooks/lib/session_work.py:33:def parse_ts(value):
+$ python3 -B char.py   (stop copy loaded with ast, session_work imported; 20 inputs)
+'2026-11-04T06:05:12+00:00'                stop=datetime(2026, 11, 4, 6, 5, 12, tzinfo=utc)  session_work=datetime(2026, 11, 4, 6, 5, 12, tzinfo=utc)
+'2026-11-04T06:05:12+07:00'                stop=datetime(2026, 11, 4, 6, 5, 12, tzinfo=timezone(timedelta(seconds=25200)))  session_work=datetime(2026, 11, 4, 6, 5, 12, tzinfo=timezone(timedelta(seconds=25200)))
+'2026-11-04T06:05:12'                      stop=datetime(2026, 11, 4, 6, 5, 12, tzinfo=utc)  session_work=datetime(2026, 11, 4, 6, 5, 12, tzinfo=utc)
+'2026-11-04T06:05:12Z'                     stop=datetime(2026, 11, 4, 6, 5, 12, tzinfo=utc)  session_work=datetime(2026, 11, 4, 6, 5, 12, tzinfo=utc)
+'2026-11-04T06:05:12.123456Z'              stop=datetime(2026, 11, 4, 6, 5, 12, 123456, tzinfo=utc)  session_work=datetime(2026, 11, 4, 6, 5, 12, 123456, tzinfo=utc)
+'2026-11-04T06:05:12.5'                    stop=datetime(2026, 11, 4, 6, 5, 12, 500000, tzinfo=utc)  session_work=datetime(2026, 11, 4, 6, 5, 12, 500000, tzinfo=utc)
+'2026-11-04'                               stop=datetime(2026, 11, 4, 0, 0, tzinfo=utc)  session_work=datetime(2026, 11, 4, 0, 0, tzinfo=utc)
+'2026-11-04T06:05:12z'                     stop=None  session_work=None
+' 2026-11-04T06:05:12Z'                    stop=None  session_work=None
+''                                         stop=None  session_work=None
+None                                       stop=None  session_work=None
+0                                          stop=None  session_work=None
+1.5                                        stop=None  session_work=None
+[]                                         stop=None  session_work=None
+{}                                         stop=None  session_work=None
+b'2026-11-04T06:05:12Z'                    stop=None  session_work=None
+'not a time'                               stop=None  session_work=None
+'2026-13-45T00:00:00Z'                     stop=None  session_work=None
+datetime(2026, 11, 4, 6, 5, 12)   stop=datetime(2026, 11, 4, 6, 5, 12, tzinfo=utc)  session_work=datetime(2026, 11, 4, 6, 5, 12, tzinfo=utc)
+datetime(2026, 11, 4, 0, 0, tzinfo=utc) stop=datetime(2026, 11, 4, 0, 0, tzinfo=utc)  session_work=datetime(2026, 11, 4, 0, 0, tzinfo=utc)
+AGREE
+```
 
 **AFTER**: [same command, post-change] OR [verbatim excerpt of the new content]
 
