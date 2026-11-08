@@ -3043,3 +3043,23 @@ On T278 a scratch copy that hid every section but `#skills` printed `2 under 44p
 ### 2026-11-07 — `self_review.py pre` is not read-only: it marks register rows `fixed` (T281)
 `cmd_pre` calls `mark_fixed` and rewrites `memory/self-review/register.md` when the fix task of an `open` row has merged (T257–T259 flipped to `fixed` on the first run after their merge). A Supervisor who runs `pre` leaves a tracked file modified on `main`. Say "no model call", never "read-only"; commit the register with the memory pass. A claim about what a script writes must come from running it, not from the docstring or memory.
 **Files**: skills/self-review/scripts/self_review.py, memory/self-review/register.md, docs/claude-md/pipeline-stages.md
+
+### 2026-11-08 — Parallel agents of one task share one step budget (T283, T285)
+`pre_agent_step_limit.py` keyed its counter on session and task, so Runs A, B and C of T283 (one Task ID) shared 90 calls and Run B was stopped after 25 of its own. The same cause stopped T267 after 3.4 minutes and a T266 reviewer after 8 calls. Give each parallel run its own Task ID in the spawn prompt, or key the counter on `agent_id` (T285). Resuming with SendMessage keeps the agent's counter.
+**Files**: .claude/hooks/pre_agent_step_limit.py
+
+### 2026-11-08 — A `sed` mutation control can stay green on a stale `.pyc` (T286)
+A mutation that kept the file's size and second was not re-read: Python reused the cached bytecode and the test stayed green. Run mutation controls with `python3 -B` (or `PYTHONDONTWRITEBYTECODE=1`) and check the `git diff --stat` is non-empty. A second cause seen in T283 spikes: a mutation can stay green because another guard catches the same case, or because a regex still matches the renamed function; isolate the guard in its own test.
+**Files**: tests/test_claude_md_slim.py
+
+### 2026-11-08 — A docs-only task gets SKIP from auto verify, written as `blocked` (T283)
+The headless `/verify` answers SKIP when a diff has no runtime surface, and the hook records it as `☐ blocked`. The task then needs the user's own `/verify` before a merge; under `[admin]` the merge gate stays closed for it. A candidate follow-up is a real pass verdict for docs-only tasks (not started: it touches the verify gate).
+**Files**: .claude/hooks/stop_auto_verify.py
+
+### 2026-11-08 — A gate fed by a shell-command reader needs an allowlist of words, not a blocklist (T287)
+Three rounds of "add the next `cd` form" (comments, subshells, `builtin cd`, `eval`, `{ }`, then zsh `chdir -`) each left a hole, and the consumer (`trace_shows_verification`) trusts the filed trace as merge evidence. Fail-closed reading means: accept a tiny exact form and let everything else fall to the old behaviour. Also check which shell the tool really runs (here zsh, which has `chdir`), and probe with the real shell, not only the hook.
+**Files**: .claude/hooks/lib/task_context.py
+
+### 2026-11-08 — A PreToolUse gate checks the world before the command, so a chained write defeats it (T284)
+The `[admin]` gate verified `main` and the verified tip before the command ran. `git add -A && git commit --amend && git push origin main` changed `main` after the check and published it; a push from a second clone, a planted `.git/hooks/pre-push`, and config keys such as `core.sshCommand` ran or published unchecked content the same way. Fixes: an `[admin]` command holds exactly one git write, the push and the merge must share one `--git-common-dir`, executable hooks and command-running config keys make the gate refuse. A static check of command text is still not an airtight boundary (user-global config, scripts that call git, a hook added after the check).
+**Files**: .claude/hooks/pre_bash_block_unsafe_merge.py
