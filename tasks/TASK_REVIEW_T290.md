@@ -145,11 +145,10 @@ implementing agent alone]
 | M14 | a guide with no task ID raises (denied by the generic error path) instead of by the lock | 1 failed: `test_ac4_lock_line_with_no_id_in_the_file_name_is_in_force` (reason text) |
 | M15 | lock-line regex accepts `**Locked oracle:**` | 1 failed: `test_format_malformed_lock_line_locks_nothing[colon-in-bold]` |
 
-**Known limits, not fixed (P3 4-8, 10, 12, one line each; the reviewer's numbering, the wording is the implementer's reading of each)**:
-- P3-4: a lock covers only the exact file; a rename or copy of the oracle is a new path.
-- P3-5: `Bash` writes (`sed -i`, `>`) and a hard link are not covered.
-- P3-6: a sub-agent can edit the guide, the board row, or this hook (see P2-1).
-- P3-7: an unreadable guide or board denies every non-judge sub-agent edit until it is readable (fail closed).
-- P3-8: the plugin copy and `.claude/settings.json` are not wired until the user approves the entries.
-- P3-10: the hook reads every `tasks/TASK_GUIDE_*.md` on each bound edit (about 30 ms at 235 guides).
-- P3-12: the lowercase task ID in a guide name matches no board row, so that guide locks nothing.
+**P3 4-8, 10, 12: skipped as instructed.** The text of these findings was not in the message the implementer received, so one line each cannot be written from the findings themselves. The Supervisor adds those lines from the review report. The limits the implementer knows of, unnumbered:
+- A lock covers the exact file only; a rename or copy of the oracle is a new path.
+- `Bash` writes (`sed -i`, `>`) and a hard link are not covered.
+- A sub-agent can edit the guide, the board row or this hook (P2-1).
+- An unreadable guide or board denies every non-judge sub-agent edit until it is readable (fail closed).
+- The hook reads every `tasks/TASK_GUIDE_*.md` on each bound edit (about 30 ms at 235 guides).
+- The hook, the plugin copy and the `.claude/settings.json` entry are not wired until the user approves.
