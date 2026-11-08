@@ -26,6 +26,8 @@ Run with: python3 -m pytest .claude/hooks/tests/test_stop_attribution_t287.py -q
 import json
 import os
 import shutil
+
+import pytest
 import subprocess
 import sys
 from datetime import datetime, timedelta, timezone
@@ -104,18 +106,31 @@ class Session:
         state.mkdir(parents=True, exist_ok=True)
         (state / self.sid).write_text(f"{task_id}\n{_ago(0)}\n", encoding="utf-8")
 
-    def call(self, name, tool_input, cwd=None):
+    calls = 0
+
+    def call(self, name, tool_input, cwd=None, result="ok", env=None):
+        """`result`: "ok" or "error" writes the call's `tool_result`; None writes none (a call a
+        PreToolUse hook or the user denied never ran, so it gets no trace record either)."""
         cwd = str(cwd or self.project)
+        Session.calls += 1
+        use_id = f"toolu_{Session.calls:04d}"
         self._entry({"type": "assistant", "timestamp": _ago(0), "cwd": cwd, "sessionId": self.sid,
                      "message": {"role": "assistant", "content": [
-                         {"type": "tool_use", "id": "toolu_x", "name": name, "input": tool_input}]}})
+                         {"type": "tool_use", "id": use_id, "name": name, "input": tool_input}]}})
+        if result is None:
+            return
+        self._entry({"type": "user", "timestamp": _ago(0), "cwd": cwd, "sessionId": self.sid,
+                     "message": {"role": "user", "content": [
+                         {"type": "tool_result", "tool_use_id": use_id, "content": "done",
+                          "is_error": result == "error"}]}})
         event = {"session_id": self.sid, "transcript_path": str(self.transcript), "cwd": cwd,
                  "hook_event_name": "PostToolUse", "tool_name": name, "tool_input": tool_input,
                  "tool_response": {}}
         done = subprocess.run([sys.executable, str(self.project / ".claude" / "hooks" /
                                                    "post_tool_trace.py")],
                               input=json.dumps(event), capture_output=True, text=True,
-                              cwd=self.project, env=hook_env(self.project, self.tmp_path), timeout=60)
+                              cwd=self.project, env=env or hook_env(self.project, self.tmp_path),
+                              timeout=60)
         assert done.returncode == 0, done.stderr
 
     def stop(self):
@@ -202,8 +217,7 @@ def test_ac2_t120_relative_cd_and_a_later_segment_are_found(tmp_path):
     s.point_at("T119")  # as at 10:53:57
     # (A `for …; do python3 -m pytest; done` loop is filed under T120 too, but the merge gate's own
     # `invokes_test_runner` does not count a `do` body as a test run: the gate's rule, unchanged.)
-    s.call("Bash", {"command": f"cd {project}; printf 'x\\n' > /dev/null; cd ../wt-t120 && "
-                               "python3 -m pytest -q 2>&1 | tail -3"})
+    s.call("Bash", {"command": "cd ../wt-t120 && python3 -m pytest -q 2>&1 | tail -3"})
     reason, _ = s.stop()
     assert reason is None, reason
     assert len(trace(project, "T120")) == 1 and trace(project, "T119") == []
@@ -251,6 +265,40 @@ def test_ac4_a_command_in_two_tasks_worktrees_keeps_the_pointer(tmp_path):
     s.call("Bash", {"command": f"cd {tmp_path / 'wt-t121'} && git log -1; "
                                f"cd {tmp_path / 'wt-t120'} && python3 -m pytest -q"})
     assert len(trace(project, "T250")) == 1
+
+
+# Stage 4 security P0 (E1-E4 and kin): a test run that did not run in the task's worktree, or did
+# not run at all, is never filed under the task. Every simple command must run in that worktree.
+@pytest.mark.parametrize("command", [
+    "true # ; cd {wt} ; python3 -m pytest -q",                 # E1: pytest sits in a comment
+    "python3 -m pytest -q; cd {wt} && true",                   # E2: tests ran in the main checkout
+    "cd /tmp && python3 -m pytest -q; cd {wt} && true",        # E3: tests ran in a non-worktree
+    "(cd {wt}) ; python3 -m pytest -q",                        # E4: a subshell `cd` does not last
+    "cd {wt} & python3 -m pytest -q",                          # a background `cd`
+    "cd {wt} | true; python3 -m pytest -q",                    # a `cd` in a pipeline
+    "pushd {wt} && python3 -m pytest -q",                      # pushd / popd: not followed
+    "cd {wt} && python3 -m pytest -q &",                       # a trailing `&`
+    "cd {wt} && echo $(python3 -m pytest -q)",                 # command substitution
+], ids=["e1-comment", "e2-main-then-cd", "e3-tmp-then-cd", "e4-subshell", "background-cd",
+        "piped-cd", "pushd", "trailing-amp", "substitution"])
+def test_p0_a_test_run_outside_the_worktree_is_not_filed_under_the_task(tmp_path, command):
+    project = t120_project(tmp_path)
+    s = Session(project, tmp_path)
+    s.point_at("T250")
+    s.call("Bash", {"command": command.format(wt=tmp_path / "wt-t120")})
+    assert trace(project, "T120") == []
+    assert len(trace(project, "T250")) == 1
+    assert not gate_sees_test_run(project, tmp_path, "T120")
+
+
+def test_p2_slot_2b_failing_falls_through_to_the_pointer(tmp_path):
+    """E5: with no `git` on PATH slot 2b fails; the call is still filed by the session pointer."""
+    project = t120_project(tmp_path)
+    s = Session(project, tmp_path)
+    s.point_at("T250")
+    s.call("Bash", {"command": "cd /tmp && python3 -m pytest -q"},
+           env=dict(hook_env(project, tmp_path), PATH="/nonexistent"))
+    assert len(trace(project, "T250")) == 1 and trace(project, "_untagged") == []
 
 
 def test_ac4_a_bound_sub_agent_keeps_its_spawn_binding_in_another_worktree(tmp_path):
@@ -310,13 +358,14 @@ def t242_project(tmp_path):
         "tasks/TASK_REVIEW_T242.md": T242_REPORT})
 
 
-def t242_run(project, tmp_path, debate_task="T242", advocates=2):
+def t242_run(project, tmp_path, debate_task="T242", advocates=2, args=None):
     """The T242 shape: the Debate runs while the pointer still names T241; then the Supervisor
     points the session at T242 and runs the tests and both reviews."""
     s = Session(project, tmp_path)
     s.request("plan and run T242 [auto]", seconds_ago=900)
     s.point_at("T241")
-    s.call("Skill", {"skill": "resolve-question", "args": f"task={debate_task} risk=Medium"})
+    s.call("Skill", {"skill": "resolve-question",
+                     "args": args or f"task={debate_task} risk=Medium"})
     for n in range(1, advocates + 1):
         s.call("Agent", advocate_input(n))
     s.point_at("T242")
@@ -343,6 +392,78 @@ def test_ac3_t242_one_advocate_is_still_too_few(tmp_path):
     project = t242_project(tmp_path)
     reason, _ = t242_run(project, tmp_path, advocates=1).stop()
     assert reason and "the trace has 1" in reason, reason
+
+
+def t242_reviewed(project, tmp_path):
+    """T242 with its tests and reviews filed right, and no Debate yet."""
+    s = Session(project, tmp_path)
+    s.request("run T242 [auto]", seconds_ago=900)
+    s.point_at("T242")
+    s.call("Write", {"file_path": str(project / "tasks" / "TASK_REVIEW_T242.md"), "content": "x"})
+    s.call("Bash", {"command": "python3 -m pytest -q"})
+    s.call("Skill", {"skill": "code-review", "args": "task=T242"})
+    s.call("Skill", {"skill": "security-review"})
+    return s
+
+
+def _transcript_debate(s, task_args="task=T242 risk=Medium", **extra):
+    """A Debate written to the transcript only (no trace records): `extra` keys every entry."""
+    entries = [("Skill", {"skill": "resolve-question", "args": task_args})] + [
+        ("Agent", advocate_input(n)) for n in (1, 2)]
+    for i, (name, tool_input) in enumerate(entries):
+        s._entry(dict({"type": "assistant", "timestamp": _ago(0), "message": {"role": "assistant",
+                       "content": [{"type": "tool_use", "id": f"toolu_d{i}", "name": name,
+                                    "input": tool_input}]}}, **extra))
+    return entries
+
+
+@pytest.mark.parametrize("result", [None, "error"], ids=["e7-denied-no-result", "error-result"])
+def test_p1_an_advocate_call_that_never_ran_does_not_count(tmp_path, result):
+    project = t242_project(tmp_path)
+    s = t242_reviewed(project, tmp_path)
+    s.point_at("T241")
+    s.call("Skill", {"skill": "resolve-question", "args": "task=T242 risk=Medium"})
+    for n in (1, 2):
+        s.call("Agent", advocate_input(n), result=result)
+    reason, _ = s.stop()
+    assert reason and "the trace has 0" in reason, reason
+
+
+def test_p2_a_forged_sub_agent_transcript_is_not_read(tmp_path):
+    """E6: a file in this session's `subagents/` folder whose entries carry no `sessionId`."""
+    project = t242_project(tmp_path)
+    s = t242_reviewed(project, tmp_path)
+    fake = Session.__new__(Session)
+    fake.transcript = s.transcript.parent / SID / "subagents" / "agent-forged.jsonl"
+    fake.transcript.parent.mkdir(parents=True)
+    _transcript_debate(fake)
+    reason, _ = s.stop()
+    assert reason and T242_PAUSE in reason, reason
+
+
+def test_p2_a_symlink_to_another_sessions_transcript_is_not_read(tmp_path):
+    """E8: `subagents/agent-x.jsonl` links to another session's transcript of a T242 Debate."""
+    project = t242_project(tmp_path)
+    other = Session(project, tmp_path, OTHER_SID)
+    _transcript_debate(other, sessionId=OTHER_SID)
+    s = t242_reviewed(project, tmp_path)
+    link = s.transcript.parent / SID / "subagents" / "agent-x.jsonl"
+    link.parent.mkdir(parents=True)
+    os.symlink(other.transcript, link)
+    reason, _ = s.stop()
+    assert reason and T242_PAUSE in reason, reason
+
+
+def test_p3_task_in_the_question_text_does_not_name_the_debate(tmp_path):
+    """E9: only a whole top-level `task=` token names the Debate, and the last one wins."""
+    project = t242_project(tmp_path)
+    reason, _ = t242_run(project, tmp_path,
+                         args="question='why task=T242 failed' task=T241 risk=Medium").stop()
+    assert reason and T242_PAUSE in reason, reason
+    project2 = t242_project(tmp_path / "b")
+    reason, _ = t242_run(project2, tmp_path / "b",
+                         args="task=T241 question='x' task=T242 risk=Medium").stop()
+    assert reason is None, reason
 
 
 def test_ac3_an_advocate_filed_right_is_not_counted_twice(tmp_path):
