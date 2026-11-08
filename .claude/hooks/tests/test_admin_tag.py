@@ -401,6 +401,12 @@ def test_ac9_agents_md_tracks_paragraph_names_admin():
     assert "`[admin]`" in para and "auto verify" in para
 
 
+def test_ac10_a_skip_falls_back_to_the_user_and_the_paste_limit_is_stated():
+    body = admin_tag_section()
+    assert "A docs-only task answers `skip`; its `/verify` then falls back to you" in body
+    assert "Known limit" in body and "without a code fence or a `>` quote" in body and "it counts" in body
+
+
 def test_ac8_ship_stays_the_users_under_admin():
     m = re.search(r"^### Admin tag[^\n]*\n(.*?)(?=^##+ |\Z)", _auto_mode_section(), re.M | re.S)
     assert m and re.search(r"`ship`[^.]*stays the user's", _norm(m.group(1))), "ship limit missing"
@@ -460,3 +466,79 @@ def test_ac10_a_hook_row_that_is_not_a_pass_blocks_the_admin_merge(gate, tmp_pat
     for command, cwd in ((MERGE + " feat/t900-x", fx.main), (PUSH + " origin feat/t900-x", fx.wt)):
         text = reason(command, cwd, path)
         assert text is not None and "auto verify" in text, (command, text)
+
+
+# ── AC 8 / Success Criteria 7b — `[admin]` may push `main` after its own merge ──────────────
+def bash(command, cwd, offset_s=-300):
+    return {"type": "assistant", "timestamp": _ts(offset_s), "sessionId": SID, "cwd": cwd,
+            "message": {"role": "assistant", "content": [
+                {"type": "tool_use", "id": "b1", "name": "Bash", "input": {"command": command}}]}}
+
+
+def merged_session(tmp_path, fx, merge=True, ran=True):
+    """The `[admin]` session that merged T900's branch into `main` (in the transcript and in git)."""
+    if merge:
+        git(fx.main, "merge", "-q", "--no-ff", "-m", "T900 merge", "feat/t900-x")
+    extra = [bash(MERGE + " --no-ff feat/t900-x", fx.main, -200)] if ran else []
+    return session(tmp_path, fx, "do it [admin]", extra=extra)
+
+
+@pytest.mark.parametrize("command", [PUSH + " origin main", PUSH, PUSH + " origin main:main",
+                                     PUSH + " -u origin main"], ids=["named", "bare", "same-dst", "u"])
+def test_sc7b_admin_may_push_main_after_its_own_passed_merge(gate, tmp_path, command):
+    fx = gate(kanban(done=("T900",)))
+    auto_verified(fx)
+    assert reason(command, fx.main, merged_session(tmp_path, fx)) is None
+
+
+def test_sc7b_main_push_without_a_merge_in_this_session_is_blocked(gate, tmp_path):
+    fx = gate(kanban(done=("T900",)))
+    auto_verified(fx)
+    git(fx.main, "merge", "-q", "--no-ff", "-m", "T900 merge", "feat/t900-x")  # merged, not by us
+    text = reason(PUSH + " origin main", fx.main, merged_session(tmp_path, fx, merge=False, ran=False))
+    assert text is not None and "merge" in text, text
+
+
+def test_sc7b_a_merge_only_in_the_transcript_is_not_a_merge(gate, tmp_path):
+    """The session asked for the merge, but `main` does not hold the branch tip."""
+    fx = gate(kanban(done=("T900",)))
+    auto_verified(fx)
+    text = reason(PUSH + " origin main", fx.main, merged_session(tmp_path, fx, merge=False))
+    assert text is not None, text
+
+
+@pytest.mark.parametrize("verdict", ["blocked", "fail", "hand-typed"])
+def test_sc7b_main_push_without_a_passed_hook_verify_is_blocked(gate, tmp_path, verdict):
+    fx = gate(kanban(done=("T900",)))
+    if verdict == "hand-typed":
+        fx.review(result=MANUAL_PASS, commit=True)
+    else:
+        fx.task_file("TASK_GUIDE_T900.md", GUIDE_VACATED.format(tid="T900"), commit=True)
+        verified = git(fx.wt, "rev-parse", "HEAD")
+        verify_record.write_record(merge_gate.ROOT, "T900", verified, verdict, "s-1", "log.txt")
+        cells = verify_record.row_cells(verified, verdict, "s-1", "log.txt")
+        fx.task_file("TASK_REVIEW_T900.md", REVIEW.format(tid="T900", result=cells[0],
+                                                          notes=cells[1]), commit=True)
+    text = reason(PUSH + " origin main", fx.main, merged_session(tmp_path, fx))
+    assert text is not None and "auto verify" in text, text
+
+
+@pytest.mark.parametrize("command", [PUSH + " --force origin main", PUSH + " -f", PUSH + " origin +main",
+                                     PUSH + " --force-with-lease origin main",
+                                     PUSH + " --no-verify origin main", PUSH + " --all origin",
+                                     PUSH + " --tags", PUSH + " origin release/x",
+                                     PUSH + " origin feat/t900-x:main"],
+                         ids=["force", "f", "plus", "lease", "no-verify", "all", "tags", "other-ref",
+                              "branch-to-main"])
+def test_sc7b_force_and_other_refs_stay_blocked_after_the_merge(gate, tmp_path, command):
+    fx = gate(kanban(done=("T900",)))
+    auto_verified(fx)
+    assert reason(command, fx.main, merged_session(tmp_path, fx)) is not None, command
+
+
+def test_sc7b_auto_only_main_push_stays_blocked(gate, tmp_path):
+    fx = gate(kanban(done=("T900",)))
+    auto_verified(fx)
+    git(fx.main, "merge", "-q", "--no-ff", "-m", "T900 merge", "feat/t900-x")
+    path = session(tmp_path, fx, "do it [auto]", extra=[bash(MERGE + " feat/t900-x", fx.main, -200)])
+    assert reason(PUSH + " origin main", fx.main, path) is not None

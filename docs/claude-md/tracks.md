@@ -497,12 +497,16 @@ command, from this session's transcript. It allows a `git merge` or `git push` o
 With `[admin]`, the Supervisor starts the run itself: as soon as the task is at Ready for Review, it runs
 `python3 .claude/hooks/stop_auto_verify.py --start <ID>` and waits for the verdict. It never runs `/verify` in
 its own session. Only on a pass does it go on to merge and push, without asking. On `skip`, `blocked` or
-`fail` it merges nothing and reports why. A docs-only task answers `skip`, so the user runs `/verify` for it.
+`fail` it merges nothing and reports why. A docs-only task answers `skip`; its `/verify` then falls back to
+you, as for any blocked run.
 
 The gate's other checks then still run, as for every merge. `ship` stays the user's with `[admin]` too.
 With `[auto]` alone, the same gate blocks every merge, push and pull while that request is the latest
 one. A `git rebase` is not part of this rule. A session with no readable transcript has no known request,
 so this rule does not apply and the gate works as before.
+
+Known limit: the gate cannot tell typed text from pasted text inside your own message. An `[admin]` in
+text you paste without a code fence or a `>` quote is part of your message, so it counts.
 
 ### The Supervisor never
 

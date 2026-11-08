@@ -1291,7 +1291,8 @@ AUTO_MODE_PATTERNS = [
 ADMIN_PUSH_FLAGS = frozenset({"-u", "--set-upstream", "-q", "--quiet", "-v", "--verbose",
                               "--progress", "-n", "--dry-run"})
 AUTO_MODE_LIMIT = ("With `[auto]`, merge and push stay the user's. `[admin]` allows only a merge or a "
-                   "plain push of the request's own task branch, after its auto verify passed "
+                   "plain push of the request's own task branch (or of `main` after that merge), "
+                   "after its auto verify passed "
                    "(docs/claude-md/tracks.md `### Admin tag`).")
 
 
@@ -1321,6 +1322,26 @@ def _admin_push_branch(args, directory):
     return src or None
 
 
+ADMIN_MAIN_BRANCH = "main"
+
+
+def _session_admin_merges(transcript_path, when, id_regex):
+    """`[(task ID, branch, directory)]` for each `git merge <one task branch>` this session (or a
+    sub-agent) ran since `when` — read from the transcript, never from a command's own text."""
+    found = []
+    for name, tool_input, call_cwd in session_work.load_work(transcript_path, since=when) or []:
+        if name != "Bash" or not isinstance(tool_input.get("command"), str):
+            continue
+        for args, where in _git_actions(tool_input["command"], call_cwd) or []:
+            if args[0] != "merge" or where is None:
+                continue
+            names = [n for _, n in _merge_sources(args[1:], where)]
+            task_id = _ref_task_id(names[0], id_regex) if len(names) == 1 else None
+            if task_id:
+                found.append((task_id, names[0], where))
+    return found
+
+
 def admin_refusal(command, cwd, transcript_path, admin):
     """Why `[admin]` (`admin` = `(timestamp, text)` of the request) does not allow `command`, or
     None when it does. Never raises: an error is a refusal."""
@@ -1342,8 +1363,23 @@ def admin_refusal(command, cwd, transcript_path, admin):
             elif args[0] == "push":
                 branch = _admin_push_branch(args[1:], where)
                 if branch is None:
-                    return ("`[admin]` allows only a plain push of the task branch to the same "
-                            "branch: no force, no other destination")
+                    return ("`[admin]` allows only a plain push of the task branch, or of `main` "
+                            "after the task's own merge, to the same branch: no force, no other "
+                            "destination")
+                if branch == ADMIN_MAIN_BRANCH:
+                    # AC 8 / 7b: `main` only after this session's own merge of the task branch,
+                    # and only when `main` really holds that branch's tip.
+                    merges = _session_admin_merges(transcript_path, when, id_regex)
+                    if not merges:
+                        return ("a push of `main` needs the task's own `[admin]` merge into `main` "
+                                "in this session, after the request")
+                    for task_id, merged, merge_where in merges:
+                        held = _git(where, "merge-base", "--is-ancestor", f"{merged}^{{commit}}",
+                                    f"{ADMIN_MAIN_BRANCH}^{{commit}}")
+                        if held is None or held.returncode != 0:
+                            return f"`main` does not hold the merged branch {merged}"
+                        targets.add((task_id, merged, merge_where))
+                    continue
             else:
                 return f"`[admin]` allows only merge and push, not `git {args[0]}`"
             task_id = _ref_task_id(branch, id_regex)
