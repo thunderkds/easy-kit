@@ -1016,10 +1016,9 @@ def test_r3_n1c_a_commit_chained_with_the_task_branch_push_is_refused(gate, tmp_
     assert reason(cmd, fx.wt, path) is not None
 
 
-@pytest.mark.parametrize("chain", [G + "status && " + PUSH + " origin main",
-                                   G + "log --oneline -1 && " + PUSH + " origin main",
-                                   "cd {main} && " + PUSH + " origin main"],
-                         ids=["status", "log", "cd"])
+# T295 narrowed this: a chained `git status`/`log`/`diff`/`show` can run a textconv or filter, so only
+# `cd <dir> &&` may stay (the refusals are in test_admin_repo_allowlist.py, AC 5).
+@pytest.mark.parametrize("chain", ["cd {main} && " + PUSH + " origin main"], ids=["cd"])
 def test_r3_n1_read_only_segments_stay_allowed(gate, tmp_path, chain):
     fx, path = legit(gate, tmp_path)
     assert reason(chain.format(main=fx.main), fx.main, path) is None
@@ -1082,8 +1081,10 @@ def test_r3_n4_repo_config_that_can_run_code_is_refused(gate, tmp_path, key, val
     assert text is not None and "config" in text, (key, text)
 
 
-@pytest.mark.parametrize("key,value", [("core.fsmonitor", "false"), ("credential.helper", "store"),
-                                       ("alias.st", "status")])
+# T295 repointed this: `core.fsmonitor=false`, `credential.helper=store` and `alias.st=status` are no
+# longer allowed (the allowlist lists neither key; they are red in test_admin_repo_allowlist.py, AC 2).
+@pytest.mark.parametrize("key,value", [("core.autocrlf", "input"), ("user.name", "T"),
+                                       ("branch.main.merge", "refs/heads/main")])
 def test_r3_n4_harmless_values_of_those_keys_stay_allowed(gate, tmp_path, key, value):
     fx, path = legit(gate, tmp_path)
     git(fx.main, "config", key, value)

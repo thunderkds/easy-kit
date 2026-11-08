@@ -19,8 +19,8 @@ import pytest
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from test_admin_tag import (  # noqa: E402
-    MERGE, NO_FF, PUSH, ROOT, TRACKS, admin_session, auto_verified, common_dir, G, gate,
-    git, kanban, legit, merge_gate, publish, reason, session, write)
+    MERGE, NO_FF, PUSH, G, admin_session, admin_tag_section, auto_verified, common_dir, gate, git,
+    kanban, legit, merge_gate, publish, reason, session, write)
 from test_merge_gate_t210 import GIT_ENV  # noqa: E402
 
 assert gate  # the fixture, imported for pytest
@@ -496,15 +496,13 @@ def test_sc4_the_main_push_after_a_legit_merge_stays_allowed(gate, tmp_path):
 
 # ── AC 7, 8 — text and tripwire ─────────────────────────────────────────────────────────────
 def item2():
-    text = TRACKS.read_text(encoding="utf-8")
-    section = text.split("### Admin tag", 1)[1].split("\n### ", 1)[0]
-    return " ".join(section.split())
+    return admin_tag_section()
 
 
 def test_ac7_tracks_md_states_the_allowlist_rule_and_its_short_list():
     body = item2()
     for needle in ("allowlist", "core.repositoryformatversion", "remote.<name>.url",
-                   "branch.<b>.remote", "user.email", "no executable file in the hooks directory",
+                   "branch.<b>.remote", "user.email", "must hold no executable file",
                    "`.sample`", "`merge=`, `filter=` or `diff=`", "`.gitattributes`",
                    "`.git/info/attributes`", "`cd <dir> &&`"):
         assert needle in body, needle

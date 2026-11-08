@@ -549,16 +549,22 @@ command, from this session's transcript. It allows a `git merge` or `git push` o
    `origin`). The push URL of `origin` must equal its fetch URL, and no `url.<x>.insteadOf`,
    `url.<x>.pushInsteadOf`, `remote.<name>.pushurl`, `remote.<name>.receivepack`, `push.followTags` or
    `core.hooksPath` may be set. Any `git -c <key>=<value>` (or `--config-env`) anywhere before the verb,
-   also after `-C <dir>`, is refused. The command holds exactly one git write, its merge or its push:
-   a chained `git add`, `commit`, `reset`, `tag`, `checkout` or any other git write is refused, while
-   `git status`, `log`, `diff`, `show`, `rev-parse` and `cd <dir> &&` may stay. The repository must have
-   no executable hook (not `.sample`) for `pre-push`, `pre-merge-commit`, `post-merge`, `pre-commit`,
-   `commit-msg`, `prepare-commit-msg`, `post-commit`, `post-checkout` or `reference-transaction`, and no
-   repo or worktree config that can run a command or send git elsewhere (`include.*`, `includeIf.*`,
-   `url.*`, `receive.*`, `core.sshCommand`, `core.gitProxy`, `core.fsmonitor` set to a command,
-   `remote.*.proxy`, `remote.*.uploadpack`, `remote.*.vcs`, `push.recurseSubmodules`, `push.pushOption`,
-   `transfer.hideRefs`, a `credential.*` or `alias.*` value starting with `!`). User-global and system
-   config are trusted and not read.
+   also after `-C <dir>`, is refused. The command holds exactly one git command, its merge or its push:
+   a chained `git add`, `commit`, `reset`, `tag`, `checkout`, `status`, `show`, `diff`, `log` or any other
+   git command is refused (`status`, `show`, `diff` and `log` can run a textconv, a clean filter or an
+   external diff), while `cd <dir> &&` may stay. The gate reads the repo config and the worktree config as
+   an allowlist (T295): every key must be on this short list of keys that cannot run code or reach another
+   host, or the gate refuses and names the key: `core.repositoryformatversion`, `core.filemode`,
+   `core.bare`, `core.logallrefupdates`, `core.ignorecase`, `core.precomposeunicode`, `core.autocrlf`,
+   `core.safecrlf`, `core.symlinks`, `remote.<name>.url` (no helper `::` form, no leading `-`),
+   `remote.<name>.fetch`, `branch.<b>.remote`, `branch.<b>.merge`, `branch.<b>.vscode-merge-base`,
+   `pull.rebase` (`true` or `false`), `push.default` (`simple` or `current`), `user.name`, `user.email`
+   and `extensions.worktreeConfig`. Any other key refuses, for example `merge.<d>.driver`,
+   `filter.<f>.smudge`, `diff.<d>.textconv`, `diff.external`, `gpg.program`, `core.editor`, `core.pager`,
+   `credential.helper`, `http.proxy`, `include.*`, `url.*`, `alias.*` and `core.fsmonitor`. The hooks
+   directory must hold no executable file, whatever its name; a `.sample` file is not a hook. No
+   `.gitattributes` of the checkout and no `.git/info/attributes` may have a line with `merge=`, `filter=`
+   or `diff=`. User-global and system config are trusted and not read.
    It may also push `main` (`git push origin main`; the rule names `main` only), but only after this
    session's own `[admin]` merge of the task branch: the merge call is in the transcript after the
    request, its result is not an error, it ran with `main` checked out, and it ran in the same
@@ -607,14 +613,14 @@ Known limits:
   want merged.
 - For the gate, only an entry marked as typed by a human is a request: an entry with no origin, or a
   sub-agent's prompt, neither ends an `[auto]` request nor carries `[admin]`.
-- **The deny lists in item 2 are not complete (gate hunt, 2026-11-08, open).** A quoted `<<EOF` marker
-  (`echo "<<EOF"`, `echo '<<EOF'`, `# <<EOF`) hides the lines after it from the gate, in every mode. Repo
-  config the lists miss (`merge.<d>.driver`, `filter.<f>.smudge`, `filter.<f>.clean`, `diff.<d>.textconv`,
-  `diff.external`, `gpg.program`, `core.editor`, `credential.helper` set to a path, `http.proxy`) and the
-  hooks `post-index-change` and `pre-auto-gc` can run code during an allowed merge or push; a merge driver
-  can also make `main` differ from the checked tree. Cheap hidden verbs (`v=push; git $v`,
-  `timeout 20 git "push"`, `git send-pack`) and `git merge --message <branch>` are not caught. Treat
-  `[admin]` as a guard against accidents, not against a hostile repo or a hostile agent.
+- **The gate has two open gaps (gate hunt, 2026-11-08).** A quoted `<<EOF` marker (`echo "<<EOF"`,
+  `echo '<<EOF'`, `# <<EOF`) hides the lines after it from the gate, in every mode. Cheap hidden verbs
+  (`v=push; git $v`, `timeout 20 git "push"`, `git send-pack`) and `git merge --message <branch>` are not
+  caught. Treat `[admin]` as a guard against accidents, not against a hostile repo or a hostile agent.
+- The repo rule of item 2 is an allowlist, and it reads the repository at the time of the command.
+  A key, hook or attributes line added after that check (a merge that brings in its own `.gitattributes`,
+  or a hook another process writes) is out of its reach. A `.gitattributes` with `filter=lfs` refuses
+  `[admin]`, because the gate cannot tell a safe filter from an unsafe one.
 - The run record the gate trusts is a file in the trace anchors' directory
   (`.claude/hooks/lib/verify_record.py`), the same trust root as for `/verify`.
 - Repo config the gate does not read, such as a `core.hooksPath` hook run by `git commit`, and a model

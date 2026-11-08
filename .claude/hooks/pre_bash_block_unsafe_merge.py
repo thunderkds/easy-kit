@@ -1296,6 +1296,8 @@ def session_owned_in_progress(rows, command, cwd, transcript_path):
 #   * round 3: one git write per command; push and merge in the same repository; no executable
 #     merge/push hook and no repo config that can run a command; `-c` refused anywhere before the
 #     verb; a hidden git verb (quotes, `${IFS}`, `$(…)`, backticks, `eval`) is a block in auto mode.
+#   * T295: the repo rule is an allowlist of config keys, no executable hook file, no attributes line
+#     with `merge=`, `filter=` or `diff=`, and no other git command in the same command line.
 # The gate's other checks then still run. No transcript, or one that cannot be read, means no
 # request is known: the rule does not apply and the gate is exactly as before T284.
 AUTO_MODE_PATTERNS = [p for p in BLOCKED_PATTERNS if not p.endswith(r"rebase\b")]
@@ -1305,17 +1307,41 @@ ADMIN_REMOTE = "origin"     # P2: the one remote `[admin]` may push to
 NEGATION = re.compile(r"\b(?:not|never|no|without|except|skip|leave|don't|dont|hold|wait|later|"
                       r"postpone)\b|n't\b", re.I)
 LS_REMOTE_TIMEOUT_S = 10
-# Round 3 (N1): the only git subcommands that may share an `[admin]` command with its one merge/push.
-ADMIN_READ_ONLY_GIT = frozenset({"status", "log", "diff", "show", "rev-parse"})
+# T295: no git subcommand may share an `[admin]` command with its one merge/push. `status`, `show`,
+# `diff` and `log` can run a textconv, a clean filter or an external diff, so the set stays empty:
+# only `cd <dir> &&` may stand before the merge or push.
+ADMIN_READ_ONLY_GIT = frozenset()
 GIT_OPTION_ARGS = ("-C", "-c", "--git-dir", "--work-tree", "--namespace", "--config-env")
-# Round 3 (N3): hooks a merge or push can run; any executable one (not `.sample`) refuses `[admin]`.
-ADMIN_HOOKS = ("pre-push", "pre-merge-commit", "post-merge", "pre-commit", "commit-msg",
-               "prepare-commit-msg", "post-commit", "post-checkout", "reference-transaction")
-# Round 3 (N4): repo/worktree config keys that can run a command or send git elsewhere.
-ADMIN_DENY_CONFIG = re.compile(
-    r"^(include\.|includeif\.|url\.|receive\.|core\.(sshcommand|gitproxy|hookspath)$"
-    r"|remote\..*\.(proxy|uploadpack|receivepack|vcs|pushurl)$"
-    r"|push\.(recursesubmodules|pushoption|followtags)$|transfer\.hiderefs$)")
+# T295 (finding P1-2, replaces the T284 round-3 deny lists): the repo/worktree config of an `[admin]`
+# merge or push is read as an allowlist. Each key is `(section, has a subsection, variable)`, with
+# section and variable in lower case (git ignores their case; the subsection is case-sensitive).
+# A key not here is refused by name; a longer deny list failed against `merge.<d>.driver`,
+# `filter.<f>.smudge`, `diff.<d>.textconv`, `gpg.program` and `core.editor`. The value is the reason
+# the key cannot run code or reach another host. Add a key only with a reason and a test.
+ADMIN_ALLOWED_CONFIG = {
+    ("core", False, "repositoryformatversion"): "a number that git reads; it names no program",
+    ("core", False, "filemode"): "a boolean about the executable bit; it names no program",
+    ("core", False, "bare"): "a boolean about the repository kind; it names no program",
+    ("core", False, "logallrefupdates"): "a boolean about the reflog; it names no program",
+    ("core", False, "ignorecase"): "a boolean about file name case; it names no program",
+    ("core", False, "precomposeunicode"): "a boolean about file name encoding on macOS",
+    ("core", False, "autocrlf"): "a line-ending mode; git converts text itself, no program",
+    ("core", False, "safecrlf"): "a line-ending warning mode; it names no program",
+    ("core", False, "symlinks"): "a boolean that WSL and Windows checkouts set; no program",
+    ("remote", True, "url"): "the address of a remote; checked below for helper and option forms",
+    ("remote", True, "fetch"): "a refspec that only maps ref names",
+    ("branch", True, "remote"): "a remote name; a bare push checks that it is origin",
+    ("branch", True, "merge"): "a ref name; it names no program",
+    ("branch", True, "vscode-merge-base"): "a ref name that only an editor reads",
+    ("pull", False, "rebase"): "a boolean here (checked below); `git pull` is blocked anyway",
+    ("push", False, "default"): "simple or current only (checked below): the push destination",
+    ("user", False, "name"): "the commit author name; text only",
+    ("user", False, "email"): "the commit author address; text only",
+    ("extensions", False, "worktreeconfig"): "makes git read the per-worktree config the gate reads",
+}
+ADMIN_REMOTE_URL_HELPER = re.compile(r"^-|^[A-Za-z0-9+.-]+::|://-|@-")  # option, `ext::` helper
+ADMIN_ATTRIBUTE_PATTERN = re.compile(r"(?:^|\s)(?:merge|filter|diff)=", re.I)
+ADMIN_ATTRIBUTES_MAX_BYTES = 1 << 20
 # Round 3 (N5): shell forms that hide which word is `git` or its verb.
 OBFUSCATION = re.compile(r"\$\{?IFS\b|\$\(|`|\beval\b")
 SHELL_WRAPPERS = frozenset({"command", "env", "sudo", "nohup", "time", "exec"})
@@ -1415,32 +1441,113 @@ def _common_dir(where):
     return os.path.realpath(path) if path else None
 
 
+def _config_key_shape(key):
+    """`(section, has a subsection, variable)` of a `git config --list` key, section and variable in
+    lower case; the subsection (case-sensitive, it may hold dots) is not part of the shape."""
+    section, _, rest = key.partition(".")
+    subsection, dot, variable = rest.rpartition(".")
+    if not dot:
+        return (section.lower(), False, rest.lower())
+    return (section.lower(), True, variable.lower()) if subsection else (section.lower(), False, "?")
+
+
+def _config_value_ok(shape, value):
+    """The few allowlisted keys whose value matters: a push default, a rebase mode, a remote URL."""
+    if shape == ("push", False, "default"):
+        return value.strip().lower() in SAFE_PUSH_DEFAULTS
+    if shape == ("pull", False, "rebase"):
+        return value.strip().lower() in ("true", "false")
+    if shape == ("remote", True, "url"):
+        return not ADMIN_REMOTE_URL_HELPER.search(value.strip())
+    return True
+
+
+def _admin_config_refusal(where):
+    """Why the repo/worktree config at `where` is refused (a key not on `ADMIN_ALLOWED_CONFIG`, or an
+    allowlisted key with a value that can run a command), or None. User-global and system config
+    are trusted and not read. `-z` ends an entry at NUL, so a newline in a value is not a new key."""
+    done = _git(where, "config", "--list", "--show-scope", "-z")
+    if done is None or done.returncode not in (0, 1):
+        return "cannot read the repository config"
+    fields = done.stdout.split("\0")
+    if fields and not fields[-1]:
+        fields.pop()
+    if len(fields) % 2:
+        return "cannot read the repository config"
+    for scope, entry in zip(fields[0::2], fields[1::2]):
+        if scope not in ("local", "worktree"):
+            continue
+        key, _, value = entry.partition("\n")
+        shape = _config_key_shape(key)
+        if shape not in ADMIN_ALLOWED_CONFIG:
+            return (f"repo config `{key}` is not on the `[admin]` allowlist: it can run a command or "
+                    "send git elsewhere, so `[admin]` refuses")
+        if not _config_value_ok(shape, value):
+            return f"repo config `{key}` has a value that can run a command or send git elsewhere"
+    return None
+
+
+def _admin_hooks_refusal(common):
+    """T295: why the hooks directory refuses an `[admin]` merge or push (any executable file that is
+    not a `.sample` file, whatever its name), or None. A symlinked directory or file is followed."""
+    try:
+        with os.scandir(os.path.join(common, "hooks")) as entries:
+            for entry in entries:
+                if (not entry.name.endswith(".sample") and not os.path.isdir(entry.path)
+                        and os.access(entry.path, os.X_OK)):
+                    return (f"the repository has an executable `{entry.name}` hook, which this merge "
+                            "or push could run")
+    except FileNotFoundError:
+        return None
+    except OSError:
+        return "cannot read the repository's hooks directory"
+    return None
+
+
+def _admin_attributes_refusal(where, common):
+    """T295: why the attributes of the repository at `where` refuse an `[admin]` merge or push (a
+    line with `merge=`, `filter=` or `diff=` in `.git/info/attributes` or any `.gitattributes` of the
+    checkout), or None. Such a line names a driver or filter that a config outside the allowlist, or
+    user-global config, could define."""
+    files = [os.path.join(common, "info", "attributes")]
+    top = _git(where, "rev-parse", "--show-toplevel")
+    if top is not None and top.returncode == 0 and top.stdout.strip():
+        def unreadable(error):
+            raise error
+        try:
+            for directory, subdirs, names in os.walk(top.stdout.strip(), onerror=unreadable):
+                subdirs[:] = [d for d in subdirs if d != ".git"]
+                files += [os.path.join(directory, n) for n in subdirs + names if n == ".gitattributes"]
+        except OSError:
+            return "cannot read the attributes of the repository"
+    for path in files:
+        try:
+            with open(path, "rb") as handle:
+                raw = handle.read(ADMIN_ATTRIBUTES_MAX_BYTES + 1)
+        except FileNotFoundError:
+            continue
+        except OSError:
+            return f"cannot read the attributes file {path}"
+        if len(raw) > ADMIN_ATTRIBUTES_MAX_BYTES:
+            return f"the attributes file {path} is too large to read"
+        for line in raw.decode("utf-8", errors="replace").splitlines():
+            line = line.strip()
+            if line and not line.startswith("#") and ADMIN_ATTRIBUTE_PATTERN.search(line):
+                return (f"the attributes file {path} sets `merge=`, `filter=` or `diff=`, which can "
+                        "run a driver or filter during this merge or push")
+    return None
+
+
 def _admin_repo_refusal(where):
-    """Round 3 (N3, N4): why the repository at `where` may not run an `[admin]` merge or push, or
-    None. An executable hook it could run, or repo/worktree config that can run a command or send git
-    elsewhere, refuses. User-global and system config are trusted (not read here)."""
+    """Why the repository at `where` may not run an `[admin]` merge or push, or None (T295, finding
+    P1-2): repo/worktree config off the allowlist, an executable hook, or an attributes line with
+    `merge=`, `filter=` or `diff=`. User-global and system config are trusted (not read here). Read at
+    hook time: a change between this check and the command stays a documented limit."""
     common = _common_dir(where)
     if common is None:
         return f"cannot read the repository at {where}"
-    for name in ADMIN_HOOKS:
-        path = os.path.join(common, "hooks", name)
-        if os.path.isfile(path) and os.access(path, os.X_OK):
-            return f"the repository has an executable `{name}` hook, which this merge or push could run"
-    done = _git(where, "config", "--list", "--show-scope")
-    if done is None or done.returncode not in (0, 1):
-        return "cannot read the repository config"
-    for line in done.stdout.splitlines():
-        scope, _, entry = line.partition("\t")
-        if scope not in ("local", "worktree"):
-            continue
-        key, _, value = entry.partition("=")
-        key, value = key.lower(), value.strip()
-        if (ADMIN_DENY_CONFIG.match(key)
-                or (key == "core.fsmonitor" and value.lower() not in ("", "true", "false"))
-                or ((key.startswith("credential.") or key.startswith("alias."))
-                    and value.startswith("!"))):
-            return f"repo config `{key}` can run a command or redirect git, so `[admin]` refuses"
-    return None
+    return (_admin_hooks_refusal(common) or _admin_config_refusal(where)
+            or _admin_attributes_refusal(where, common))
 
 
 def hidden_git_verb(command):
@@ -1502,6 +1609,11 @@ def _main_push_refusal(where, merged):
     Allowed: `main` is the branch tip and contains the remote's real `main` (a fast-forward), or
     `main` is one merge commit whose parents are the remote's real `main` and the tip and whose tree
     is `git merge-tree --write-tree <remote main> <tip>`. Anything else is refused."""
+    # T295: `git merge-tree` below runs the repo's own merge drivers, so it cannot tell a tree a
+    # driver rewrote; the same repository rule as for the merge is what refuses it.
+    repo_refusal = _admin_repo_refusal(where)
+    if repo_refusal:
+        return repo_refusal
     remote = _remote_main(where)
     if remote is None:
         return ("cannot read the remote's real `main`: `git ls-remote origin refs/heads/main` "
