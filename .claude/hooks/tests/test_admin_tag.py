@@ -8,9 +8,10 @@ passed auto verify (`tasks/TASK_GUIDE_T284.md`, AC 1-8, Success Criteria 1-8).
   * `[admin]` is auto mode: every `[auto]` hook behaviour applies to it (AC 1).
   * The merge gate blocks `git merge`, `git push` and `git pull` while the latest request carries
     `[auto]` or `[admin]` (AC 4), unless `[admin]` holds for that one command: it merges or plainly
-    pushes one task's own branch, the task is the request's (named in it, or worked on by this
-    session since it), and the branch commits a hook-written `auto-run by hook` verify row with its
-    run record (AC 2, 3, 8). The gate's other checks then still run.
+    pushes one task's own branch (or `main` after that task's own merge), the task is the request's
+    (named in it, or the one task whose guide was first added after it), and the branch commits a
+    hook-written `auto-run by hook` verify row with its run record (AC 2, 3, 8). The gate's other
+    checks then still run.
 
 Every board, guide, trace, transcript and git repo here is constructed.
 Run with: python3 -m pytest .claude/hooks/tests/test_admin_tag.py -v
@@ -198,8 +199,14 @@ def auto_verified(fx):
 
 
 def publish(fx):
-    """`origin/main` as the remote last saw it: `main` now (the state before any admin merge)."""
-    git(fx.main, "update-ref", "refs/remotes/origin/main", "main")
+    """A real `origin` (a local bare repo) holding `main` as it is now, before any admin merge; the
+    gate reads the remote's `main` with `git ls-remote`, never the local `origin/main` ref."""
+    bare = os.path.join(fx.root, "origin.git")
+    if not os.path.isdir(bare):
+        git(fx.root, "init", "-q", "--bare", bare)
+        git(fx.main, "remote", "add", "origin", bare)
+    git(fx.main, "push", "-q", "origin", "main")
+    git(fx.main, "fetch", "-q", "origin")
 
 
 def session(tmp_path, fx, request, worked=True, extra=()):
@@ -253,6 +260,7 @@ def test_sc2_a_request_naming_the_task_binds_it_without_new_work(gate, tmp_path)
 def test_sc3_admin_without_a_passed_verify_is_blocked_and_says_why(gate, tmp_path):
     fx = gate(kanban(ready=("T900",)))
     fx.task_file("TASK_GUIDE_T900.md", GUIDE_VACATED.format(tid="T900"), commit=True)
+    publish(fx)  # a real `origin`, so the push reaches the verify check
     path = session(tmp_path, fx, "do it [admin]")
     for command, cwd in ((MERGE + " feat/t900-x", fx.main), (PUSH + " origin feat/t900-x", fx.wt)):
         text = reason(command, cwd, path)
@@ -626,12 +634,16 @@ def test_p0_a_fast_forward_merge_may_push_main(gate, tmp_path):
     assert reason(PUSH + " origin main", fx.main, path) is None
 
 
-def test_p0_no_remote_main_ref_blocks_the_main_push(gate, tmp_path):
+def test_p0_no_remote_main_blocks_the_main_push(gate, tmp_path):
+    """Round 2: `ls-remote` returns nothing (the remote has no `main`), so the push is blocked."""
     fx = gate(kanban(done=("T900",)))
     auto_verified(fx)
     path = merged_session(tmp_path, fx)
-    git(fx.main, "update-ref", "-d", "refs/remotes/origin/main")
-    assert reason(PUSH + " origin main", fx.main, path) is not None
+    empty = os.path.join(fx.root, "empty.git")
+    git(fx.root, "init", "-q", "--bare", empty)
+    git(fx.main, "remote", "set-url", "origin", empty)
+    text = reason(PUSH + " origin main", fx.main, path)
+    assert text is not None and "ls-remote" in text, text
 
 
 AFTER = +60  # a request dated after every fixture commit: the guide existed before it
@@ -797,3 +809,155 @@ def test_mutant_g_a_bare_push_with_matching_push_default_is_refused(gate, tmp_pa
     assert reason(PUSH, fx.wt, path) is None  # control
     git(fx.wt, "config", "push.default", "matching")
     assert reason(PUSH, fx.wt, path) is not None
+
+
+
+# ── Stage 4 fix round 2 (security re-review B1-B11) ─────────────────────────────────────────
+def admin_session(tmp_path, fx, request="merge and push T900 [admin]", merge_cmd=None, cwd=None):
+    entries = [human(request, AFTER)]
+    if merge_cmd:
+        entries += [bash(merge_cmd, cwd or fx.main, AFTER + 10), result(offset_s=AFTER + 11)]
+    return transcript(tmp_path, entries)
+
+
+def evil_commit(repo, name="evil.txt"):
+    write(os.path.join(repo, name), "unreviewed\n")
+    git(repo, "add", name)
+    git(repo, "commit", "-qm", "sneaky")
+    return git(repo, "rev-parse", "HEAD")
+
+
+NO_FF = MERGE + " --no-ff feat/t900-x"
+
+
+def test_r2_b1_a_moved_local_origin_main_is_not_the_remote(gate, tmp_path):
+    fx = gate(kanban(done=("T900",)))
+    auto_verified(fx)
+    evil = evil_commit(fx.main)
+    git(fx.main, "update-ref", "refs/remotes/origin/main", evil)
+    git(fx.main, "merge", "-q", "--no-ff", "-m", "T900 merge", "feat/t900-x")
+    assert reason(PUSH + " origin main", fx.main, admin_session(tmp_path, fx, merge_cmd=NO_FF)) is not None
+
+
+def test_r2_b1b_a_fetch_into_the_remote_ref_is_not_the_remote(gate, tmp_path):
+    fx = gate(kanban(done=("T900",)))
+    auto_verified(fx)
+    git(fx.main, "checkout", "-q", "-b", "scratch")
+    evil = evil_commit(fx.main)
+    git(fx.main, "checkout", "-q", "main")
+    git(fx.main, "fetch", "-q", ".", "+scratch:refs/remotes/origin/main")
+    git(fx.main, "reset", "-q", "--hard", evil)
+    git(fx.main, "merge", "-q", "--no-ff", "-m", "T900 merge", "feat/t900-x")
+    assert reason(PUSH + " origin main", fx.main, admin_session(tmp_path, fx, merge_cmd=NO_FF)) is not None
+
+
+def test_r2_the_honest_no_ff_merge_against_the_real_remote_is_allowed(gate, tmp_path):
+    fx = gate(kanban(done=("T900",)))
+    auto_verified(fx)
+    git(fx.main, "merge", "-q", "--no-ff", "-m", "T900 merge", "feat/t900-x")
+    assert reason(PUSH + " origin main", fx.main, admin_session(tmp_path, fx, merge_cmd=NO_FF)) is None
+
+
+def test_r2_b3_a_no_commit_merge_with_an_added_file_is_blocked(gate, tmp_path):
+    fx = gate(kanban(done=("T900",)))
+    auto_verified(fx)
+    git(fx.main, "merge", "-q", "--no-ff", "--no-commit", "feat/t900-x")
+    write(os.path.join(fx.main, "backdoor.py"), "evil=1\n")
+    git(fx.main, "add", "backdoor.py")
+    git(fx.main, "commit", "-qm", "T900 merge")
+    text = reason(PUSH + " origin main", fx.main,
+                  admin_session(tmp_path, fx, merge_cmd=MERGE + " --no-ff --no-commit feat/t900-x"))
+    assert text is not None and "changes files" in text, text
+
+
+def test_r2_b3b_an_amended_merge_is_blocked(gate, tmp_path):
+    fx = gate(kanban(done=("T900",)))
+    auto_verified(fx)
+    git(fx.main, "merge", "-q", "--no-ff", "-m", "T900 merge", "feat/t900-x")
+    write(os.path.join(fx.main, "backdoor.py"), "evil=1\n")
+    git(fx.main, "add", "backdoor.py")
+    git(fx.main, "commit", "-q", "--amend", "--no-edit")
+    text = reason(PUSH + " origin main", fx.main, admin_session(tmp_path, fx, merge_cmd=NO_FF))
+    assert text is not None and "changes files" in text, text
+
+
+def test_r2_b3c_a_crafted_merge_with_a_no_op_merge_in_the_worktree_is_blocked(gate, tmp_path):
+    fx = gate(kanban(done=("T900",)))
+    auto_verified(fx)
+    git(fx.main, "checkout", "-q", "-b", "scratch")
+    evil_commit(fx.main)
+    git(fx.main, "checkout", "-q", "main")
+    tree = git(fx.main, "rev-parse", "scratch^{tree}")
+    base = git(fx.main, "rev-parse", "main")
+    tip = git(fx.main, "rev-parse", "feat/t900-x")
+    crafted = git(fx.main, "commit-tree", tree, "-p", base, "-p", tip, "-m", "T900 merge")
+    git(fx.main, "update-ref", "refs/heads/main", crafted)
+    git(fx.main, "reset", "-q", "--hard")
+    path = admin_session(tmp_path, fx, merge_cmd=MERGE + " feat/t900-x", cwd=fx.wt)
+    assert reason(PUSH + " origin main", fx.main, path) is not None
+
+
+def test_r2_a_merge_run_with_another_branch_checked_out_does_not_count(gate, tmp_path):
+    fx = gate(kanban(done=("T900",)))
+    auto_verified(fx)
+    git(fx.main, "merge", "-q", "--no-ff", "-m", "T900 merge", "feat/t900-x")
+    path = admin_session(tmp_path, fx, merge_cmd=NO_FF, cwd=fx.wt)  # the call ran in the worktree
+    text = reason(PUSH + " origin main", fx.main, path)
+    assert text is not None and "merge" in text, text
+
+
+@pytest.mark.parametrize("key,value", [
+    ("remote.origin.pushurl", "https://attacker.example/x.git"),
+    ("url.https://attacker.example/.pushInsteadOf", "/"),
+    ("url.https://attacker.example/.insteadOf", "/nowhere"),
+    ("push.followTags", "true"),
+    ("remote.origin.receivepack", "sh -c evil"),
+    ("core.hooksPath", "/tmp/nonexistent-hooks"),
+], ids=["pushurl", "pushInsteadOf", "insteadOf", "followTags", "receivepack", "hooksPath"])
+@pytest.mark.parametrize("target", ["main", "branch"])
+def test_r2_b7_push_url_and_config_rewrites_are_refused(gate, tmp_path, key, value, target):
+    fx = gate(kanban(done=("T900",)))
+    auto_verified(fx)
+    git(fx.main, "merge", "-q", "--no-ff", "-m", "T900 merge", "feat/t900-x")
+    path = admin_session(tmp_path, fx, merge_cmd=NO_FF)
+    command, cwd = (PUSH + " origin main", fx.main) if target == "main" else (
+        PUSH + " origin feat/t900-x", fx.wt)
+    assert reason(command, cwd, path) is None  # control
+    git(fx.main, "config", key, value)
+    assert reason(command, cwd, path) is not None, key
+
+
+@pytest.mark.parametrize("text", [
+    "Merge T950 [admin]. T900 is not ready.",
+    "work on T950 [admin] and T900 should not be merged",
+    "work on T950 [admin]; hold off on T900",
+    "work on T950 [admin]; T900 must wait",
+    "work on T950 [admin]; skip T900",
+])
+def test_r2_b9_a_negation_after_the_id_does_not_bind(gate, tmp_path, text):
+    fx = gate(kanban(ready=("T900",)))
+    auto_verified(fx)
+    assert reason(MERGE + " feat/t900-x", fx.main, transcript(tmp_path, [human(text, AFTER)])) is not None
+
+
+def test_r2_b11_a_forward_dated_guide_commit_does_not_bind(gate, tmp_path, monkeypatch):
+    fx = gate(kanban(ready=("T900",)))
+    monkeypatch.setenv("GIT_COMMITTER_DATE", "2030-01-01T00:00:00Z")
+    auto_verified(fx)
+    monkeypatch.delenv("GIT_COMMITTER_DATE")
+    path = transcript(tmp_path, [human("fix the typo in README [admin]", AFTER)])
+    text = reason(MERGE + " feat/t900-x", fx.main, path)
+    assert text is not None and "not the task" in text, text
+
+
+@pytest.mark.parametrize("command,where", [
+    (G + "-c core.hooksPath=/tmp/h merge feat/t900-x", "main"),
+    (G + "-c user.name=x merge feat/t900-x", "main"),
+    (G + "-c push.default=current push origin feat/t900-x", "wt"),
+], ids=["merge-hooksPath", "merge-any", "push"])
+def test_r2_any_dash_c_before_merge_or_push_is_refused(gate, tmp_path, command, where):
+    fx = gate(kanban(ready=("T900",)))
+    auto_verified(fx)
+    path = session(tmp_path, fx, "do it [admin]")
+    text = reason(command, fx.main if where == "main" else fx.wt, path)
+    assert text is not None and "-c" in text, text

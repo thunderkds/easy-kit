@@ -28,6 +28,7 @@ import re
 import shlex
 import subprocess
 import sys
+import time
 from datetime import datetime, timezone
 
 HOOKS_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -906,10 +907,11 @@ def _current_branch(directory):
     return name if name and name != "HEAD" else None
 
 
-def _push_config_is_plain(directory):
+def _push_config_is_plain(directory, keys=PUSH_CONFIG_KEYS):
     """True only when no config in `directory` can send a push somewhere its refspec
-    does not say: no `remote.*.push`, no `remote.*.mirror`, `push.default` simple/current."""
-    done = _git(directory, "config", "--get-regexp", PUSH_CONFIG_KEYS)
+    does not say: no `remote.*.push`, no `remote.*.mirror`, `push.default` simple/current.
+    T284 passes `ADMIN_PUSH_CONFIG_KEYS`, which also refuses URL rewrites and hook/pack config."""
+    done = _git(directory, "config", "--get-regexp", keys)
     if done is None:
         return False
     if done.returncode == 1 and not done.stdout.strip():
@@ -1276,8 +1278,12 @@ def session_owned_in_progress(rows, command, cwd, transcript_path):
 #     `[admin]` outside code spans and `>` quoted lines — `auto_mode.admin_request`;
 #   * each git action of the command is `git merge <one branch>` or a plain `git push` of a branch
 #     to the same branch name: no force flag, no `+refspec`, no other destination, no `--no-verify`;
-#   * every branch names the same one task, and that task is the request's: the request names it,
-#     or this session (or a sub-agent) worked on it since the request (`session_work`);
+#   * every branch names the same one task, and that task is the request's: the request names it
+#     with no negation in its clause, or it is the one task whose guide was first added after the
+#     request (`_named_tasks`, `_guides_added_since`);
+#   * a push of `main` (round 2): the remote's real `main` comes from `git ls-remote origin`, the
+#     local `main` is that sha plus only this session's merge of the task branch (run with `main`
+#     checked out), and the merge commit's tree is `git merge-tree --write-tree`'s result;
 #   * the branch tip commits the hook's own `auto-run by hook` verify result for the task, confirmed
 #     by its run record for that commit (`committed_verify_row(..., hook_only=True)`): a hand-typed
 #     pass row never counts.
@@ -1287,7 +1293,13 @@ AUTO_MODE_PATTERNS = [p for p in BLOCKED_PATTERNS if not p.endswith(r"rebase\b")
 ADMIN_MAIN_BRANCH = "main"  # AC 8: the one branch `[admin]` may push besides the task branch
 ADMIN_REMOTE = "origin"     # P2: the one remote `[admin]` may push to
 # P1: a task ID in the request counts only when no negation stands before it in its clause.
-NEGATION = re.compile(r"\b(?:not|never|no|without|except|skip|leave|don't|dont)\b|n't\b", re.I)
+NEGATION = re.compile(r"\b(?:not|never|no|without|except|skip|leave|don't|dont|hold|wait|later|"
+                      r"postpone)\b|n't\b", re.I)
+LS_REMOTE_TIMEOUT_S = 10
+FUTURE_SLACK_S = 60  # B11: a commit dated later than now + this is not trusted as "added after"
+# B7: config that can send an `[admin]` push somewhere else or run code during it.
+ADMIN_PUSH_CONFIG_KEYS = (r"^(push\.default|remote\..*\.(push|mirror)|push\.followtags|core\.hookspath"
+                          r"|remote\..*\.(receivepack|pushurl)|url\..*\.(insteadof|pushinsteadof))$")
 CLAUSE_END = re.compile(r"[.;,!?\n]")
 ADMIN_PUSH_FLAGS = frozenset({"-u", "--set-upstream", "-q", "--quiet", "-v", "--verbose",
                               "--progress", "-n", "--dry-run"})
@@ -1321,7 +1333,12 @@ def _admin_push_branch(args, directory):
     if len(positionals) > 2 or (positionals and not REMOTE_NAME_PATTERN.fullmatch(positionals[0])):
         return None
     current = _current_branch(directory)
-    if current is None or not _push_config_is_plain(directory):
+    if current is None or not _push_config_is_plain(directory, ADMIN_PUSH_CONFIG_KEYS):
+        return None
+    fetch_url = _git(directory, "remote", "get-url", ADMIN_REMOTE)
+    push_url = _git(directory, "remote", "get-url", "--push", ADMIN_REMOTE)
+    if (fetch_url is None or push_url is None or fetch_url.returncode != 0
+            or push_url.returncode != 0 or fetch_url.stdout.strip() != push_url.stdout.strip()):
         return None
     if positionals:
         if positionals[0] != ADMIN_REMOTE:
@@ -1350,7 +1367,8 @@ def _session_admin_merges(transcript_path, when, id_regex):
         if not ok:
             continue
         for args, where in _git_actions(command, call_cwd) or []:
-            if args[0] != "merge" or where is None:
+            # Round 2: only a merge run with `main` checked out counts.
+            if args[0] != "merge" or where is None or _current_branch(where) != ADMIN_MAIN_BRANCH:
                 continue
             names = [n for _, n in _merge_sources(args[1:], where)]
             task_id = _ref_task_id(names[0], id_regex) if len(names) == 1 else None
@@ -1359,27 +1377,57 @@ def _session_admin_merges(transcript_path, when, id_regex):
     return found
 
 
-def _main_extra_commits(where, tip):
-    """P0: the commits `main` would publish besides the merge of `tip`, or None when that cannot be
-    read. Allowed shapes: nothing (a fast-forward to commits of `tip`), or exactly one merge commit
-    whose parents are `origin/main` and `tip`. Anything else is listed."""
-    remote_main = f"refs/remotes/{ADMIN_REMOTE}/{ADMIN_MAIN_BRANCH}"
-    shas = {}
-    for name, ref in (("remote", remote_main), ("tip", tip), ("main", ADMIN_MAIN_BRANCH)):
-        done = _git(where, "rev-parse", "--verify", "--quiet", f"{ref}^{{commit}}")
-        if done is None or done.returncode != 0 or not SHA_PATTERN.match(done.stdout.strip()):
-            return None
-        shas[name] = done.stdout.strip()
-    done = _git(where, "rev-list", f"{shas['remote']}..{shas['main']}", "--not", shas["tip"])
-    if done is None or done.returncode != 0:
+def _remote_main(where):
+    """Round 2: the remote's real `main` sha from `git ls-remote origin refs/heads/main` (argv, no
+    shell, a 10 s timeout, no prompt), never the local `refs/remotes/origin/main` the model can move.
+    None on any failure, a timeout or no answer."""
+    try:
+        done = subprocess.run(
+            ["git", "-C", where, "ls-remote", ADMIN_REMOTE, f"refs/heads/{ADMIN_MAIN_BRANCH}"],
+            capture_output=True, text=True, timeout=LS_REMOTE_TIMEOUT_S,
+            env={**os.environ, "GIT_TERMINAL_PROMPT": "0"})
+    except Exception:
         return None
-    extra = done.stdout.split()
-    if len(extra) == 1:
-        parents = _git(where, "rev-list", "--parents", "-n", "1", extra[0])
-        if parents is not None and parents.returncode == 0 and \
-                parents.stdout.split()[1:] == [shas["remote"], shas["tip"]]:
-            return []
-    return extra
+    words = done.stdout.split() if done.returncode == 0 else []
+    return words[0] if len(words) >= 2 and SHA_PATTERN.match(words[0]) and \
+        words[1] == f"refs/heads/{ADMIN_MAIN_BRANCH}" else None
+
+
+def _rev(where, ref):
+    done = _git(where, "rev-parse", "--verify", "--quiet", ref)
+    sha = done.stdout.strip() if done is not None and done.returncode == 0 else ""
+    return sha if SHA_PATTERN.match(sha) else None
+
+
+def _main_push_refusal(where, merged):
+    """P0 (rounds 1-2): why `main` may not be pushed after the merge of branch `merged`, or None.
+    Allowed: `main` is the branch tip and contains the remote's real `main` (a fast-forward), or
+    `main` is one merge commit whose parents are the remote's real `main` and the tip and whose tree
+    is `git merge-tree --write-tree <remote main> <tip>`. Anything else is refused."""
+    remote = _remote_main(where)
+    if remote is None:
+        return ("cannot read the remote's real `main`: `git ls-remote origin refs/heads/main` "
+                "failed, timed out or returned nothing")
+    tip, main_sha = _rev(where, f"{merged}^{{commit}}"), _rev(where, f"{ADMIN_MAIN_BRANCH}^{{commit}}")
+    if tip is None or main_sha is None:
+        return f"cannot resolve `main` or {merged}"
+    if main_sha == tip:
+        held = _git(where, "merge-base", "--is-ancestor", remote, tip)
+        return None if held is not None and held.returncode == 0 else (
+            f"`main` is {merged}, which does not contain the remote's `main`")
+    parents = _git(where, "rev-list", "--parents", "-n", "1", main_sha)
+    if parents is None or parents.returncode != 0 or parents.stdout.split()[1:] != [remote, tip]:
+        return (f"`main` carries commits besides the merge of {merged}: it is not one merge commit "
+                "of the remote's `main` and the branch tip")
+    expected = _git(where, "merge-tree", "--write-tree", remote, tip)
+    tree = expected.stdout.split()[0] if expected is not None and expected.returncode == 0 \
+        and expected.stdout.split() else ""
+    if not SHA_PATTERN.match(tree):
+        return ("`git merge-tree --write-tree` failed or found a conflict: push a merge that "
+                "resolves a conflict yourself")
+    if _rev(where, f"{main_sha}^{{tree}}") != tree:
+        return f"the merge commit on `main` changes files the merge of {merged} does not"
+    return None
 
 
 def _named_tasks(text, id_regex):
@@ -1388,7 +1436,11 @@ def _named_tasks(text, id_regex):
     named = set()
     for match in id_regex.finditer(text or ""):
         start = max((m.end() for m in CLAUSE_END.finditer(text, 0, match.start())), default=0)
-        if not NEGATION.search(text[start:match.start()]):
+        after = CLAUSE_END.search(text, match.end())
+        end = after.start() if after else len(text)
+        # Round 2 (B9): a negation after the ID in the same clause counts too ("T900 is not ready").
+        if not NEGATION.search(text[start:match.start()]) and \
+                not NEGATION.search(text[match.end():end]):
             named.add(match.group(0).upper())
     return named
 
@@ -1400,11 +1452,11 @@ def _guides_added_since(directory, when):
                 "--", "tasks/")
     if done is None or done.returncode != 0:
         return None
-    first = {}
+    first, latest = {}, time.time() + FUTURE_SLACK_S
     for chunk in done.stdout.split("\x00")[1:]:
         lines = [l.strip() for l in chunk.splitlines() if l.strip()]
-        if not lines or not lines[0].isdigit():
-            continue
+        if not lines or not lines[0].isdigit() or int(lines[0]) > latest:
+            continue  # B11: a commit dated in the future is not trusted (the date is git's record)
         for name in lines[1:]:
             hit = re.fullmatch(r"tasks/TASK_GUIDE_([A-Za-z]+-?\d+)\.md", name)
             if hit:
@@ -1418,6 +1470,15 @@ def admin_refusal(command, cwd, transcript_path, admin):
     None when it does. Never raises: an error is a refusal."""
     try:
         when, text = admin
+        # Round 2: any `git -c <k>=<v>` (or `--config-env`) before the verb can change what a merge
+        # or push runs (`core.hooksPath`) or where it goes, so `[admin]` refuses it.
+        for tokens, _, _ in _command_segments(command) or []:
+            if tokens and tokens[0] == "git":
+                for token in tokens[1:]:
+                    if not token.startswith("-"):
+                        break
+                    if token.startswith(("-c", "--config-env")):
+                        return "`[admin]` refuses `git -c` (or `--config-env`) before merge or push"
         actions = _git_actions(command, cwd)
         if not actions:
             return "cannot tell which branch this command merges or pushes"
@@ -1449,12 +1510,9 @@ def admin_refusal(command, cwd, transcript_path, admin):
                                     f"{ADMIN_MAIN_BRANCH}^{{commit}}")
                         if held is None or held.returncode != 0:
                             return f"`main` does not hold the merged branch {merged}"
-                        extra = _main_extra_commits(where, merged)
-                        if extra is None:
-                            return (f"cannot compare `main` with `{ADMIN_REMOTE}/main` and {merged}")
-                        if extra:
-                            return (f"`main` carries commits besides the merge of {merged}: "
-                                    + ", ".join(sha[:8] for sha in extra[:5]))
+                        refusal = _main_push_refusal(where, merged)
+                        if refusal:
+                            return refusal
                         targets.add((task_id, merged, merge_where))
                     continue
             else:
