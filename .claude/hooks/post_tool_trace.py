@@ -10,7 +10,9 @@ inspect instead of trusting the model's claim that it ran tests.
 Attribution is structural only (see lib/task_context.py): a record is
 filed under a Task ID because a guide path, an Agent spawn prompt, or
 CLAUDE_ACTIVE_TASK says so — never because the text of a file the agent
-read happens to mention a Task ID.
+read happens to mention a Task ID. T287: this hook alone also files a
+`Bash` call by the task worktree it runs in, before the session pointer
+(`resolve_task_id(event, per_call=True)`).
 
 Records with no discoverable Task ID are written to
 memory/event-trace/_untagged.jsonl instead of being dropped, so nothing
@@ -44,7 +46,7 @@ TRACE_DIR = os.path.join(ROOT, "memory", "event-trace")
 try:
     from task_context import resolve_task_id
 except Exception:
-    def resolve_task_id(event):
+    def resolve_task_id(event, per_call=False):
         return None
 try:
     from trace_chain import GENESIS, anchor_path, chain_hash, safe_name
@@ -155,7 +157,7 @@ def main():
     tool_input = event.get("tool_input", {})
     tool_response = event.get("tool_response", {})
 
-    task_id = resolve_task_id(event) or "_untagged"
+    task_id = resolve_task_id(event, per_call=True) or "_untagged"
 
     os.makedirs(TRACE_DIR, exist_ok=True)
     trace_path = os.path.join(TRACE_DIR, f"{task_id}.jsonl")
