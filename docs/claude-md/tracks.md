@@ -685,9 +685,12 @@ Read these before you rely on `[auto]`. T180 left them open, on purpose. T186 re
     call that `session_work.py` sees as work on it. A change it cannot see (a path held in a shell variable,
     code passed to an interpreter, work in the main checkout of a minimal-track task) leaves the task
     with no window or a later one: with no window, every Debate of the session counts, as before T293.
-    There is no upper bound, so a Debate after the task's last change still counts. Times come from the
-    transcript for both the work and the Debate, so clock skew with git or file times does not matter. The
-    trace's Advocate records follow the same rule (they carry the trace hook's own timestamp).
+    There is no upper bound, so a Debate after the task's last change still counts. Times of the work and of the
+    Debate come from the transcript, and the trace's Advocate records follow the same rule with the trace
+    hook's own timestamp. No time comes from git or file times, so clock skew with them does not matter.
+  - A session that resumes a task and writes the report must rerun the Debate (T293). The Advocate records
+    of an earlier session now fall before the window of the task's first change in the new session, and
+    that session's transcript is not read, so they do not count.
   - The window reader does not skip symlinks and does not filter `sessionId` (T293). It uses
     `session_work._session_files`, shared with the merge gate (T250), which reads every
     `subagents/agent-*.jsonl` under this session's folder. A transcript file planted or linked there, with
