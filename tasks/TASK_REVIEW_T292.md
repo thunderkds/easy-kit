@@ -47,16 +47,16 @@ Not done: merge (yours); <auto verify: running (T182) | auto verify: <result> | 
 
 | Check | Result | Notes / output snippet |
 |-------|--------|------------------------|
-| **New test(s) cover Acceptance Criteria (file paths pasted)** | ☐ pass / ☐ fail | [test file path(s) — required before Done] |
-| Verification command run | ☐ pass / ☐ fail | [paste actual output] |
-| Negative cases hold | ☐ pass / ☐ fail | [paste the red run against the prior content, or the mutation diff (`git diff --stat`, non-empty) before each verdict] |
+| **New test(s) cover Acceptance Criteria (file paths pasted)** | pass | `.claude/hooks/tests/test_parse_ts_single.py` (43 tests, 23 red on the old code, green after) |
+| Verification command run | pass | `python3 -m pytest .claude/hooks/tests tests -q -p no:cacheprovider` -> `4205 passed, 25 subtests passed` (see Demonstration AFTER) |
+| Negative cases hold | pass | M1 `lib/auto_mode.py` +2 lines -> `4 failed, 39 passed`; M2 `lib/session_work.py` +9/-1 lines -> `2 failed, 41 passed`; independent reviewer ran 5 more mutations, each red (4, 8, 10, 2, 1 failed) |
 | verify | ☐ pass / ☐ fail / ☐ N/A | [what was observed — must literally state "pass" or "fail" here too, e.g. "skill run, feature confirmed working — pass": the merge gate scans this Notes column for the word "pass", not just the Result column] |
-| Review scope bounded to the change's blast radius (affected set, not whole repo) | ☐ pass / ☐ fail | [what was reviewed vs. skipped, and why] |
-| Full smoke suite still green (no regression) | ☐ pass / ☐ fail | |
-| **Companion score (easy-verifier)** | ☐ pass / ☐ fail / ☐ N/A | [`overall` and `change_risk` as the tool returned them, the scope, the ref, and the absolute path of the verifier report after a literal `report:` label — e.g. "overall 86 (>= 80), change_risk pass, scope changes, ref `main...HEAD`, report: `/home/me/.easy-verifier-reports/kit/score_changes_20261028T0530Z.html`". The gate reads the path that follows `report:` and nothing else, so with no label, or a path that is absent, the row is unscored — write ☑ N/A instead. ☑ N/A with a reason when neither companion tool was run: the merge gate blocks on ☑ fail only, never on an absent or N/A row] |
-| **UI: Visual regression (diff or verdict pasted)** | ☐ pass / ☐ fail / ☐ N/A | [screenshot path or LLM verdict — required for UI tasks, Hard-Stop Gate 6] |
-| **UI: Design-system compliance (tokens/colors/typography verified)** | ☐ pass / ☐ fail / ☐ N/A | [method used + output] |
-| **UI: Responsiveness at target viewports** | ☐ pass / ☐ fail / ☐ N/A | [viewports tested, any overflow findings] |
+| Review scope bounded to the change's blast radius (affected set, not whole repo) | pass | Independent Stage 4 code-review (read-only): 36 inputs through old copies (`git show main:`) and new `parse_ts`, identical; fail-closed import paths tested; no P0, P1 or P2; two P3 notes, no change needed. Reviewed: the 3 changed hook files, the 2 callers, `pre_bash_block_unsafe_merge.py` import guard. Skipped: unrelated hooks |
+| Full smoke suite still green (no regression) | pass | `4205 passed, 25 subtests passed in 256.11s` |
+| **Companion score (easy-verifier)** | ☑ N/A | Not run: Low-risk refactor of one helper; the independent code-review and the 36-input comparison cover it |
+| **UI: Visual regression (diff or verdict pasted)** | ☑ N/A | No UI component |
+| **UI: Design-system compliance (tokens/colors/typography verified)** | ☑ N/A | No UI component |
+| **UI: Responsiveness at target viewports** | ☑ N/A | No UI component |
 
 ---
 
@@ -113,8 +113,7 @@ $ python3 -m pytest .claude/hooks/tests tests -q -p no:cacheprovider
 
 **DELTA**: A fix to the timestamp parser now lands in every hook at once, because `stop_auto_mode_check.py` and `lib/session_work.py` bind the one `parse_ts` in `lib/auto_mode.py`.
 
-**WITNESS**: [who ran it and when — derived from `memory/event-trace/Txxx.jsonl`, never the
-implementing agent alone]
+**WITNESS**: `memory/event-trace/T292.jsonl` holds the implementer's 30 Bash calls and the Stage 4 reviewer's hand-back (2026-11-08T10:04Z). The full suite ran in `wt-t292`: `4205 passed`. The hook-written verify row follows from the auto verify run.
 
 ---
 
