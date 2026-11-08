@@ -764,7 +764,8 @@ def test_known_limit_a_local_main_ref_moved_onto_the_runtime_change_hides_it(tmp
     """DOCUMENTED, NOT FIXED (`docs/claude-md/tracks.md` `### Known limits`): `refs/heads/main` is a
     mutable local ref. Moving it onto the branch's runtime commit makes the diff look docs-only. That
     needs a model that can run git and also write the record directory, which can already forge a pass
-    (the T182 trust root); a push of `main` is tied to the real remote by the gate (`_main_push_refusal`)."""
+    (the T182 trust root). `_main_push_refusal` does not close it: a fast-forward merge of the docs-only
+    branch onto that moved `main` publishes the commits below the branch tip (tracks.md says so)."""
     repo = _repo(tmp_path)
     _commit_file(repo, "skills/x/SKILL.md", "runtime change\n")
     runtime = _tip(repo)
@@ -777,7 +778,8 @@ def test_known_limit_a_local_main_ref_moved_onto_the_runtime_change_hides_it(tmp
 
 def test_known_limit_is_written_down_in_tracks_md():
     limits = " ".join(TRACKS.read_text(encoding="utf-8").split("### Known limits", 1)[1].split())
-    for needle in ("git update-ref refs/heads/main", "trust root", "_main_push_refusal", "No network check"):
+    for needle in ("git update-ref refs/heads/main", "trust root", "_main_push_refusal", "No network check",
+                   "publishes C1", "read the diff from `origin/main` to the", "not to move local `main`"):
         assert needle in limits, needle
 
 

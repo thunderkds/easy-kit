@@ -681,10 +681,13 @@ Read these before you rely on `[auto]`. T180 left them open, on purpose. T186 re
   `refs/heads/main`, a mutable local ref: `git update-ref refs/heads/main <a commit with the branch's runtime
   change>` makes that change part of "main" and the diff look docs-only. This is part of the T182 record
   trust root: a model that can run git and write the run record's directory can already forge a pass. No
-  network check is added. A push of `main` stays tied to the real remote by the gate (`_main_push_refusal`:
-  `git ls-remote origin refs/heads/main`, a fast-forward or the exact merge), so a rewritten local `main`
-  does not reach the remote through `[admin]`. The merge itself is yours, or the `[admin]` merge of the task
-  branch, which the gate also checks.
+  network check is added. `_main_push_refusal` (`git ls-remote origin refs/heads/main`, a fast-forward or
+  the exact merge) does not close this. It stops a push of a `main` that differs from the branch tip. It does
+  not stop this case: local `main` is moved to a runtime commit C1, the docs-only branch (C1 plus C2) is
+  merged by fast-forward, and the push publishes C1, because `main` equals the branch tip and the remote's
+  `main` is an ancestor. So the limit also covers a push that publishes the commits below the branch's own
+  docs-only tip. Before you trust `[admin]` for a docs-only task, read the diff from `origin/main` to the
+  branch tip yourself. The remedy is not to move local `main` by hand (`update-ref`, `reset`).
 - **A hand-typed `☑ pass` in the `verify` row ends the check.** The auto-mode check skips a review file
   whose `verify` row says `☑ pass`, so an agent that types that row ends the run unchecked. The merge
   gate still blocks a hand-typed row at merge: it accepts only a row with an `auto-run by hook` run
