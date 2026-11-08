@@ -67,8 +67,21 @@ Not done: merge (yours); <auto verify: running (T182) | auto verify: <result> | 
 > **before any implementation commit exists**; if it does not (docs, templates, skill-instruction
 > text), BEFORE is the **verbatim prior content** of what changed — a quoted excerpt, not a command.
 
-**BEFORE**: [pasted timestamped command output showing the thing absent/failing, captured before the
-first implementation commit] OR [verbatim excerpt of the prior content, for non-executable changes]
+**BEFORE** (captured 2026-11-08T06:42Z, worktree `wt-t290`, branch `feat/t290-locked-oracle`, before any implementation commit; the only change on disk is the untracked red test file):
+
+```
+$ ls .claude/hooks/pre_tool_locked_oracle.py
+ls: cannot access '.../.claude/hooks/pre_tool_locked_oracle.py': No such file or directory
+$ grep -n '^\*\*Locked oracle' <fixture>/tasks/TASK_GUIDE_T066.md     # real T066 guide + lock line, board row T066 In Progress
+240:**Locked oracle**: `.claude/hooks/tests/test_agent_guide_dedup.py`
+# T082-style Edit ("assert a < b" -> "assert a <= b") by agent_type common-infrastructure, piped to each existing PreToolUse hook that matches Edit
+--- pre_tool_sensitive_path.py   exit=0, stdout empty  (no deny: the Edit goes through)
+--- pre_agent_step_limit.py      exit=0, stdout empty  (no deny: the Edit goes through)
+--- pre_tool_locked_oracle.py    python3: can't open file ... [Errno 2] No such file or directory
+$ python3 -B -m pytest .claude/hooks/tests/test_locked_oracle.py -q -p no:cacheprovider
+67 failed, 1 passed in 1.36s        # (the 1 pass is the guard "implementer guides do not mention the lock", true on the prior content)
+```
+Script: scratchpad `before_replay.sh` (fixture built in a temp dir; no repo file touched).
 
 **AFTER**: [same command, post-change] OR [verbatim excerpt of the new content]
 
