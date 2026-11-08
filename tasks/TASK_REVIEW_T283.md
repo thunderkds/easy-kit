@@ -1,4 +1,4 @@
-# TASK_REVIEW — T283: [Short Title]
+# TASK_REVIEW — T283: Karpathy autoresearch loop — seven spikes with evidence
 
 > Sibling of `tasks/TASK_GUIDE_T283.md`. Everything here is **filled by the reviewer at Stage
 > 4/5** — it is deliberately NOT in the guide, because the implementing agent re-reads the guide on
@@ -47,12 +47,12 @@ Not done: merge (yours); <auto verify: running (T182) | auto verify: <result> | 
 
 | Check | Result | Notes / output snippet |
 |-------|--------|------------------------|
-| **New test(s) cover Acceptance Criteria (file paths pasted)** | ☐ pass / ☐ fail | [test file path(s) — required before Done] |
-| Verification command run | ☐ pass / ☐ fail | [paste actual output] |
-| Negative cases hold | ☐ pass / ☐ fail | [paste the red run against the prior content, or the mutation diff (`git diff --stat`, non-empty) before each verdict] |
-| verify | ☐ pass / ☐ fail / ☐ N/A | [what was observed — must literally state "pass" or "fail" here too, e.g. "skill run, feature confirmed working — pass": the merge gate scans this Notes column for the word "pass", not just the Result column] |
-| Review scope bounded to the change's blast radius (affected set, not whole repo) | ☐ pass / ☐ fail | [what was reviewed vs. skipped, and why] |
-| Full smoke suite still green (no regression) | ☐ pass / ☐ fail | |
+| **New test(s) cover Acceptance Criteria (file paths pasted)** | ☑ pass | `tests/test_spike_report_t283.py` (6 tests incl. 4 mutation controls); each spike branch holds its own test (`spike/t283-*`: `spike/test_*.py` or `tests/test_spike_*_t283.py`) |
+| Verification command run | ☑ pass | 2026-11-08 `python3 -m pytest tests/test_spike_report_t283.py -q` — `6 passed`; `git diff --name-only main...HEAD` — `tasks/SPIKE_REPORT_T283.md`, `tasks/TASK_REVIEW_T283.md`; all 7 `spike/t283-*` exist and none is an ancestor of `main` |
+| Negative cases hold | ☑ pass | BEFORE: report absent → `1 failed, 5 passed` (the real-report test red). The oracle's own mutation controls (blank field, toy baseline, bad verdict, missing idea) each fail the validator. Each spike's mutation diff and red run are pasted in its report section |
+| verify | ☐ blocked | auto-run by hook, session 12e8ba7a-23ab-4f15-a3bb-b8f8974b905a, commit 1c389894df5ef3e7911dfb33e56086160e1258f6, log .claude/verify-runs/T283-1c389894df5e.log — blocked (no single verdict line) |
+| Review scope bounded to the change's blast radius (affected set, not whole repo) | ☑ pass | Reviewed: the two files in the diff against the guide's AC 1–7. Not reviewed: the throwaway spike scripts on `spike/t283-*` (never merged; guide marks them throwaway) |
+| Full smoke suite still green (no regression) | ☑ pass | `python3 -m pytest .claude/hooks/tests/ tests/ -q` in `../wt-t283` — `3442 passed, 25 subtests passed in 215.53s` |
 | **Companion score (easy-verifier)** | ☐ pass / ☐ fail / ☐ N/A | [`overall` and `change_risk` as the tool returned them, the scope, the ref, and the absolute path of the verifier report after a literal `report:` label — e.g. "overall 86 (>= 80), change_risk pass, scope changes, ref `main...HEAD`, report: `/home/me/.easy-verifier-reports/kit/score_changes_20261028T0530Z.html`". The gate reads the path that follows `report:` and nothing else, so with no label, or a path that is absent, the row is unscored — write ☑ N/A instead. ☑ N/A with a reason when neither companion tool was run: the merge gate blocks on ☑ fail only, never on an absent or N/A row] |
 | **UI: Visual regression (diff or verdict pasted)** | ☐ pass / ☐ fail / ☐ N/A | [screenshot path or LLM verdict — required for UI tasks, Hard-Stop Gate 6] |
 | **UI: Design-system compliance (tokens/colors/typography verified)** | ☐ pass / ☐ fail / ☐ N/A | [method used + output] |

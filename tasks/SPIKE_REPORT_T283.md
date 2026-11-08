@@ -1,6 +1,6 @@
 # Spike report T283 — Karpathy autoresearch loop, seven ideas tested
 **Date**: 2026-11-08 · **Method**: one spike branch per idea (`spike/t283-<idea>`, local only, never merged); every baseline is real kit work (a task ID, commit or file).
-**Result in one line**: 3 `adapt` (locked judge, no check-ins, steering file) + 1 `adapt` (attempt log), 3 `drop` (ratchet, time budget, simplicity rule). Two spikes found a defect that is worth more than the idea they tested (see Recommendation).
+**Result in one line**: 4 `adapt` (locked judge, attempt log, no check-ins, steering file) and 3 `drop` (ratchet, time budget, simplicity rule). Two spikes found a defect that is worth more than the idea they tested (see Recommendation). The `Command` lines name local worktrees (`../wt-t283-<idea>`) that exist only on the machine that ran the spikes; the branches `spike/t283-<idea>` hold the same files.
 
 ### 1. Locked judge
 - **Hypothesis:** A PreToolUse check that denies a sub-agent other than `qa-expert` any Edit/Write to a file a guide lists as `**Locked oracle**:` stops the implementer from weakening the test that grades it, and costs little friction.
