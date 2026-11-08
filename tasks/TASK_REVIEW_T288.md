@@ -1,4 +1,4 @@
-# TASK_REVIEW — T288: [Short Title]
+# TASK_REVIEW — T288: Attempts log derived from the event trace
 
 > Sibling of `tasks/TASK_GUIDE_T288.md`. Everything here is **filled by the reviewer at Stage
 > 4/5** — it is deliberately NOT in the guide, because the implementing agent re-reads the guide on
@@ -97,3 +97,25 @@ $ python3 scripts/attempt_log.py derive .../memory/event-trace | head -3 | cut -
 **DELTA**: The Supervisor can run `python3 scripts/attempt_log.py append tasks/attempts.tsv memory/event-trace` and get a committed, readable, append-only file of every blocked or stopped sub-agent run, including the step-limit stops that no committed record names today.
 
 **WITNESS**: Derived from `/home/hungnguyenhuu/workspace/pets/personal-agentic-claude/memory/event-trace/T288.jsonl` (the common-infrastructure sub-agent's tool calls, bound by the spawn prompt's `Task ID: T288`); BEFORE was captured before commit b56bfc26. The Supervisor re-runs the Verification Command at Stage 4; the implementing agent alone is not the witness.
+
+---
+
+## Known limit
+
+A handback with no `Status:` line is never a row, because AC 1 limits rows to the status line. Example: a reviewer handback that the step limit (`pre_agent_step_limit`) stopped, T266, trace `memory/event-trace/T266.jsonl` line 90. The same limit is in the docstring of `scripts/attempt_log.py`. Not fixed on purpose: a free-text search of the whole handback is what produced the spike's false positive (the word "blocked" in a done handback).
+
+## Stage 4 fix round (2026-11-08)
+
+Findings of the Stage 4 `code-review`: no P0, no P1, three P2, two P3. Method: each test written first and seen red (`python3 -B -m pytest tests/test_attempt_log.py -q`), then the fix. Fix commit `0ac64982`. Each mutation changes bytes of `scripts/attempt_log.py` (non-empty `git diff --stat`), is restored with `git checkout`, and the file is green again (`26 passed`).
+
+| # | Finding | What I did | Red before the fix | Mutation control (red) |
+|---|---------|------------|--------------------|------------------------|
+| 1 | P2: `append` not idempotent for a status holding a character that `str.splitlines()` splits on (VT, FF, FS, GS, RS, NEL, LS, PS) | New `LINE_BREAKS` class and `_flat()`: every such character, and tab, CR, LF, becomes a space in each cell. `have` is read with `text.split("\n")`. New test `test_ac2_a_status_with_a_splitlines_separator_appends_once` (8 separators: append twice, second run `appended 0 rows`, file bytes unchanged, one row) | `FAILED test_ac2_a_status_with_a_splitlines_separator_appends_once`, `2 failed, 24 passed` | N4: `LINE_BREAKS` cut to `[\t\n\r]`: `1 failed, 25 passed` (`test_ac2_a_status_with_a_splitlines_separator_appends_once`). N3: `have = set(text.splitlines())` alone: `26 passed`. It cannot be seen by itself, because the cells are already flat; N4 is the guard that bites. `split("\n")` stays as defence in depth for a file edited by hand. |
+| 2 | P2: a lone surrogate (a cut between the halves of an emoji pair, `\ud83d`) crashes `derive` with `UnicodeEncodeError` | `_flat()` repairs lone surrogates: `text.encode("utf-16", "surrogatepass").decode("utf-16", "replace")`. New test `test_ac5_a_cut_between_the_halves_of_an_emoji_pair_does_not_crash` runs the real command (derive and two appends): exit 0, a row ending in `(cut at 300)`, no traceback | `FAILED test_ac5_a_cut_between_the_halves_of_an_emoji_pair_does_not_crash` | N2: the `encode("utf-16", "surrogatepass")` line removed: `1 failed, 25 passed` (same test) |
+| 3 | P2: `test_ac3_a_cut_in_the_middle_of_an_escape_does_not_crash` cannot fail for `PARTIAL_ESCAPE` | Added `assert cell.startswith("blocked \u2014 y")` (em dash decoded) and `"\\u20" not in cell` | n/a (test strengthened; the guard was already in place) | N1: loop `for text in (raw, PARTIAL_ESCAPE.sub("", raw))` replaced by `for text in (raw,)`: `FAILED test_ac3_a_cut_in_the_middle_of_an_escape_does_not_crash`, `1 failed, 25 passed` |
+| 4 | P3: the tab/newline test does not exercise `\r` | New `test_a_carriage_return_inside_the_status_line_becomes_a_space` (`blocked\rabc` gives `blocked abc`, no `\r` in the row). `\n` stays in the class: the escape `\n` ends the status line, but `\u000a` decodes to a real newline; new test `test_a_newline_escaped_as_unicode_inside_the_status_line_becomes_a_space` | both pass at once (the old code already replaced `\r` and `\n`); the mutations show they can fail | N5: `\r` removed from the class: `FAILED test_a_carriage_return_inside_the_status_line_becomes_a_space`, `1 failed, 25 passed`. N6: `\n` removed from the class: `FAILED test_a_newline_escaped_as_unicode_inside_the_status_line_becomes_a_space`, `1 failed, 25 passed` |
+| 5 | P3: a reviewer handback with no `Status:` line, stopped by the step limit (T266), is not logged | Documentation only: section `## Known limit` above and the docstring of the script. No code change | n/a | n/a |
+| 6 | Title line | Filled: `# TASK_REVIEW — T288: Attempts log derived from the event trace` | n/a | n/a |
+
+The `verify` row and the companion-score row are unchanged.
+
