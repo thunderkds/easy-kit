@@ -47,16 +47,16 @@ Not done: merge (yours); <auto verify: running (T182) | auto verify: <result> | 
 
 | Check | Result | Notes / output snippet |
 |-------|--------|------------------------|
-| **New test(s) cover Acceptance Criteria (file paths pasted)** | ☐ pass / ☐ fail | [test file path(s) — required before Done] |
-| Verification command run | ☐ pass / ☐ fail | [paste actual output] |
-| Negative cases hold | ☐ pass / ☐ fail | [paste the red run against the prior content, or the mutation diff (`git diff --stat`, non-empty) before each verdict] |
+| **New test(s) cover Acceptance Criteria (file paths pasted)** | ☑ pass | `.claude/hooks/tests/test_admin_tag.py` (new, 100+ cases: AC 1-10, SC 1-7b); repointed/narrowed pins: `.claude/hooks/tests/test_merge_gate_guard.py`, `.claude/hooks/tests/test_agent_guide_dedup.py`, `tests/test_stage_names.py`, `tests/test_site_story.py`. Run by common-infrastructure on HEAD `2a7d4545`, 2026-11-08T00:07:49Z: `python3 -m pytest .claude/hooks/tests -q -k "admin or auto or merge"` → `644 passed, 979 deselected in 24.92s` |
+| Verification command run | ☑ pass | HEAD `2a7d4545849f68d49adb79e34b49403eea479d28`. `python3 -m pytest .claude/hooks/tests -q -k "admin or auto or merge"` → `644 passed, 979 deselected in 24.92s` (2026-11-08T00:11:01Z). `python3 -m pytest .claude/hooks/tests/ tests/ -q` → `FAILED tests/test_spike_report_t283.py::test_the_real_report_is_valid` / `1 failed, 3543 passed, 25 subtests passed in 238.38s (0:03:58)` (2026-11-08T00:15:00Z). The one failure is T283's own report test and also failed before any T284 change (BEFORE). |
+| Negative cases hold | ☑ pass | Red before the change: `55 failed, 15 passed` (BEFORE, 2026-11-07T23:34:41Z). Mutations in a scratch copy, each byte-changing (`diff`/`cmp` exit 1): M1 passed-verify check → `if False` (2026-11-07T23:55:17Z): `3 failed` (all sc3 tests); M2 push-shape check → T197 resolver (23:55:34Z): `6 failed` (sc7 force, f, lease, plus, dst-other, no-verify); M3 tracks.md AC 10 sentence removed (23:59:45Z): `1 failed` (`test_ac10_admin_tag_section_states_...`); M4 merge-happened check removed for the `main` push (2026-11-08T00:05:28Z): `2 failed` (`test_sc7b_main_push_without_a_merge_in_this_session_is_blocked`, `test_sc7b_a_merge_only_in_the_transcript_is_not_a_merge`). Not done by the Supervisor yet (Stage 4 own mutant). |
 | verify | ☐ pass / ☐ fail / ☐ N/A | [what was observed — must literally state "pass" or "fail" here too, e.g. "skill run, feature confirmed working — pass": the merge gate scans this Notes column for the word "pass", not just the Result column] |
 | Review scope bounded to the change's blast radius (affected set, not whole repo) | ☐ pass / ☐ fail | [what was reviewed vs. skipped, and why] |
-| Full smoke suite still green (no regression) | ☐ pass / ☐ fail | |
+| Full smoke suite still green (no regression) | ☑ pass | Same full run as above: `1 failed, 3543 passed`; the failure is pre-existing (T283). `sh tests/test_readme_current.sh` → `FAIL: AC2: could not parse any skill names from README's Codex-skip bullet list` on this branch AND on `main` `4c076b6c` (run read-only in the main checkout), so pre-existing, not T284. |
 | **Companion score (easy-verifier)** | ☐ pass / ☐ fail / ☐ N/A | [`overall` and `change_risk` as the tool returned them, the scope, the ref, and the absolute path of the verifier report after a literal `report:` label — e.g. "overall 86 (>= 80), change_risk pass, scope changes, ref `main...HEAD`, report: `/home/me/.easy-verifier-reports/kit/score_changes_20261028T0530Z.html`". The gate reads the path that follows `report:` and nothing else, so with no label, or a path that is absent, the row is unscored — write ☑ N/A instead. ☑ N/A with a reason when neither companion tool was run: the merge gate blocks on ☑ fail only, never on an absent or N/A row] |
-| **UI: Visual regression (diff or verdict pasted)** | ☐ pass / ☐ fail / ☐ N/A | [screenshot path or LLM verdict — required for UI tasks, Hard-Stop Gate 6] |
-| **UI: Design-system compliance (tokens/colors/typography verified)** | ☐ pass / ☐ fail / ☐ N/A | [method used + output] |
-| **UI: Responsiveness at target viewports** | ☐ pass / ☐ fail / ☐ N/A | [viewports tested, any overflow findings] |
+| **UI: Visual regression (diff or verdict pasted)** | ☑ N/A | No UI component: the site change is two text sentences and one list item in `site/docs.html`, no layout, style or component change; site tests `218 passed`. |
+| **UI: Design-system compliance (tokens/colors/typography verified)** | ☑ N/A | No UI component: the site change is two text sentences and one list item in `site/docs.html`, no layout, style or component change; site tests `218 passed`. |
+| **UI: Responsiveness at target viewports** | ☑ N/A | No UI component: the site change is two text sentences and one list item in `site/docs.html`, no layout, style or component change; site tests `218 passed`. |
 
 ---
 
@@ -109,9 +109,28 @@ The 15 that passed before are the controls and negative cases that hold today (a
 such as `[Admin]` is trivially not admin when nothing reads the tag; a hand-typed `☑ pass` row
 passes the plain gate; a rebase is not blocked).
 
-**AFTER**: [same command, post-change] OR [verbatim excerpt of the new content]
+**BEFORE refresh (2026-11-08)**: AC 10 (Supervisor starts the auto verify run, merges only on a pass) and the
+AC 8 change (`[admin]` may push `main` after its own merge) came after the capture above. Their tests were
+written first and seen red before the code: the 7b allowed case failed `4 failed` at 2026-11-08T00:04:45Z
+(`main names no single task`); AC 10 is a docs statement, and its tests failed until the `tracks.md` text existed.
 
-**DELTA**: [one sentence — what a user can now do that they could not before]
+**AFTER**: HEAD `2a7d4545`, run by common-infrastructure:
 
-**WITNESS**: [who ran it and when — derived from `memory/event-trace/Txxx.jsonl`, never the
-implementing agent alone]
+```
+$ date -u; python3 -m pytest .claude/hooks/tests -q -k "admin or auto or merge"
+2026-11-08T00:07:49Z
+644 passed, 979 deselected in 24.92s
+$ python3 -m pytest .claude/hooks/tests/ tests/ -q
+FAILED tests/test_spike_report_t283.py::test_the_real_report_is_valid - Asser...
+1 failed, 3543 passed, 25 subtests passed in 238.38s (0:03:58)
+2026-11-08T00:15:00Z
+```
+
+`test_sc4_auto_only_with_a_passed_verify_stays_blocked[merge|push|pull]`, red in the BEFORE, now pass: with
+`[auto]` the gate blocks with `Auto-mode gate — cannot push/merge`.
+
+**DELTA**: The user can write `[admin]` so the Supervisor runs the task in auto mode, starts its auto verify run, and only after a hook-proven pass merges and pushes the task branch and then `main`; with `[auto]` alone the gate now actually blocks merge, push and pull.
+
+**WITNESS**: Not yet witnessed. The runs above are by common-infrastructure (the implementing agent),
+2026-11-07T23:27Z to 2026-11-08T00:15Z, attributed to T284 in `memory/event-trace/T284.jsonl`. The implementing
+agent alone does not witness: the Supervisor's Stage 4 rerun, or the headless auto verify run, fills this.
