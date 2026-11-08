@@ -84,6 +84,68 @@ def test_ac4_a_done_status_that_says_the_step_limit_did_not_stop_it_is_not_a_row
     assert al.classify(handback("ready-for-review. The step-limit hook stopped me."))[0] == "stopped"
 
 
+# Summaries copied byte for byte from the real trace (memory/event-trace/<task>.jsonl, line in the key).
+REAL = {
+    "T173:94": '{"message": "Agent: common-infrastructure\\nTask: T173 \\u2014 AGENTS.md is the primary doctrine file; CLAUDE.md imports it\\nStatus: ready-for-review, with 3 gaps listed below. The `pre_agent_step_limit` hook stopped me at its 90-call limit (\\"Stop and report to the Supervisor\\"). I made one more edit',
+    "T189:100": '{"message": "Agent: common-infrastructure\\nTask: T189 \\u2014 option (a), check (7), then the AC 11 rerun\\nStatus: blocked \\u2014 the step-limit hook stopped me before I made any change.\\n\\n**Blocker.** `pre_agent_step_limit` killed my next Bash call with this message: `[hook:pre_agent_step_limit] T1',
+    "T223:90": '{"message": "Agent: common-infrastructure\\nTask: T223 \\u2014 Stage 4 review fixes (S1\\u2013S3, C1\\u2013C5)\\nStatus: blocked. All 7 fixes are done and the tests are green, but they are NOT committed and the Evidence rows are NOT updated yet.\\n\\nThe step-limit hook stopped my last call. It ran the Evi',
+    "T249:90": '{"message": "Agent: common-infrastructure\\nTask: T249 \\u2014 TokenEconomizer A/B experiment, phase 1 ($0 spent)\\nStatus: blocked (waiting on Supervisor sign-off for phase 2, plus 3 choice questions below). The `pre_agent_step_limit` hook also stopped me at 90 tool calls.\\n\\nChanged files (branch `ex',
+    "T250:88": '{"message": "Agent: common-infrastructure\\nTask: T250 \\u2014 Gates judge only this session\'s work; a blocked verify falls back to the user\'s /verify\\nStatus: in-progress (stopped by `pre_agent_step_limit`: \\"T250 has exceeded 90 tool calls without reaching Ready for Review \\u2026 Stop and report to ',
+    "T267:91": '{"message": "Agent: common-infrastructure\\nTask: T267 \\u2014 the merge gate reads PowerShell-spelled git writes and the PowerShell tool\\nStatus: blocked. The step-limit hook stopped me, and one new pin test fails.\\n\\n**Done.** I added T267 to the guard, as you decided, in commit `d44284ae` (\\"test(T',
+    "T284:92": '{"message": "Agent: common-infrastructure\\nTask: T284 \\u2014 `[admin]` tag: auto mode, plus merge and push of the task branch after a passed auto verify\\nStatus: blocked \\u2014 the step-limit guard (90 tool calls) fired and told me to stop and report. My last commit, `f46a854a` (AC 10), leaves two p',
+    "T285:30": '{"message": "Agent: common-infrastructure\\nTask: T285 \\u2014 Step limit counts per sub-agent run (agent_id)\\nStatus: ready-for-review (committed on feat/t285-step-limit-per-agent as e257cd5b; not merged, not pushed)\\n\\nWhat changed\\n- /home/hungnguyenhuu/workspace/pets/wt-t285/.claude/hooks/pre_agen',
+    "T285:36": '{"message": "Agent: common-infrastructure\\nTask: T285 \\u2014 Stage 4 fixes\\nStatus: ready-for-review. HEAD is 112c7e3e on feat/t285-step-limit-per-agent. Not merged, not pushed. PROJECT_KANBAN.md, memory/** and .claude/settings.json untouched.\\n\\n1. `skills/resolve-question/SKILL.md` is now 8177 byt',
+}
+
+
+def real(key):
+    return {"timestamp": "2026-11-08T00:00:00+00:00", "tool_name": "SubagentHandback",
+            "summary": REAL[key]}
+
+
+def test_fix2_finished_work_on_a_step_limit_branch_is_not_a_stop():
+    # The two real T285 handbacks that the first version logged as stops (verify FAIL on c0e1d555).
+    assert al.classify(real("T285:30")) is None
+    assert al.classify(real("T285:36")) is None
+
+
+def test_fix2_the_real_stops_are_still_stopped_rows():
+    for key in ("T173:94", "T189:100", "T249:90", "T250:88", "T267:91", "T284:92"):
+        got = al.classify(real(key))
+        assert got is not None and got[0] == "stopped", key
+
+
+def test_fix2_t223_first_stays_a_blocked_row():
+    # Its status line is `blocked.`; the hook is named in the body, which AC 1 does not read.
+    got = al.classify(real("T223:90"))
+    assert got is not None and got[0] == "blocked"
+
+
+def test_fix2_a_name_with_step_limit_in_a_done_status_is_not_a_stop():
+    for status in (
+        "ready-for-review. Branch `feat/t999-step-limit-fix` is committed, not merged.",
+        "ready-for-review. HEAD is abc1234 on feat/t999-step-limit-fix.",
+        "ready-for-review. I edited `.claude/hooks/pre_agent_step_limit.py` and its tests.",
+        "ready-for-review. Worktree /home/me/wt-t999/step-limit-fix is clean.",
+        "ready-for-review. Branch t999-step-limit-fix is committed.",
+    ):
+        assert al.classify(handback(status)) is None, status
+
+
+def test_fix2_the_same_words_in_a_real_stop_are_a_stopped_row():
+    got = al.classify(handback("blocked. The step-limit hook stopped me on feat/t999-step-limit-fix."))
+    assert got is not None and got[0] == "stopped"
+    got = al.classify(handback("ready-for-review. Edited `pre_agent_step_limit.py`; the hook "
+                               "`pre_agent_step_limit` killed a call after 90 tool calls."))
+    assert got is not None and got[0] == "stopped"
+
+
+def test_fix2_a_negated_stop_verb_is_not_a_stop():
+    # The verb is there ("stopped"), so only the negation guard keeps it out.
+    assert al.classify(handback("ready-for-review. The step-limit hook never stopped me.")) is None
+    assert al.classify(handback("ready-for-review. The step-limit hook did not stop me.")) is None
+
+
 def test_ac1_a_status_line_that_starts_with_bold_blocked_is_blocked():
     got = al.classify(handback("**blocked** on a question"))
     assert got is not None and got[0] == "blocked"

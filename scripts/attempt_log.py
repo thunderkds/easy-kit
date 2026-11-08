@@ -4,8 +4,10 @@
 One row per sub-agent handback that reports a blocked or stopped run:
     time <TAB> task <TAB> kind <TAB> status line
 - kind `blocked`: the handback's `Status:` line starts with "blocked".
-- kind `stopped`: the `Status:` line names the step limit (the `pre_agent_step_limit` hook),
-  unless it says only that the hook did not stop the run.
+- kind `stopped`: the `Status:` line names the step limit (the `pre_agent_step_limit` hook) as the
+  cause, with a stopping verb in the same sentence ("hook stopped me", "killed a call", "stopped by
+  `pre_agent_step_limit`"). A branch, path or file name that holds the words is cut out first, and
+  a negated mention ("did not stop me") is no stop.
 A done handback that only contains the word "blocked" ("Nothing is blocked") is not a row.
 The time is the trace's own UTC stamp. The task is the `Task:` line of the handback, else the
 trace file name. The trace cuts every handback summary at 300 characters; a status line that
@@ -35,7 +37,18 @@ TRACE_CAP = 300  # post_tool_trace.py cuts every summary at this many characters
 # The summary is a JSON-text fragment: newlines are the two characters `\n`.
 STATUS = re.compile(r'(?:\\n|")\s*\**Status:\**\s*(.*?)(\\n|$)')
 TASK = re.compile(r'(?:\\n|")\s*\**Task:\**\s*\**([A-Z][A-Z0-9]*-?\d+)')
-STEP_LIMIT = re.compile(r"step[-_ ]limit", re.I)
+# Names that merely contain the words: a branch or path (has a slash), a file name, a hyphenated
+# compound such as `t285-step-limit-per-agent`. They are cut out before the step limit is looked for.
+NAME_TOKENS = re.compile(
+    r"\S*[/\\]\S*"                                     # branch or path
+    r"|\S+\.(?:py|md|json|jsonl|sh|ps1|tsv|txt|html)\b\S*"  # file name
+    r"|[\w]+-step[-_]limit\S*|\S*step[-_]limit-[\w-]+",    # hyphenated compound name
+    re.I)
+# The step limit as the CAUSE: the hook named with a stopping verb in the same sentence.
+STEP_LIMIT = re.compile(
+    r"step[-_ ]limit[^.]{0,60}?\b(?:stopped|killed|fired|halted|cut me off|exceeded)\b"
+    r"|\b(?:stopped|killed|halted|cut off)\b[^.]{0,40}?step[-_ ]limit",
+    re.I)
 # "the step-limit hook did not stop me": the hook is named only to say it did not fire.
 STEP_LIMIT_NEGATED = re.compile(
     r"step[-_ ]limit[^.]{0,60}?\b(?:did not|didn't|never|does not|doesn't|not (?:stop|hit|fire))", re.I)
@@ -82,7 +95,8 @@ def classify(record):
     status = _status_line(record.get("summary") or "")
     if status is None:
         return None
-    if STEP_LIMIT.search(status) and not STEP_LIMIT_NEGATED.search(status):
+    named_out = NAME_TOKENS.sub(" ", status)
+    if STEP_LIMIT.search(named_out) and not STEP_LIMIT_NEGATED.search(named_out):
         return "stopped", status
     if BLOCKED.search(status):
         return "blocked", status
