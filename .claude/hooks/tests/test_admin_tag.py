@@ -417,7 +417,7 @@ def test_ac9_agents_md_tracks_paragraph_names_admin():
 
 def test_ac10_a_skip_falls_back_to_the_user_and_the_paste_limit_is_stated():
     body = admin_tag_section()
-    assert "A docs-only task answers `skip`; its `/verify` then falls back to you" in body
+    assert "A `skip` for any other task is `blocked`: its `/verify` then falls back to you" in body
     assert "Known limit" in body and "without a code fence or a `>` quote" in body and "it counts" in body
 
 
@@ -440,7 +440,7 @@ AC10_NEEDLES = ("the Supervisor starts the run itself",
                 "`python3 .claude/hooks/stop_auto_verify.py --start <ID>`",
                 "waits for the verdict", "never runs `/verify` in its own session",
                 "Only on a pass does it go on to merge and push",
-                "On `skip`, `blocked` or `fail` it merges nothing")
+                "On `blocked` or `fail` it merges nothing")
 
 
 def admin_tag_section(text=None):
@@ -463,7 +463,7 @@ def test_ac10_admin_tag_section_states_the_verify_run_and_the_pass_only_merge():
 def test_ac10_agents_md_states_the_supervisor_starts_the_run():
     lines = (ROOT / "AGENTS.md").read_text(encoding="utf-8").splitlines()
     para = lines[lines.index("## Tracks") + 1]
-    assert "starts that run itself" in para and "`skip`, `blocked` or `fail` merges nothing" in para
+    assert "starts that run itself" in para and "`blocked` or `fail` merges nothing" in para
 
 
 @pytest.mark.parametrize("cut", AC10_NEEDLES)

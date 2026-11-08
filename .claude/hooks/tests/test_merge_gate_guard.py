@@ -109,8 +109,9 @@ def test_a_base_ref_that_does_not_resolve_fails_closed(tmp_path):
 
 def test_the_allowlist_names_the_tasks_that_own_rules_in_the_gate():
     # T284 added (tasks/TASK_GUIDE_T284.md names the gate in its Files to Change).
+    # T289 added (tasks/TASK_GUIDE_T289.md names the gate: `skip-pass` records are re-checked there).
     assert guard.AUTHORISED_TASKS == ("T182", "T188", "T190", "T197", "T196", "T210",
-                                    "T211", "T232", "T250", "T284")
+                                    "T211", "T232", "T250", "T284", "T289")
     text = open(os.path.join(os.path.dirname(os.path.abspath(__file__)),
                              "merge_gate_guard.py"), encoding="utf-8").read()
     for task in guard.AUTHORISED_TASKS:

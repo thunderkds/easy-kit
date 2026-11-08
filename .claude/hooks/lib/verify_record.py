@@ -27,7 +27,10 @@ from trace_chain import ANCHOR_DIR_ENV, DEFAULT_ANCHOR_BASE, repo_slug, safe_nam
 AUTO_ROW_TAG = "auto-run by hook"
 AUTO_CHECKED_TAG = "auto-checked"
 VERDICTS = ("pass", "fail", "blocked")
-RESULT_CELL = {"pass": "☑ pass", "fail": "☑ fail", "blocked": "☐ blocked"}
+# T289: a run that answers SKIP on a branch whose every changed path is docs-only is recorded as
+# `skip-pass`. The hook decides that from git (`docs_only_change`); the model's text only says SKIP.
+SKIP_PASS = "skip-pass"
+RESULT_CELL = {"pass": "☑ pass", "fail": "☑ fail", "blocked": "☐ blocked", SKIP_PASS: "☑ pass"}
 SHA_PATTERN = re.compile(r"^[0-9a-f]{40}$")
 ROW_COMMIT = re.compile(r"\bcommit ([0-9a-f]{40})\b")
 ROW_SESSION = re.compile(r"\bsession ([A-Za-z0-9-]+)")
@@ -54,6 +57,41 @@ VERIFY_LINE = re.compile(rf"^[ \t]*{BULLET}?[ \t]*verify:[ \t]*(?P<result>[^—\
                          r"(?:—[ \t]*(?P<notes>[^\n]*))?$", re.M | re.I)
 
 
+# --- T289: the paths that have no runtime surface -------------------------------------------
+#
+# One literal list, in one place. A path is docs-only when it is a plain file name (the safe
+# characters below, no `.`/`..` part, 200 bytes at most) and lies under one of DOCS_ONLY_PREFIXES, or
+# is a root `*.md` file. Prompt config stays out (`skills/`, `agents/`, `templates/`, `AGENTS.md`,
+# `CLAUDE.md`, `docs/claude-md/`), and so do the hook scripts, the scripts and the site. Three root
+# files are out as well, beyond the root `*.md` rule: `CLAUDE_LEGACY.md` is the brownfield twin of
+# `CLAUDE.md`, and `PROJECT_KANBAN.md` and `PROJECT_SPEC.md` are read by the hooks as control state.
+# The exceptions are compared in lower case, so a case-folding file system cannot reach
+# `docs/claude-md/` through `docs/Claude-MD/`; the prefixes are compared exactly.
+DOCS_ONLY_PREFIXES = ("tasks/", "memory/", "docs/", "tests/", ".claude/hooks/tests/")
+DOCS_ONLY_EXCEPT = ("docs/claude-md",)
+ROOT_MD_EXCEPT = ("agents.md", "claude.md", "claude_legacy.md", "project_kanban.md", "project_spec.md")
+SAFE_PATH = re.compile(r"^[A-Za-z0-9._/-]+$")
+MAX_PATH_BYTES = 200
+BASE_REF = "refs/heads/main"  # the branch a task branch is judged against: `main`, as the admin push rule
+REGULAR_MODES = ("100644", "100755")  # a symlink (120000) or a gitlink (160000) is never docs-only
+RAW_RECORD = re.compile(r"^:(\d{6}) (\d{6}) [0-9a-f]{40} [0-9a-f]{40} ([AMD])$")
+NOTE_PATHS = 12  # the notes name this many paths; the check always covers all of them
+
+
+def docs_only_path(path):
+    """True when `path` (as git prints it) is in the docs-only list. Any doubt is False."""
+    if not isinstance(path, str) or not path or len(path) > MAX_PATH_BYTES or not SAFE_PATH.match(path):
+        return False
+    if path.startswith("/") or any(part in ("", ".", "..") for part in path.split("/")):
+        return False
+    low = path.lower()
+    if any(low.startswith(exception) for exception in DOCS_ONLY_EXCEPT):
+        return False
+    if "/" not in path:
+        return path.endswith(".md") and path != ".md" and low not in ROOT_MD_EXCEPT
+    return path.startswith(DOCS_ONLY_PREFIXES)
+
+
 def record_dir(root):
     base = os.environ.get(ANCHOR_DIR_ENV) or os.path.expanduser(DEFAULT_ANCHOR_BASE)
     if not os.path.isabs(base):
@@ -67,13 +105,17 @@ def record_path(root, task_id, sha):
     return os.path.join(record_dir(root), f"{safe_name(task_id, '_untagged')}-{sha}.json")
 
 
-def write_record(root, task_id, sha, verdict, session, log):
+def write_record(root, task_id, sha, verdict, session, log, base=None):
+    """`base` (T289) is the merge-base a `skip-pass` was judged against; the merge gate repeats the
+    path check between it and `commit`. Other verdicts carry none."""
     path = record_path(root, task_id, sha)
     os.makedirs(os.path.dirname(path), exist_ok=True)
     tmp = f"{path}.{os.getpid()}.tmp"
+    data = {"task": task_id, "commit": sha, "verdict": verdict, "session": session, "log": log}
+    if base is not None:
+        data["base"] = base
     with open(tmp, "w", encoding="utf-8") as f:
-        json.dump({"task": task_id, "commit": sha, "verdict": verdict, "session": session,
-                   "log": log}, f)
+        json.dump(data, f)
     os.replace(tmp, path)
     return path
 
@@ -105,6 +147,74 @@ def head_commit(checkout):
     return sha if SHA_PATTERN.match(sha) else None
 
 
+def _raw_diff(checkout, base, tip):
+    """The sorted changed paths between two full hashes, or None on any doubt: an unreadable range,
+    an empty diff, a status other than add/modify/delete (renames are off, so a moved file lists its
+    old path as a delete), a mode other than a regular file, or a path outside DOCS_ONLY."""
+    if not all(isinstance(sha, str) and SHA_PATTERN.match(sha) for sha in (base, tip)):
+        return None
+    out = _git(checkout, "diff", "--raw", "-z", "--no-abbrev", "--no-renames", "--no-ext-diff",
+               "--no-textconv", "--ignore-submodules=none", base, tip)
+    tokens = out.split("\0")
+    if tokens and tokens[-1] == "":
+        tokens.pop()
+    if not tokens or len(tokens) % 2:
+        return None
+    paths = []
+    for meta, path in zip(tokens[0::2], tokens[1::2]):
+        record = RAW_RECORD.match(meta)
+        if not record:
+            return None
+        old_mode, new_mode, status = record.groups()
+        missing = "000000"
+        if old_mode not in REGULAR_MODES + (missing,) or new_mode not in REGULAR_MODES + (missing,):
+            return None
+        if (status == "A") != (old_mode == missing) or (status == "D") != (new_mode == missing):
+            return None
+        if not docs_only_path(path):
+            return None
+        paths.append(path)
+    return sorted(set(paths))
+
+
+def docs_only_change(checkout, tip):
+    """(base, paths) when every file the branch at `tip` changed since it left `main` is docs-only,
+    else None. `base` is the one merge-base of `refs/heads/main` and `tip`, as a full hash; `paths`
+    are the changed files, sorted. Fail closed (T289): a missing `main`, two merge-bases, an
+    unreadable range and an empty diff are all None. Never raises."""
+    try:
+        if not isinstance(tip, str) or not SHA_PATTERN.match(tip):
+            return None
+        bases = _git(checkout, "merge-base", "--all", BASE_REF, tip).split()
+        if len(bases) != 1 or not SHA_PATTERN.match(bases[0]):
+            return None
+        paths = _raw_diff(checkout, bases[0], tip)
+        return (bases[0], paths) if paths else None
+    except Exception:
+        return None
+
+
+def record_confirms_pass(checkout, record):
+    """True when a run record counts as a pass: `pass`, or a `skip-pass` that git still backs. The
+    second needs a full-hash `base` that is an ancestor of the record's commit and of `main`, and
+    a docs-only change between the two. The model's SKIP is never read here. Any doubt is False."""
+    try:
+        verdict = record.get("verdict")
+        if verdict == "pass":
+            return True
+        if verdict != SKIP_PASS:
+            return False
+        base, sha = record.get("base"), record.get("commit")
+        if not (isinstance(base, str) and isinstance(sha, str)
+                and SHA_PATTERN.match(base) and SHA_PATTERN.match(sha)):
+            return False
+        _git(checkout, "merge-base", "--is-ancestor", base, sha)
+        _git(checkout, "merge-base", "--is-ancestor", base, BASE_REF)
+        return bool(_raw_diff(checkout, base, sha))
+    except Exception:
+        return False
+
+
 def same_code(checkout, task_id, verified, head, report_rel=None):
     """True when `head` is the verified commit, or differs from it only in the file that holds this
     task's result (the Supervisor committed the hook-written row or line). Any doubt is False.
@@ -123,9 +233,22 @@ def same_code(checkout, task_id, verified, head, report_rel=None):
     return set(changed) <= {report_rel or f"tasks/TASK_REVIEW_{task_id}.md"}
 
 
-def row_cells(sha, verdict, session, log, reason=""):
+def skip_note(paths):
+    """T289: `skip (no runtime surface: <paths>)`. The note names the first NOTE_PATHS paths. Each is
+    a safe name (`docs_only_path`), so it cannot add a cell, a line or a `commit <sha>` of its own."""
+    paths = sorted(paths)
+    shown = ", ".join(paths[:NOTE_PATHS])
+    more = f", +{len(paths) - NOTE_PATHS} more" if len(paths) > NOTE_PATHS else ""
+    return f"skip (no runtime surface: {shown}{more})"
+
+
+def row_cells(sha, verdict, session, log, reason="", paths=()):
     """The D4 `verify` row's Result and Notes cells. Notes for a run that did not pass never
-    contain "pass" (the merge gate looks for that word in Notes)."""
+    contain "pass" (the merge gate looks for that word in Notes). A `skip-pass` (T289) says
+    `skip (no runtime surface: <paths>)` and ends `— pass`."""
+    if verdict == SKIP_PASS:
+        notes = f"{AUTO_ROW_TAG}, session {session}, commit {sha}, log {log}, {skip_note(paths)} — pass"
+        return RESULT_CELL[verdict], re.sub(r"[|\n\r]", " ", notes)
     notes = f"{AUTO_ROW_TAG}, session {session}, commit {sha}, log {log} — {verdict}"
     if reason:
         notes += f" ({reason})"
@@ -137,8 +260,9 @@ def row_cells(sha, verdict, session, log, reason=""):
 
 def auto_row_confirmed(root, checkout, task_id, notes, report_rel=None):
     """D5: an `auto-run by hook` row counts only when the record for this task and the row's commit
-    exists, names the same task, commit and session, says pass, and the commit is the checkout's
-    head (or differs from it only in the file that holds the result)."""
+    exists, names the same task, commit and session, says pass (or a `skip-pass` that git still
+    backs: `record_confirms_pass`), and the commit is the checkout's head (or differs from it only
+    in the file that holds the result)."""
     commit = ROW_COMMIT.search(notes or "")
     session = ROW_SESSION.search(notes or "")
     if not commit or not session:
@@ -147,20 +271,23 @@ def auto_row_confirmed(root, checkout, task_id, notes, report_rel=None):
     record = read_record(root, task_id, sha)
     if not record:
         return False
-    if (record.get("task"), record.get("commit"), record.get("verdict"), record.get("session")) != (
-            task_id, sha, "pass", session.group(1)):
+    if (record.get("task"), record.get("commit"), record.get("session")) != (
+            task_id, sha, session.group(1)) or not record_confirms_pass(checkout, record):
         return False
     return same_code(checkout, task_id, sha, head_commit(checkout), report_rel)
 
 
-def record_line(sha, verdict, session, log, reason=""):
+def record_line(sha, verdict, session, log, reason="", paths=()):
     """The D3 `verify:` line for a minimal-track Decision record (T188), bullet excluded.
 
     Same facts as the Evidence row's two cells, on one line. A line that did not pass never
-    contains the word "pass": the merge gate reads that word as the result.
+    contains the word "pass": the merge gate reads that word as the result. A `skip-pass` (T289)
+    adds `skip (no runtime surface: <paths>)`.
     """
     tail = f"{AUTO_ROW_TAG}, session {session}, commit {sha}, log {log}"
-    if reason:
+    if verdict == SKIP_PASS:
+        tail += f", {skip_note(paths)}"
+    elif reason:
         tail += f" ({reason})"
     tail = re.sub(r"[\n\r]", " ", tail)
     if verdict != "pass":

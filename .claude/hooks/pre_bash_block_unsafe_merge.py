@@ -63,8 +63,8 @@ try:
         board_mode, my_blocking_tasks, my_review_tasks, pull_cache)
     from verify_record import (  # noqa: E402
         AUTO_CHECKED_TAG, AUTO_ROW_TAG, MINIMAL_LOG_REL, ROW_COMMIT, ROW_SESSION, SHA_PATTERN,
-        auto_row_confirmed, head_commit, minimal_verify_lines, read_record, record_verify_lines,
-        same_code)
+        auto_row_confirmed, head_commit, minimal_verify_lines, read_record, record_confirms_pass,
+        record_verify_lines, same_code)
     import auto_mode  # noqa: E402
     from auto_mode import record_block  # noqa: E402
     import session_work  # noqa: E402
@@ -560,9 +560,9 @@ def _auto_row_confirmed_at(directory, task_id, notes, tip, report_rel=None):
         return False
     sha = commit.group(1)
     record = read_record(ROOT, task_id, sha)
-    if not record or (record.get("task"), record.get("commit"), record.get("verdict"),
-                      record.get("session")) != (task_id, sha, "pass", session.group(1)):
-        return False
+    if not record or (record.get("task"), record.get("commit"), record.get("session")) != (
+            task_id, sha, session.group(1)) or not record_confirms_pass(directory, record):
+        return False  # T289: a `skip-pass` record counts only when git, read here, still backs it
     return same_code(directory, task_id, sha, tip, report_rel)
 
 

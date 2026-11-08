@@ -67,8 +67,14 @@ Not done: merge (yours); <auto verify: running (T182) | auto verify: <result> | 
 > **before any implementation commit exists**; if it does not (docs, templates, skill-instruction
 > text), BEFORE is the **verbatim prior content** of what changed — a quoted excerpt, not a command.
 
-**BEFORE**: [pasted timestamped command output showing the thing absent/failing, captured before the
-first implementation commit] OR [verbatim excerpt of the prior content, for non-executable changes]
+**BEFORE** (captured 2026-11-08T06:39:03+00:00, on branch `feat/t289-docs-only-pass` at `4b8edf8e`, before any implementation commit). Command: `python3 -B <scratchpad>/demo_skip.py /home/hungnguyenhuu/workspace/pets/wt-t289` (builds a temp git project whose task branch changes only a review file, as T283 and T286 did, stubs the headless `claude` to answer `**Verdict:** SKIP`, runs the real `stop_auto_verify.py` Stop hook, prints the `verify` row the hook wrote):
+```
+date: 2026-11-08T06:39:03+00:00
+changed paths: ['tasks/TASK_REVIEW_T951.md']
+verify row result: ☐ blocked
+verify row notes : auto-run by hook, session bb6500c2-6ee9-4ce9-bc0e-ea2f246f2fd4, commit <head>, log .claude/verify-runs/T951-4b07ca005e52.log — blocked (no single verdict line)
+```
+The docs-only branch gets `☐ blocked`, so `[admin]` cannot merge it (the same outcome T283 and T286 showed in their `verify` rows before the user typed `/verify`).
 
 **AFTER**: [same command, post-change] OR [verbatim excerpt of the new content]
 
