@@ -63,6 +63,8 @@ Restored: `diff` against the saved good copy empty, `7 passed in 17.84s`. |
 | **UI: Design-system compliance (tokens/colors/typography verified)** | ☐ pass / ☐ fail / ☐ N/A | [method used + output] |
 | **UI: Responsiveness at target viewports** | ☐ pass / ☐ fail / ☐ N/A | [viewports tested, any overflow findings] |
 
+2026-11-08 note: Not covered by tests: the real `agent_id` to `resolve_task_id` path; a harness that omits `agent_id` falls back to today's behaviour (limit still in force).
+
 ---
 
 ## Demonstration

@@ -23,9 +23,9 @@ budget. Two parallel runs with one Task ID used to share one counter and
 stopped each other's legitimate work. A resumed run keeps its `agent_id`
 and so its counter. An absent, non-string or empty-after-sanitising
 `agent_id` falls back to the main-thread key: never unlimited. Old
-counter files age out by the TTL below and are not migrated. A counter file older than
-CLAUDE_STEP_COUNT_TTL_S (default 6h) is treated as count 0 rather than
-carried forward, so a task's counter cannot outlive it indefinitely (T056):
+counter files age out by the TTL below and are not migrated. A counter file
+older than CLAUDE_STEP_COUNT_TTL_S (default 6h) is treated as count 0 rather
+than carried forward, so a task's counter cannot outlive it indefinitely (T056):
 post_agent_move_to_review.py is deliberately inert as a writer (T044), so
 nothing else ever resets these files.
 
