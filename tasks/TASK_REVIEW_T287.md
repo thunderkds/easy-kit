@@ -214,3 +214,44 @@ The `<<` rule has three guards (the explicit `<<` test, the newline rule, the pu
 **Suite.** `python3 -B -m pytest .claude/hooks/tests tests -q -p no:cacheprovider`: `1 failed, 3644 passed, 25 subtests passed in 202.55s`. The 1 failure is the pre-existing `tests/test_spike_report_t283.py::test_the_real_report_is_valid` (`tasks/SPIKE_REPORT_T283.md` exists only on `feat/t283-karpathy-spikes`); T287 touches neither.
 
 **Accepted limits** (`### Known limits`): a script file in the worktree that does its own `cd`; a symlink in the worktree that points to main; any worktree of this repo on a branch whose name holds the task ID (C9); the gate's older `invokes_test_runner` counting a heredoc body or the far side of `||` as a run (not changed here).
+
+## Fix round 3 (2026-11-08)
+
+A re-check of `4006eaf7` found a P0 of the same class: the Bash tool's shell is zsh and zsh's `chdir` is `cd`. `cd W && chdir - && python3 -m pytest -q` passed the allowlist (T120=1, gate True) while zsh ran pytest in main. This is the third round of "find the next word", so the command words are now an allowlist too.
+
+**What changed** (`.claude/hooks/lib/task_context.py`; docs in `docs/claude-md/tracks.md` and the slot 2b docstring):
+- `_allowed_command`: every command after the `cd` (after each `&&`, and after each `|`) must start with `pytest`, `py.test`, `python`/`python3` (only `-m pytest|unittest`, after optional `-B -u -O -s -E -I`, or a relative script path), `git` (no `-C`/`--git-dir`/`--work-tree`), `ls`, `echo`, `cat`, `head`, `tail`, `grep`, `wc`, `true`, or `timeout <n>` before one of these. Anything else (`env`, `make`, `xargs`, `find`, `sudo`, `bash`, `zsh`, `time`, `chdir`, `./venv/bin/pytest`) falls through to the pointer task.
+- `chdir` joins `ANYWHERE_WORDS` (second layer).
+- An argument that is exactly `-` or `[-+]N` is refused (`chdir -`, `chdir -1`, `cd +2`). `head`, `tail` and `git` are exempt, so `tail -3` and `git log -1` stay filed; this is the one deliberate exception to the rule as asked.
+- A relative piece of an argument is resolved: `realpath(<worktree>/<piece>)` must stay in the worktree (a symlink `W/m -> main`: `pytest m`, `--rootdir=m m`, `m/tests`).
+- An `@`-prefixed argument (argfile) is refused. A control character or non-ASCII space anywhere in the command is refused.
+- Known limits now add: N13 (`xargs` reads paths from a file; not allowed as a first word), zsh `autocd` (theoretical; not on in the tool shell), and the earlier C9.
+
+**Red then green.**
+
+```
+ebbc0bb2 tests only, against the round-2 task_context.py:   29 failed, 108 passed
+allowlist of command words:                                   137 passed in 16.36s
+```
+
+Red shapes: N01 `chdir -`, N19 `'chdir' -`, N20 `chdir -1` and `chdir +1`, `ls -1`, `cat -`, `env`, `make`, `xargs`, `bash`, `sudo`, `./venv/bin/pytest`, a word after a pipe, a word after `timeout`, `timeout -k`, `python3 -m json.tool`, `python3 /dev/null`, `git -C`, `git --work-tree`, N14 `@args.txt`, N26 NBSP, zero-width space and `\x0b`, and N02/N03/N04/N24 plus a `cat` and a script through the `W/m -> main` link. The honest shapes (H1-H5, C1, C4, C11, C13, subdirectory, `python3 -B -m pytest`, `unittest`, a relative script, `pytest && py.test`, `timeout 60 ...`, `git log -1 && ls && cat | head | wc && grep && echo && true`) are green before and after.
+
+**Mutation controls** (one `str.replace` each, restored; group `-k "round2 or round3"`):
+
+```
+R1  drop the command-word allowlist                       8 failed
+R2  drop `chdir` from ANYWHERE_WORDS only                 100 passed  (green BY DESIGN: the word allowlist refuses `chdir` first; second layer)
+R2b drop `chdir` AND the word allowlist                   8 failed
+R3  drop the `-` / `[-+]N` argument rule                  2 failed
+R4  relative args not resolved through symlinks           5 failed
+R5  allow `@argfile`                                      1 failed
+R6  drop the non-ASCII / control rule                     3 failed
+R7  `python3 -m` any module                               1 failed
+R8  `git -C` allowed                                      2 failed
+R9  `timeout` flags allowed                               100 passed  (green BY DESIGN: `5 30 python3 ...` then fails the first-word check)
+R10 last command not checked                              11 failed
+R11 middle commands not checked                           4 failed
+```
+
+**Suite.** `python3 -B -m pytest .claude/hooks/tests tests -q -p no:cacheprovider`: `1 failed, 3680 passed, 25 subtests passed in 206.43s`. The 1 failure is the pre-existing `tests/test_spike_report_t283.py::test_the_real_report_is_valid` (`tasks/SPIKE_REPORT_T283.md` exists only on `feat/t283-karpathy-spikes`).
+

@@ -314,14 +314,20 @@ their calls land in `_untagged.jsonl` unless the active-task state file is set.
 Since T287, two more signals find the work. First, the trace hook files a `Bash` call that runs in a task's
 worktree under that task, before the session's active-task file. It does so only for the exact form
 `cd <dir> && cmd [&& cmd]...`, where `<dir>` is an existing, searchable directory inside a worktree whose
-branch names the task (`fix/t120-x`). Any other form is not filed by its directory, and the session's
-active-task file decides, as before. That covers: a `;`, `||`, newline, `&` or pipe after the `cd`, a second
+branch names the task (`fix/t120-x`). Every command after the `cd`, and every command after a `|`, must start
+with one word of a fixed list: `pytest`, `py.test`, `python`/`python3` (only as `-m pytest`, `-m unittest` or a
+relative script path), `git` (without `-C`, `--git-dir`, `--work-tree`), `ls`, `echo`, `cat`, `head`, `tail`,
+`grep`, `wc`, `true`, and `timeout <n>` before one of these. Any other form is not filed by its directory, and
+the session's active-task file decides, as before. That covers any other first word (`env`, `make`, `xargs`,
+`find`, `sudo`, `bash`, `sh`, `zsh`, `chdir`, `time`, a path to a program) and: a `;`, `||`, newline, `&` or pipe after the `cd`, a second
 `cd` (`cd -` too), `builtin`, `command`, `eval`, `exec`, `source`, `pushd`, `popd`, a shell keyword
 (`if`, `while`, `for`, `time`, `!`, `{`, `function`), a leading `VAR=` before a word, a heredoc `<<`, `$`,
 backticks, a `#` comment, a directory that does not exist or is a file, the main checkout, a directory that is
 no worktree, a `~`, `..` or `CDPATH` target, and an argument that names `..` or an absolute path outside the
-worktree (`--rootdir <main>`), an inline-code flag (`-c`, `-e`, `-lc`), and an argument that holds a quote
-or paren next to a `/` (`os.chdir('/home')`). A call with no `cd` is not filed by the session's directory. So a test run in
+worktree (`--rootdir <main>`), an inline-code flag (`-c`, `-e`, `-lc`), an argument that holds a quote
+or paren next to a `/` (`os.chdir('/home')`), an argument `-` or `+N`/`-N` (zsh `cd -`, `cd -2`; `head`, `tail`
+and `git` may take `-N`), an `@file` argument, a relative path whose real path leaves the worktree (a symlink
+to main), and a control character or non-ASCII space anywhere. A call with no `cd` is not filed by the session's directory. So a test run in
 the worktree counts for item 7 and for the auto close-out. Second, items 3 and 5 also count the Advocate calls this session
 made after a `resolve-question` Skill call whose last top-level `task=<ID>` names the task, wherever the trace
 filed them. Only a call that ran counts: its result in the transcript is not an error. The check uses the
@@ -571,6 +577,10 @@ Read these before you rely on `[auto]`. T180 left them open, on purpose. T186 re
     check can, so the trace is not a proof.
   - A worktree of this repo on any branch whose name contains the task ID is credited to that task (C9):
     `fix/t120-x` and `scratch/t120` both name T120.
+  - A runner that reads paths from a file or from standard input (`xargs`, N13) is not allowed as a first word,
+    so it is not filed. A path that a script or config file in the worktree reads is not seen.
+  - zsh's `autocd` (a bare directory name as a command) is not on in the tool shell. This is theoretical: if it
+    were, `cd <wt> && ../main` would change directory, and the first-word list refuses `../main`.
   - The merge gate's `invokes_test_runner` (older than T287, not changed here) counts a runner named in a
     heredoc body, or on the far side of `||` (`true || python3 -m pytest`), as a test run. The filing rules
     above keep such a call out of a worktree's trace, but a call filed by the session's active-task file

@@ -43,26 +43,35 @@ Precedence — first match wins:
      if it moves, this slot yields nothing and resolution falls through.
   2b. **The worktree a ``Bash`` call runs in** (T287) — only when the caller
      passes ``per_call=True``, which ``post_tool_trace.py`` alone does. An
-     ALLOWLIST (fix round 2): a call is filed under a task only when the WHOLE
-     command is ``cd <dir> && cmd [&& cmd]...``, ``<dir>`` is an existing
-     searchable directory inside a live worktree of this repo, and that
-     worktree's branch names one task (``fix/t120-x`` names T120). Every other
-     shape says nothing and the slots below decide — see ``_leading_cd_dir``
-     for the rules: no ``;``/``||``/newline/``&``/pipe after the ``cd``, no
-     second ``cd`` or ``cd -``, no ``builtin``/``command``/``eval``/``exec``/
-     ``source``/``pushd``/``popd`` or shell keyword, no leading ``VAR=``, no
-     ``<<``, ``$``, backtick or ``#``, no ``~``/``CDPATH``/glob target, and no
-     argument that names ``..`` or an absolute path outside the worktree, no
-     inline-code flag (``-c``, ``-e``) and no quoted/parenthesised path. The
-     event's ``cwd`` only resolves a relative target; a call with no ``cd``
-     is never filed by it. A failure of the slot (no ``git``, a timeout) also
-     says nothing. Limits (``docs/claude-md/tracks.md`` ``### Known limits``):
-     it shows where the command started, not what it ran; a branch name that
-     contains the task ID is enough (C9). Why: on 2026-11-04 the Supervisor ran
-     T120's tests in ``wt-t120`` while the session's one pointer (slot 3) named
-     T250, so they were filed under T250 and the Stop check paused T120 (T283
-     spike 6). The step limit and the sensitive-path hook keep the slots below:
-     a safety stop sees the task it saw before T287.
+     ALLOWLIST, for the directory and for the command words (fix rounds 2-3):
+     a call is filed under a task only when the WHOLE command is
+     ``cd <dir> && cmd [&& cmd]...`` (a ``|`` may follow a later command),
+     ``<dir>`` is an existing searchable directory inside a live worktree of
+     this repo, and that worktree's branch names one task (``fix/t120-x``
+     names T120). Every other shape says nothing and the slots below decide.
+     See ``_leading_cd_dir`` for the rules:
+       * the joiner after the ``cd`` is ``&&`` only (no ``;``, ``||``,
+         newline, ``&``, ``(``); the target is no ``-``, ``~``, ``$``, glob or
+         bare name under ``CDPATH``;
+       * every command starts with a word of ``ALLOWED_HEADS`` (``pytest``,
+         ``python3 -m pytest|unittest`` or a relative script, ``git`` without
+         ``-C``, ``ls``, ``echo``, ``cat``, ``head``, ``tail``, ``grep``, ``wc``,
+         ``true``, ``timeout <n>``). zsh's ``chdir`` is ``cd``, so the words
+         are an allowlist, not a denylist; ``cd``/``chdir``/``builtin``/
+         ``eval``/... anywhere is a second layer;
+       * no ``<<``, ``$``, backtick, ``#``, ``@file``, inline-code flag
+         (``-c``, ``-e``), argument ``-`` or ``[-+]N``, control or non-ASCII
+         space character, and no argument whose real path (absolute, or
+         relative through a symlink) is outside the worktree.
+     The event's ``cwd`` only resolves a relative target; a call with no
+     ``cd`` is never filed by it. A failure of the slot (no ``git``, a timeout)
+     also says nothing. Limits (``docs/claude-md/tracks.md`` ``### Known
+     limits``): it shows where the command started, not what it ran; a branch
+     name that contains the task ID is enough (C9). Why: on 2026-11-04 the
+     Supervisor ran T120's tests in ``wt-t120`` while the session's one pointer
+     (slot 3) named T250, so they were filed under T250 and the Stop check
+     paused T120 (T283 spike 6). The step limit and the sensitive-path hook
+     keep the slots below: a safety stop sees the task it saw before T287.
   3. **The per-session state file** (T196; replaces T047's shared file),
      ``.claude/hooks/.state/active_task.d/<session_id>`` — a plain two-line file
      (``Txxx`` on line 1, an ISO-8601 UTC "written at" timestamp on line 2)
@@ -136,6 +145,7 @@ import re
 import shlex
 import subprocess
 import sys
+import unicodedata
 from datetime import datetime, timezone
 
 # Board IDs (T153). This module must never fail to import (both callers would lose
@@ -380,7 +390,7 @@ GIT_TIMEOUT_S = 5
 # other shape says nothing. `cd` is the one word a blocklist cannot enumerate (`builtin cd`, `eval`,
 # `{ cd; }`, `if cd`, `cd -`, `CDPATH=`, a heredoc marker inside quotes, ...), so the rule is not
 # "find the bad forms" but "accept one good form".
-ANYWHERE_WORDS = re.compile(r"(?<![\w-])(?:cd|builtin|command|eval|exec|source|pushd|popd)(?![\w-])")
+ANYWHERE_WORDS = re.compile(r"(?<![\w-])(?:cd|chdir|builtin|command|eval|exec|source|pushd|popd)(?![\w-])")
 HEAD_WORDS = frozenset({".", "if", "while", "until", "for", "case", "select", "function", "coproc",
                         "time", "!", "{", "}", "(", ")", "do", "then", "else", "elif", "fi", "done",
                         "esac", "in"})
@@ -392,19 +402,57 @@ OUTSIDE_OK = frozenset({"/dev/null"})
 # quote or paren next to a `/` is a path inside such code (`os.chdir('/home')`). Both fail closed.
 INLINE_CODE = re.compile(r"-[A-Za-z]*[ce]|--(?:eval|exec|command)(?:=.*)?")
 CODE_WITH_PATH = re.compile(r"""['"()]""")
+# Fix round 3: the COMMAND WORDS are an allowlist too (zsh's `chdir` is `cd`; a denylist of words
+# was extended three times). A command that starts with any other word says nothing.
+ALLOWED_HEADS = frozenset({"pytest", "py.test", "python", "python3", "git", "ls", "echo", "cat",
+                           "head", "tail", "grep", "wc", "true", "timeout"})
+PYTHON_FLAGS = frozenset({"-B", "-u", "-O", "-s", "-E", "-I"})
+GIT_REDIRECTORS = ("-C", "--git-dir", "--work-tree")
+COUNT_EXEMPT = frozenset({"head", "tail", "git"})  # `tail -3`, `git log -1` are not a `chdir -1`
+
+
+def _allowed_command(words):
+    """True when the words of one simple command (redirects removed) start with an allowed word, in
+    an allowed form: `python3` only as `-m pytest|unittest` or a relative script path; `git` without
+    `-C`/`--git-dir`/`--work-tree`; `timeout <n>` only before an allowed word; no argument that is
+    exactly `-` or `[-+]N` (zsh `cd -`, `cd -2`) except for `head`, `tail` and `git`."""
+    words = list(words)
+    if words and words[0] == "timeout":
+        if len(words) < 3 or not re.fullmatch(r"\d+[smhd]?", words[1]):
+            return False
+        words = words[2:]
+    if not words or words[0] not in ALLOWED_HEADS or words[0] == "timeout":
+        return False
+    head, args = words[0], words[1:]
+    if head in ("python", "python3"):
+        while args and args[0] in PYTHON_FLAGS:
+            args = args[1:]
+        if not args:
+            return False
+        if args[0] == "-m":
+            return len(args) > 1 and args[1] in ("pytest", "unittest")
+        if args[0].startswith(("-", "/", "~")):
+            return False  # a relative script path only
+    if head == "git" and any(a.startswith(GIT_REDIRECTORS) for a in args):
+        return False
+    if head not in COUNT_EXEMPT and any(a == "-" or re.fullmatch(r"[-+]\d+", a) for a in args):
+        return False
+    return True
 
 
 def _escapes(token, worktree):
-    """True when `token` (or a piece of it) names a place outside `worktree`: `..`, `~`, or an
-    absolute path that is not inside it. Nothing proves a runner reads only its own directory, but a
+    """True when `token` (or a piece of it) names a place outside `worktree`: `..`, `~`, or a path
+    whose real path (absolute, or relative to the worktree) is not inside it. Nothing proves a runner reads only its own directory, but a
     plain `--rootdir <main>` or `../main/tests` must not be filed under the worktree (P2)."""
     for piece in re.split(r"[\s=:,;]+", token):
         if piece.startswith("~") or ".." in piece.split("/"):
             return True
-        if piece.startswith("/") and piece not in OUTSIDE_OK:
-            real = os.path.realpath(piece)
-            if real != worktree and not real.startswith(worktree + os.sep):
-                return True
+        if not piece or piece in OUTSIDE_OK:
+            continue
+        # an absolute path, or a relative one (a symlink inside the worktree may point out of it)
+        real = os.path.realpath(piece if piece.startswith("/") else os.path.join(worktree, piece))
+        if real != worktree and not real.startswith(worktree + os.sep):
+            return True
     return False
 
 
@@ -431,6 +479,8 @@ def _leading_cd_dir(command, cwd):
         return None
     if "<<" in command or "$" in command or "`" in command:
         return None
+    if any(unicodedata.category(c)[0] in "CZ" and c != " " and c != "\t" for c in command):
+        return None  # a control char or a non-ASCII space: not what the shell reads as a word break
     # keep in step with session_work.SEPARATORS / its shlex setup (same punctuation_chars lexer)
     lexer = shlex.shlex(command, posix=True, punctuation_chars=True)
     lexer.whitespace_split = True
@@ -460,27 +510,34 @@ def _leading_cd_dir(command, cwd):
         return None
     worktree = os.path.realpath(directory)
     head, target_next = True, False  # head: the next word starts a command; target_next: a redirect's
+    words = []  # the words of the simple command being read, redirects removed
     for token in tokens[3:]:
         if token in ("&&", "|"):
-            head = True
+            if not _allowed_command(words):
+                return None
+            head, words = True, []
             continue
         if token in REDIRECTS:
             target_next = True
             continue
         if re.fullmatch(r"[();&|<>]+", token):
             return None  # `;` `||` `&` `|&` `(` `)` `;;` `<<` ...
-        if token.startswith("#") or ANYWHERE_WORDS.search(token):
-            return None
+        if token.startswith(("#", "@")) or ANYWHERE_WORDS.search(token):
+            return None  # a comment, an argfile (`@args.txt`), a `cd`-like word
         if target_next:
             target_next = False
-        elif head:
-            if token in HEAD_WORDS or ASSIGNMENT.match(token):
-                return None
-            head = False
-            continue
+        else:
+            words.append(token)
+            if head:
+                if token in HEAD_WORDS or ASSIGNMENT.match(token):
+                    return None
+                head = False
+                continue
         if (INLINE_CODE.fullmatch(token) or (CODE_WITH_PATH.search(token) and "/" in token)
                 or _escapes(token, worktree)):
             return None
+    if not _allowed_command(words):
+        return None
     return directory
 
 

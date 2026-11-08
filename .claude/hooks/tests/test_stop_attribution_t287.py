@@ -814,6 +814,9 @@ def test_ac6_tracks_md_states_the_new_attribution():
     assert "Any other form is not filed by its directory" in check, check
     assert "A call with no `cd` is not filed by the session's directory." in check, check
     assert "an inline-code flag (`-c`, `-e`, `-lc`)" in check, check
+    assert "must start with one word of a fixed list" in check, check
+    limits_ = _tracks_section("Known limits")
+    assert "zsh's `autocd`" in limits_ and "(C9)" in limits_ and "(`xargs`, N13)" in limits_, limits_
     assert ("made after a `resolve-question` Skill call whose last top-level `task=<ID>` names the "
             "task, wherever the trace filed them. Only a call that ran counts") in check, check
     assert "it skips symlinks and entries with another session's id." in check, check
