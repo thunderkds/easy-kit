@@ -26,7 +26,7 @@ from trace_chain import ANCHOR_DIR_ENV, DEFAULT_ANCHOR_BASE, repo_slug, safe_nam
 
 AUTO_ROW_TAG = "auto-run by hook"
 AUTO_CHECKED_TAG = "auto-checked"
-VERDICTS = ("pass", "fail", "blocked")
+VERDICTS = ("pass", "fail", "blocked", "skip-pass")  # the record's `verdict` values (T289 added skip-pass)
 # T289: a run that answers SKIP on a branch whose every changed path is docs-only is recorded as
 # `skip-pass`. The hook decides that from git (`docs_only_change`); the model's text only says SKIP.
 SKIP_PASS = "skip-pass"
@@ -60,17 +60,33 @@ VERIFY_LINE = re.compile(rf"^[ \t]*{BULLET}?[ \t]*verify:[ \t]*(?P<result>[^—\
 # --- T289: the paths that have no runtime surface -------------------------------------------
 #
 # One literal list, in one place. A path is docs-only when it is a plain file name (the safe
-# characters below, no `.`/`..` part, 200 bytes at most) and lies under one of DOCS_ONLY_PREFIXES, or
-# is a root `*.md` file. Prompt config stays out (`skills/`, `agents/`, `templates/`, `AGENTS.md`,
-# `CLAUDE.md`, `docs/claude-md/`), and so do the hook scripts, the scripts and the site. Three root
-# files are out as well, beyond the root `*.md` rule: `CLAUDE_LEGACY.md` is the brownfield twin of
-# `CLAUDE.md`, and `PROJECT_KANBAN.md` and `PROJECT_SPEC.md` are read by the hooks as control state.
-# The exceptions are compared in lower case, so a case-folding file system cannot reach
-# `docs/claude-md/` through `docs/Claude-MD/`; the prefixes are compared exactly.
+# characters below, no `.`/`..` part, 200 bytes at most) and one of these three:
+#   * a root `*.md` file, except the prompt-config and control-state ones (ROOT_MD_EXCEPT);
+#   * under `tasks/`, `memory/` or `docs/` (TEXT_DIRS): only `.md`, `.txt` or `.gitkeep` files, and
+#     not `docs/claude-md/` (prompt config), `memory/MEMORY.md` or `tasks/TASK_GUIDE_*` (they steer
+#     agents and hooks: STEERING_EXCEPT, GUIDE_NAME);
+#   * under `tests/` or `.claude/hooks/tests/` (TEST_DIRS): only `test_*.py` files and `tests/fixtures/`,
+#     and never a `conftest.py`, a `.sh` file, `tests/lib/` or `merge_gate_guard.py`. A `test_*.py` runs
+#     at the next pytest collection: accepted risk (`docs/claude-md/tracks.md`).
+# Everything else has a runtime surface (`skills/`, `agents/`, `templates/`, `AGENTS.md`, `CLAUDE.md`,
+# the hook scripts, `scripts/`, `lib/`, `site/`, code). The exceptions and the steering names are
+# compared in lower case, so a case-folding file system cannot reach them through another spelling;
+# the prefixes and suffixes are compared exactly.
 DOCS_ONLY_PREFIXES = ("tasks/", "memory/", "docs/", "tests/", ".claude/hooks/tests/")
 DOCS_ONLY_EXCEPT = ("docs/claude-md",)
-ROOT_MD_EXCEPT = ("agents.md", "claude.md", "claude_legacy.md", "project_kanban.md", "project_spec.md")
-SAFE_PATH = re.compile(r"^[A-Za-z0-9._/-]+$")
+ROOT_MD_EXCEPT = ("agents.md", "claude.md", "claude_legacy.md", "project_kanban.md", "project_spec.md",
+                  "project_kanban_site.md", "project_spec_site.md")
+TEXT_DIRS = ("tasks/", "memory/", "docs/")
+TEXT_SUFFIXES = (".md", ".txt")
+TEXT_NAMES = (".gitkeep",)
+STEERING_EXCEPT = ("memory/memory.md",)
+GUIDE_NAME = "task_guide_"  # a `tasks/**/TASK_GUIDE_*` file, any case
+TEST_DIRS = ("tests/", ".claude/hooks/tests/")
+TEST_FILE = re.compile(r"test_[A-Za-z0-9_.-]*\.py")
+TEST_FIXTURES = ("tests/fixtures/",)
+TEST_EXCEPT_NAMES = ("conftest.py", "merge_gate_guard.py")
+TEST_EXCEPT_DIRS = ("tests/lib/",)
+SAFE_PATH = re.compile(r"[A-Za-z0-9._/-]+")  # used with fullmatch: `$` would let a trailing newline in
 MAX_PATH_BYTES = 200
 BASE_REF = "refs/heads/main"  # the branch a task branch is judged against: `main`, as the admin push rule
 REGULAR_MODES = ("100644", "100755")  # a symlink (120000) or a gitlink (160000) is never docs-only
@@ -80,16 +96,26 @@ NOTE_PATHS = 12  # the notes name this many paths; the check always covers all o
 
 def docs_only_path(path):
     """True when `path` (as git prints it) is in the docs-only list. Any doubt is False."""
-    if not isinstance(path, str) or not path or len(path) > MAX_PATH_BYTES or not SAFE_PATH.match(path):
+    if (not isinstance(path, str) or not path or len(path) > MAX_PATH_BYTES
+            or not SAFE_PATH.fullmatch(path)):
         return False
     if path.startswith("/") or any(part in ("", ".", "..") for part in path.split("/")):
         return False
     low = path.lower()
+    name = low.rsplit("/", 1)[-1]
     if any(low.startswith(exception) for exception in DOCS_ONLY_EXCEPT):
         return False
     if "/" not in path:
         return path.endswith(".md") and path != ".md" and low not in ROOT_MD_EXCEPT
-    return path.startswith(DOCS_ONLY_PREFIXES)
+    if path.startswith(TEXT_DIRS):
+        if low in STEERING_EXCEPT or (path.startswith("tasks/") and name.startswith(GUIDE_NAME)):
+            return False
+        return path.endswith(TEXT_SUFFIXES) or path.rsplit("/", 1)[-1] in TEXT_NAMES
+    if path.startswith(TEST_DIRS):
+        if name in TEST_EXCEPT_NAMES or name.endswith(".sh") or low.startswith(TEST_EXCEPT_DIRS):
+            return False
+        return path.startswith(TEST_FIXTURES) or bool(TEST_FILE.fullmatch(path.rsplit("/", 1)[-1]))
+    return False
 
 
 def record_dir(root):
@@ -131,8 +157,11 @@ def read_record(root, task_id, sha):
 
 
 def _git(checkout, *args):
+    # T289: `git replace` refs would show a fake commit in place of the real one to every read
+    # below (the diff, the merge-base, the ancestor checks); switch them off for all of them.
+    env = dict(os.environ, GIT_NO_REPLACE_OBJECTS="1")
     done = subprocess.run(["git", "-C", checkout, *args], capture_output=True, text=True,
-                          timeout=GIT_TIMEOUT_S)
+                          timeout=GIT_TIMEOUT_S, env=env)
     if done.returncode != 0:
         raise OSError(done.stderr.strip())
     return done.stdout
@@ -150,7 +179,7 @@ def head_commit(checkout):
 def _raw_diff(checkout, base, tip):
     """The sorted changed paths between two full hashes, or None on any doubt: an unreadable range,
     an empty diff, a status other than add/modify/delete (renames are off, so a moved file lists its
-    old path as a delete), a mode other than a regular file, or a path outside DOCS_ONLY."""
+    old path as a delete), a mode other than a regular file, or a path that `docs_only_path` refuses."""
     if not all(isinstance(sha, str) and SHA_PATTERN.match(sha) for sha in (base, tip)):
         return None
     out = _git(checkout, "diff", "--raw", "-z", "--no-abbrev", "--no-renames", "--no-ext-diff",

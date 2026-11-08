@@ -398,17 +398,21 @@ When the run ends, the hook, never the Supervisor, writes three things:
 - The result, where that track keeps its evidence:
   - **extended track** — the `verify` Evidence row: `☑ pass`, `☑ fail` or `☐ blocked`, with the Notes
     `auto-run by hook, session <id>, commit <sha>, log .claude/verify-runs/<file> — <pass|fail|blocked>`.
+    A docs-only skip is `☑ pass` with the Notes
+    `auto-run by hook, session <id>, commit <sha>, log <file>, skip (no runtime surface: <paths>) — pass`.
   - **minimal track** — one line under the Decision record's `Checked:` field, in the same shape:
-    `- verify: ☑ pass — auto-run by hook, session <id>, commit <sha>, log .claude/verify-runs/<file>`. A
+    `- verify: ☑ pass — auto-run by hook, session <id>, commit <sha>, log .claude/verify-runs/<file>`
+    (a docs-only skip ends `log <file>, skip (no runtime surface: <paths>)`). A
     `Checked:` line you wrote is never edited or removed.
 - The report's `Not done:` auto verify slot, so the report you read stops saying
   `auto verify: running (T182)` after the run ended. It becomes
-  `auto verify: ☑ pass (session <id>, commit <sha>, log .claude/verify-runs/<file>)`, in
+  `auto verify: ☑ pass (session <id>, commit <sha>, log .claude/verify-runs/<file>)` (a docs-only skip adds
+  `, skip (no runtime surface)` after the result), in
   `## Auto decisions` (extended) or the record's `**Not done:**` line (minimal). The merge clause is left
   exactly as it is. A slot you wrote by hand is left alone, and the reason goes in the run log.
 
 Only a verdict line of the skill's result sets the result. The line starts with the bold label and names one
-word, `PASS` or `FAIL`, in one of four shapes: `**Verdict:** PASS`, `**Verdict: PASS**`,
+word, `PASS`, `FAIL` or `SKIP`, in one of four shapes: `**Verdict:** PASS`, `**Verdict: PASS**`,
 `**Verdict: PASS. <sentence>**` or `**Verdict**: PASS`. A line that lists choices (`**Verdict:** PASS | FAIL | BLOCKED | SKIP`,
 `PASS / FAIL`, `PASS or fail`, `PASS - FAIL`; a second verdict word in any case, after `|`, `/`, `,`, a dash, `or` or `and`) is not a verdict and is ignored, so the blank report template never reads as a
 pass. The parser fails closed: anything it does not recognise is `blocked`. Each of these is
@@ -438,19 +442,25 @@ this list, the hook writes `☑ pass` with the Notes
 (minimal track: the same words in the `verify:` line), and a run record that says `skip-pass` and names the
 `base` commit:
 
-- `tasks/`, `memory/`, `tests/` and `.claude/hooks/tests/`;
-- `docs/`, except `docs/claude-md/`;
+- `.md`, `.txt` and `.gitkeep` files under `tasks/`, `memory/` and `docs/`, except `docs/claude-md/`,
+  `memory/MEMORY.md` and `tasks/TASK_GUIDE_*` (they steer agents and hooks). `tasks/TASK_REVIEW_*.md` and
+  `tasks/MINIMAL_LOG.md` stay in;
+- under `tests/` and `.claude/hooks/tests/`: `test_*.py` files and `tests/fixtures/`, but never a
+  `conftest.py`, a `.sh` file, `tests/lib/` or `merge_gate_guard.py`;
 - a `*.md` file in the repository root, except `AGENTS.md`, `CLAUDE.md`, `CLAUDE_LEGACY.md`,
-  `PROJECT_KANBAN.md` and `PROJECT_SPEC.md`.
+  `PROJECT_KANBAN.md`, `PROJECT_SPEC.md`, `PROJECT_KANBAN_SITE.md` and `PROJECT_SPEC_SITE.md`.
 
 Everything else has a runtime surface, for example `skills/`, `agents/`, `templates/`,
-`docs/claude-md/`, `AGENTS.md`, `CLAUDE.md`, `.claude/`, `lib/`, `scripts/`, `site/` and code. The list
+`docs/claude-md/`, `AGENTS.md`, `CLAUDE.md`, `.claude/`, `lib/`, `scripts/`, `site/`, code, and a `.py`,
+`.sh` or `.html` file under `tasks/`, `memory/` or `docs/`. An accepted risk: a `test_*.py` file still runs
+at the next pytest collection. The list
 is one literal tuple in `.claude/hooks/lib/verify_record.py`. Any doubt keeps `blocked`: one path outside
 the list, an empty diff, a missing `main`, two merge-bases, a range git cannot read, a rename (the old
 path counts), a symlink or a submodule, or a file name with unusual characters. A PASS or FAIL verdict is
 handled as before, and a FAIL never becomes a pass. The merge gate does not trust the record's word: it
 repeats the path check from git, between the record's `base` and its commit, before it accepts a
-`skip-pass` record.
+`skip-pass` record. Every git read of the check runs with `GIT_NO_REPLACE_OBJECTS=1`, so a `git replace`
+ref cannot show a fake commit.
 
 ### Auto close-out
 
@@ -667,6 +677,14 @@ Read these before you rely on `[auto]`. T180 left them open, on purpose. T186 re
     still passes the gate that way.
   - A file planted in this session's transcript folder with this session's id is still read; only the
     `.claude/settings.json` deny rules (T251) protect that folder.
+- **A `skip-pass` rests on the local `main` ref (T289).** The path check judges the branch against
+  `refs/heads/main`, a mutable local ref: `git update-ref refs/heads/main <a commit with the branch's runtime
+  change>` makes that change part of "main" and the diff look docs-only. This is part of the T182 record
+  trust root: a model that can run git and write the run record's directory can already forge a pass. No
+  network check is added. A push of `main` stays tied to the real remote by the gate (`_main_push_refusal`:
+  `git ls-remote origin refs/heads/main`, a fast-forward or the exact merge), so a rewritten local `main`
+  does not reach the remote through `[admin]`. The merge itself is yours, or the `[admin]` merge of the task
+  branch, which the gate also checks.
 - **A hand-typed `☑ pass` in the `verify` row ends the check.** The auto-mode check skips a review file
   whose `verify` row says `☑ pass`, so an agent that types that row ends the run unchecked. The merge
   gate still blocks a hand-typed row at merge: it accepts only a row with an `auto-run by hook` run

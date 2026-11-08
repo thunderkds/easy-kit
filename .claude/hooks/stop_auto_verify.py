@@ -41,12 +41,15 @@ When the run ends, this script (never the Supervisor) writes three things:
   * the run record (D5, `lib/verify_record.py`), where agents are denied write access;
   * the result, where that track keeps its evidence —
       - extended (T182 D4): the `verify` Evidence row, `☑ pass` / `☑ fail` / `☐ blocked`, Notes
-        `auto-run by hook, session <id>, commit <sha>, log .claude/verify-runs/<file> — <verdict>`;
+        `auto-run by hook, session <id>, commit <sha>, log .claude/verify-runs/<file> — <verdict>`
+        (T289: a docs-only skip is `☑ pass` with `..., log <file>, skip (no runtime surface:
+        <paths>) — pass`);
       - minimal (T188 D3): one line under the Decision record's `Checked:` field,
-        `- verify: ☑ pass — auto-run by hook, session <id>, commit <sha>, log .claude/...`;
+        `- verify: ☑ pass — auto-run by hook, session <id>, commit <sha>, log .claude/...`
+        (T289: a docs-only skip ends `log <file>, skip (no runtime surface: <paths>)`);
   * the report's `Not done:` auto verify slot (T188 D7), so the report the user reads stops saying
     `auto verify: running (T182)` after the run has ended. The merge clause is left as it is.
-The verdict is the result's `**Verdict:** PASS|FAIL` line (the bold may also close after the
+The verdict is the result's `**Verdict:** PASS|FAIL|SKIP` line (the bold may also close after the
 word or the sentence: `**Verdict: PASS**`, T208). A line that lists choices (`**Verdict:** PASS | FAIL`,
 `PASS / FAIL`, `PASS or fail`, `PASS - FAIL`) is no verdict (T209): the blank report template reads as `blocked`. BLOCKED,
 no verdict line, two different verdicts, a non-success run (budget stop, error), output that
@@ -54,8 +57,9 @@ is not JSON, a timeout or no `claude` on PATH are all `blocked`. The run's text 
 
 T289: a lone SKIP line is a pass in one case. The hook itself asks git (`verify_record.docs_only_change`)
 whether every file the task's branch changed since it left `main` lies in the short docs-only list
-(`tasks/`, `memory/`, `docs/` but not `docs/claude-md/`, `tests/`, `.claude/hooks/tests/`, root `*.md`
-but not the prompt-config ones). If so, the row says `☑ pass` with `skip (no runtime surface: <paths>)`
+(`.md`/`.txt` files under `tasks/`, `memory/`, `docs/` but not `docs/claude-md/`, `memory/MEMORY.md` or
+`tasks/TASK_GUIDE_*`; `test_*.py` and `tests/fixtures/` under `tests/` and `.claude/hooks/tests/`; root `*.md`
+but not the prompt-config and control-state ones). If so, the row says `☑ pass` with `skip (no runtime surface: <paths>)`
 and the run record says `skip-pass`; the merge gate repeats the path check before it trusts that record.
 An empty or unreadable range, a rename, a symlink or one path outside the list leaves `blocked`.
 
