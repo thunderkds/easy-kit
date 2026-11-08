@@ -19,6 +19,9 @@ The file is append-only: `append` never changes an existing row, and a second ru
 It adds no hook; only the Supervisor runs it (docs/claude-md/memory-write-protocol.md).
 A missing or empty trace folder gives no rows and exit 0. A malformed trace line is skipped
 and counted on stderr.
+
+Known limit: only the `Status:` line is read. A handback with no `Status:` line that the step
+limit stopped (a reviewer's, such as T266, trace T266.jsonl line 90) is not logged.
 """
 import glob
 import json
@@ -38,6 +41,15 @@ STEP_LIMIT_NEGATED = re.compile(
     r"step[-_ ]limit[^.]{0,60}?\b(?:did not|didn't|never|does not|doesn't|not (?:stop|hit|fire))", re.I)
 BLOCKED = re.compile(r"^\W*blocked\b", re.I)
 PARTIAL_ESCAPE = re.compile(r"\\(?:u[0-9a-fA-F]{0,3})?$")
+# Every character that must not stay in a cell: the TSV separators and all that str.splitlines()
+# splits on (VT, FF, FS, GS, RS, NEL, LS, PS). A `\u000a` escape decodes to one of them.
+LINE_BREAKS = re.compile("[\t\n\r\x0b\x0c\x1c\x1d\x1e\x85\u2028\u2029]")
+
+
+def _flat(text):
+    """One TSV cell: no line break or tab, no lone surrogate (it cannot be printed or written)."""
+    text = text.encode("utf-16", "surrogatepass").decode("utf-16", "replace")
+    return LINE_BREAKS.sub(" ", text).strip()
 
 
 def _decode(raw):
@@ -59,7 +71,7 @@ def _status_line(summary):
     cut = not ended and len(summary) >= TRACE_CAP
     if not ended and not cut:
         raw = re.sub(r'"\s*\}?\s*$', "", raw)  # the closing of the JSON text
-    text = re.sub(r"[\t\r\n]", " ", _decode(raw)).strip()
+    text = _flat(_decode(raw))
     return text + " (cut at 300)" if cut else text
 
 
@@ -108,7 +120,7 @@ def derive(paths, stats=None):
                 if not got:
                     continue
                 m = TASK.search(rec.get("summary") or "")
-                row = "\t".join([str(rec.get("timestamp", "")), m.group(1) if m else stem, *got])
+                row = "\t".join([_flat(str(rec.get("timestamp", ""))), m.group(1) if m else stem, *got])
                 if row not in seen:
                     seen.add(row)
                     rows.append(row)
@@ -121,7 +133,7 @@ def append(tsv, rows):
     if exists:
         with open(tsv, encoding="utf-8") as fh:
             text = fh.read()
-        have = set(text.splitlines())
+        have = set(text.split("\n"))  # not splitlines(): it also splits on VT, FF, NEL, LS, PS ...
     new = [r for r in rows if r not in have]
     if not new:
         return 0

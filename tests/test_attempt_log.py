@@ -156,7 +156,25 @@ def test_ac3_a_cut_in_the_middle_of_an_escape_does_not_crash(tmp_path):
     assert len(text) == 300
     rec = {"timestamp": "t", "tool_name": "SubagentHandback", "summary": text}
     cell = al.derive([write_trace(tmp_path / "T999.jsonl", [rec])])[0].split("\t")[3]
-    assert cell.endswith("(cut at 300)")
+    # The em dash still decodes: the half escape is dropped, the rest is not lost.
+    assert cell.startswith("blocked \u2014 y")
+    assert cell.endswith("(cut at 300)") and "\\u20" not in cell
+
+
+def test_ac5_a_cut_between_the_halves_of_an_emoji_pair_does_not_crash(tmp_path):
+    # The cut leaves a lone high surrogate `\ud83d`: a complete escape that is half a character.
+    prefix = '{"message": "Agent: x\\nTask: T999\\nStatus: blocked '
+    text = prefix + "y" * (300 - len(prefix) - 6) + "\\ud83d"
+    assert len(text) == 300
+    rec = {"timestamp": "t", "tool_name": "SubagentHandback", "summary": text}
+    trace = write_trace(tmp_path / "T999.jsonl", [rec])
+    out = run("derive", trace)  # printing a lone surrogate raises, so run the real command
+    assert out.returncode == 0 and "Traceback" not in out.stderr
+    cell = out.stdout.splitlines()[0].split("\t")[3]
+    assert cell.startswith("blocked yyy") and cell.endswith("(cut at 300)")
+    tsv = tmp_path / "attempts.tsv"
+    assert run("append", str(tsv), trace).returncode == 0  # writing the file must not raise either
+    assert run("append", str(tsv), trace).stdout.strip() == "appended 0 rows"
 
 
 def test_ac4_ready_for_review_that_only_says_blocked_is_not_a_row():
@@ -189,6 +207,34 @@ def test_a_tab_or_newline_in_the_status_line_becomes_a_space(tmp_path):
     row = al.derive([write_trace(tmp_path / "T999.jsonl", [rec])])[0]
     assert row.count("\t") == 3 and "\n" not in row
     assert row.split("\t")[3].startswith("blocked because")
+
+
+def test_a_carriage_return_inside_the_status_line_becomes_a_space(tmp_path):
+    rec = handback("blocked\\rabc", tail="")
+    row = al.derive([write_trace(tmp_path / "T999.jsonl", [rec])])[0]
+    assert "\r" not in row and row.split("\t")[3] == "blocked abc"
+
+
+def test_a_newline_escaped_as_unicode_inside_the_status_line_becomes_a_space(tmp_path):
+    # `\\n` ends the line, but `\\u000a` does not: it decodes to a real newline in the cell.
+    rec = handback("blocked\\u000athen more", tail="")
+    row = al.derive([write_trace(tmp_path / "T999.jsonl", [rec])])[0]
+    assert "\n" not in row and row.split("\t")[3] == "blocked then more"
+
+
+def test_ac2_a_status_with_a_splitlines_separator_appends_once(tmp_path):
+    # str.splitlines() splits on these too; one row must stay one line, so a rerun finds it.
+    for sep in ("\\u000b", "\\u000c", "\\u001c", "\\u001d", "\\u001e", "\\u0085",
+                "\\u2028", "\\u2029"):
+        trace = write_trace(tmp_path / "T999.jsonl", [handback("blocked" + sep + "fine", tail="")])
+        tsv = tmp_path / "attempts.tsv"
+        tsv.unlink(missing_ok=True)
+        assert run("append", str(tsv), trace).stdout.strip() == "appended 1 rows", sep
+        snapshot = tsv.read_bytes()
+        assert run("append", str(tsv), trace).stdout.strip() == "appended 0 rows", sep
+        assert tsv.read_bytes() == snapshot, sep
+        assert len(snapshot.split(b"\n")) == 3, sep  # header, one row, and the empty tail
+        assert snapshot.split(b"\n")[1].split(b"\t")[3] == b"blocked fine", sep
 
 
 def test_the_same_handback_twice_gives_one_row(tmp_path):
