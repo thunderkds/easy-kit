@@ -43,6 +43,18 @@ Not done: merge (yours); <auto verify: running (T182) | auto verify: <result> | 
 
 -->
 
+## Auto decisions
+
+Mode: auto
+1. Slot 2b files a Bash test run under a worktree's task only for the exact form `cd <dir> && cmd [&& cmd]...` with allow-listed command words, instead of a longer blocklist of `cd`-like words — DEBATED: allowlist (Advocate 1: allowlist, the consumer `trace_shows_verification` is a security gate; Advocate 2: allowlist, a blocklist cannot list every `cd` form; Advocate 3: allowlist, smallest safe thing, deleting slot 2b reopens Cause B) ⚠ decided for you — please review
+2. Over-refusal is accepted: `make test`, `bash run.sh`, `pytest -c pytest.ini`, `ls -1` and a plain `pytest` run with the event cwd in the worktree are no longer filed under the worktree task; they go to the session pointer, as before T287 — SAFER OPTION: a wrong guess costs one misfiled call, never a forged merge gate ⚠ decided for you — please review
+3. The Debate residual (`python3 -c "os.chdir('/home')"`) was closed by refusing inline-code flags, rather than documented as a limit — SAFER OPTION: it fails closed and is a smaller change than parsing the code ⚠ decided for you — please review
+4. Fixed the code-review P1 (`cd -`) and its four P2 test gaps although P2 is only recommended — RULE: `tasks/TASK_GUIDE_T287.md` § Acceptance Criteria
+Paused: none for T287 itself. The Stop hook listed this task for a missing report block, a missing `Memory:` line and a missing Debate while the three fix rounds and their reviews ran; this block answers all three.
+Checks: tests `python3 -B -m pytest .claude/hooks/tests tests -q -p no:cacheprovider` — 1 failed, 3680 passed (the one failure is `tests/test_spike_report_t283.py::test_the_real_report_is_valid`, expected until T283 merges); `python3 -B -m pytest .claude/hooks/tests/test_stop_attribution_t287.py -q` — 137 passed; mutation controls R1–R11 and M1–M15 each turn a test red (R2, R9 and M1b are green by design, a second layer); reviews code-review — 0 P0, 1 P1 fixed, 4 P2 fixed; security-review — three rounds (round 1 nine attacks, round 2 fifteen `cd` shapes, round 3 zsh `chdir` and symlinked relative arguments), every shape from the three rounds re-run against `0ef637bb` and blocked; real run `python3 -B -m pytest .claude/hooks/tests/test_stop_attribution_t287.py -q` — printed `137 passed` (auto-checked, not /verify)
+Memory: memory/decisions.md — T287 slot 2b allowlist (Debate, known limits); memory/learnings.md — a gate fed by a shell-command reader needs an allowlist of words, not a blocklist
+Not done: merge (yours; merge after T284); the last security pass was asked to hunt for new shapes among the allowed words (git subcommands that run programs, redirects into main, pytest plugin options, globs, zsh `=cmd`) and a safety classifier stopped it, so that hunt is not done and a separate reviewer should take it; auto verify: running (T182)
+
 ## Root causes (AC 1)
 
 Reproduced from the real traces in the main checkout's `memory/event-trace/` (read only) and the
