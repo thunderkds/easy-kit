@@ -88,6 +88,9 @@
 
 ### In Progress
 
+- [ ] **T289** — Docs-only and tests-only tasks get a real pass verdict from the auto verify run (so `[admin]` needs no typed `/verify`) | common-infrastructure | C2 | Risk: High | P1 | Guide: `tasks/TASK_GUIDE_T289.md` | User 2026-11-08: "with admin tag, you should run the verify also"; follows T283/T286 `blocked` | Started 2026-11-08: branch `feat/t289-docs-only-pass`, worktree `../wt-t289`
+- [ ] **T290** — Locked oracle: a task guide can lock its oracle test while the task runs (T283 spike idea 1, `adapt`) | common-infrastructure | C2 | Risk: High | P2 | Guide: `tasks/TASK_GUIDE_T290.md` | From the T283 report item 1; the `.claude/settings.json` hook entry needs the user's approval | Started 2026-11-08: branch `feat/t290-locked-oracle`, worktree `../wt-t290`
+
 
 
 
