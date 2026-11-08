@@ -67,8 +67,29 @@ Not done: merge (yours); <auto verify: running (T182) | auto verify: <result> | 
 > **before any implementation commit exists**; if it does not (docs, templates, skill-instruction
 > text), BEFORE is the **verbatim prior content** of what changed — a quoted excerpt, not a command.
 
-**BEFORE**: [pasted timestamped command output showing the thing absent/failing, captured before the
-first implementation commit] OR [verbatim excerpt of the prior content, for non-executable changes]
+**BEFORE** (captured 2026-11-08 15:24 UTC on `bc5ccc34`, before any implementation commit; a driver
+that sends each hidden shape, `<marker line>` / `git push --force origin main` / `EOF`, through the
+merge gate's real `main()` with the repo's `gate` fixture; the board has T901 In Progress and T900 Ready
+for Review; admin mode has T900 auto-verified and an `[admin]` request):
+
+```
+$ python3 -m pytest scratchpad/t294/test_driver.py -q -s -k test_table      # 2026-11-08T15:24:16Z
+DRIVER double-quoted      no-tag=ALLOWED [auto]=ALLOWED.
+DRIVER single-quoted      no-tag=ALLOWED [auto]=ALLOWED.
+DRIVER after-comment      no-tag=ALLOWED [auto]=ALLOWED.
+DRIVER after-backslash    no-tag=ALLOWED [auto]=ALLOWED.
+DRIVER no-marker-control  no-tag=BLOCKED [auto]=BLOCKED.
+$ python3 -m pytest scratchpad/t294/test_driver.py -q -s -k test_admin      # 2026-11-08T15:24:23Z
+DRIVER-ADMIN double-quoted      [admin]=ALLOWED.
+DRIVER-ADMIN single-quoted      [admin]=ALLOWED.
+DRIVER-ADMIN after-comment      [admin]=ALLOWED.
+DRIVER-ADMIN after-backslash    [admin]=ALLOWED.
+DRIVER-ADMIN no-marker-control  [admin]=BLOCKED.
+```
+
+The new tests against the old code, same commit (`python3 -m pytest .claude/hooks/tests/test_heredoc_quoted_marker.py -q`,
+2026-11-08T15:23:51Z): `58 failed, 70 passed` (before the three control tests were split; every AC 1 test fails with
+"the gate ALLOWED the hidden force push", and the premise tests show bash and zsh both run the push).
 
 **AFTER**: [same command, post-change] OR [verbatim excerpt of the new content]
 
