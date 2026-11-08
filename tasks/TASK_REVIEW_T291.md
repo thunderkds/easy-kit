@@ -47,12 +47,12 @@ Not done: merge (yours); <auto verify: running (T182) | auto verify: <result> | 
 
 | Check | Result | Notes / output snippet |
 |-------|--------|------------------------|
-| **New test(s) cover Acceptance Criteria (file paths pasted)** | ☐ pass / ☐ fail | [test file path(s) — required before Done] |
-| Verification command run | ☐ pass / ☐ fail | [paste actual output] |
-| Negative cases hold | ☐ pass / ☐ fail | [paste the red run against the prior content, or the mutation diff (`git diff --stat`, non-empty) before each verdict] |
+| **New test(s) cover Acceptance Criteria (file paths pasted)** | ☑ pass | `.claude/hooks/tests/test_invokes_test_runner_flags.py` (AC 1: 15 positives + trace test; AC 2: 26 negatives, 52 single-letter flags, 3 trace tests; AC 3: 27 old positives, 17 old negatives, non-string). Red on `eb85573c` code: `17 failed, 72 passed` (2026-11-08T15:51:35+07:00). Green: `135 passed in 0.09s`. AC 4: `test_merge_gate_guard.py::test_the_allowlist_names_the_tasks_that_own_rules_in_the_gate` repointed to include T291. |
+| Verification command run | ☑ pass | `cd wt-t291 && python3 -m pytest .claude/hooks/tests/test_invokes_test_runner_flags.py -q -p no:cacheprovider` -> `135 passed in 0.09s` (2026-11-08T15:52:32+07:00). Full suite `python3 -m pytest .claude/hooks/tests tests -q -p no:cacheprovider` -> `4298 passed, 25 subtests passed in 269.96s (0:04:29)`. |
+| Negative cases hold | ☑ pass | Mutation controls, each with a non-empty `git diff --stat` (`pre_bash_block_unsafe_merge.py | 2 +-`), run with `python3 -B`, restored by `git checkout` after: M1 `INTERPRETER_FLAGS = r""` (flag group removed) -> `17 failed, 72 passed`; M2 group `-\w+(?:\s+\w+)?` (any `-X dev` token) -> `10 failed, 79 passed` (incl. `python3 -B -c 'x' -m pytest`, the mention trace test); M3 `(?-i:` dropped (IGNORECASE widens to `-b -S -i`) -> `4 failed, 85 passed`; M4 letter `X` added to the class -> first run `89 passed` (SURVIVED), test `test_ac2_no_other_single_letter_flag_is_on_the_list` added, rerun -> `1 failed, 134 passed` (`[X]`); M5 letter `m` added -> `1 failed, 134 passed` (`[m]`). Working tree clean after the last restore. |
 | verify | ☐ pass / ☐ fail / ☐ N/A | [what was observed — must literally state "pass" or "fail" here too, e.g. "skill run, feature confirmed working — pass": the merge gate scans this Notes column for the word "pass", not just the Result column] |
-| Review scope bounded to the change's blast radius (affected set, not whole repo) | ☐ pass / ☐ fail | [what was reviewed vs. skipped, and why] |
-| Full smoke suite still green (no regression) | ☐ pass / ☐ fail | |
+| Review scope bounded to the change's blast radius (affected set, not whole repo) | ☐ pass / ☐ fail | Implementer self-review only (below); the Supervisor runs the independent Stage 4 reviews. Blast radius: `TEST_INVOCATION_PATTERN` is read only by `invokes_test_runner`, which is read by `trace_shows_verification` (merge gate) and pinned by `test_merge_gate_t210.py`, `test_quoted_spans_t099.py`, `test_stop_attribution_t287.py`. |
+| Full smoke suite still green (no regression) | ☑ pass | `4298 passed, 25 subtests passed in 269.96s` |
 | **Companion score (easy-verifier)** | ☐ pass / ☐ fail / ☐ N/A | [`overall` and `change_risk` as the tool returned them, the scope, the ref, and the absolute path of the verifier report after a literal `report:` label — e.g. "overall 86 (>= 80), change_risk pass, scope changes, ref `main...HEAD`, report: `/home/me/.easy-verifier-reports/kit/score_changes_20261028T0530Z.html`". The gate reads the path that follows `report:` and nothing else, so with no label, or a path that is absent, the row is unscored — write ☑ N/A instead. ☑ N/A with a reason when neither companion tool was run: the merge gate blocks on ☑ fail only, never on an absent or N/A row] |
 | **UI: Visual regression (diff or verdict pasted)** | ☐ pass / ☐ fail / ☐ N/A | [screenshot path or LLM verdict — required for UI tasks, Hard-Stop Gate 6] |
 | **UI: Design-system compliance (tokens/colors/typography verified)** | ☐ pass / ☐ fail / ☐ N/A | [method used + output] |
@@ -79,9 +79,27 @@ $ python3 before.py   # calls m.invokes_test_runner(c) for each command
 'py -B -m pytest' -> False
 ```
 
-**AFTER**: [same command, post-change] OR [verbatim excerpt of the new content]
+**AFTER** (same loader and commands, commit `99ccb29e` + test commit; 2026-11-08T15:52):
 
-**DELTA**: [one sentence — what a user can now do that they could not before]
+```
+$ python3 -m pytest .claude/hooks/tests/test_invokes_test_runner_flags.py -q -p no:cacheprovider
+135 passed in 0.09s
+```
+Per-command results on the new code, from the test corpus: `python3 -B -m pytest x.py`, `python3 -u -B -m unittest`, `python -I -m pytest`, `py -B -m pytest` -> counted; `python3 -X dev -m pytest`, `python3 -B script.py`, `python3 -B -m json.tool`, `echo "python3 -B -m pytest"` -> not counted.
+
+**DELTA**: A task whose tests ran as `python3 -B -m pytest` now passes the merge gate's test-run check without one extra run without `-B`.
 
 **WITNESS**: [who ran it and when — derived from `memory/event-trace/Txxx.jsonl`, never the
 implementing agent alone]
+
+---
+
+## Stage 4 self-review (implementer; the Supervisor runs the independent reviews)
+
+- Change: one new constant `INTERPRETER_FLAGS` and one concatenation in `TEST_INVOCATION_PATTERN`; the other alternatives are untouched (diff is 7 added lines, 1 changed).
+- Fail closed: the list is `-B -u -O -s -E -I`, alone or in a run (`-uB`); it is case exact through `(?-i:...)` because the pattern is IGNORECASE (M3 shows the widening). A flag with an argument (`-X dev`, `-W error`) or `-c`, `-m` of another module, a path, a quoted or `echo`ed mention all stay uncounted. `-Bx`, `-mpytest`, `--` and `-` do not match.
+- ReDoS: 20000 repeated `-B ` tokens, 5000 `-BBBBBBBB ` tokens and one 100000-letter token each returned in under 6 ms.
+- Consistency: `lib/task_context.py` `PYTHON_FLAGS` already holds the same six flags (`frozenset({"-B", "-u", "-O", "-s", "-E", "-I"})`), so the attribution hook and the gate now agree on the list.
+- Stale text (LR-0005): the only repo text that says `-B` runs do not count is `memory/learnings.md:3067-3068` (the 2026-11-08 entry). It is under `memory/**`, which this task must not edit; the Supervisor should mark it fixed by T291. No doc under `docs/`, `skills/`, `agents/`, `templates/`, `site/` or `README.md` says it.
+- Pin tests (LR-0004): `test_merge_gate_t210.py`, `test_quoted_spans_t099.py`, `test_stop_attribution_t287.py` pass unchanged; `test_merge_gate_guard.py` pins the `AUTHORISED_TASKS` tuple and required the T291 repoint.
+- Tripwire: `T291` is added to `AUTHORISED_TASKS` with its rule comment in `.claude/hooks/tests/merge_gate_guard.py`. **The Supervisor must sign this line off at Stage 4.**
