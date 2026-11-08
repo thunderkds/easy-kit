@@ -20,7 +20,6 @@ import json
 import os
 import re
 import shlex
-from datetime import datetime, timezone
 
 import auto_mode
 from shell_data import strip_heredoc_bodies
@@ -30,13 +29,7 @@ COMMAND_NAME = re.compile(r"<command-name>\s*/verify\s*</command-name>")
 COMMAND_ARGS = re.compile(r"<command-args>(.*?)</command-args>", re.S)
 
 
-def parse_ts(value):
-    """An aware datetime from a transcript timestamp, or None."""
-    try:
-        ts = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
-    except Exception:
-        return None
-    return ts if ts.tzinfo else ts.replace(tzinfo=timezone.utc)
+parse_ts = auto_mode.parse_ts  # T292: the one copy
 
 
 def _human_command_args(entry):
