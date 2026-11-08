@@ -44,12 +44,17 @@ Precedence — first match wins:
   2b. **The worktree a ``Bash`` call runs in** (T287) — only when the caller
      passes ``per_call=True``, which ``post_tool_trace.py`` alone does. The
      directory each simple command runs in comes from the event's ``cwd`` and
-     each ``cd <dir>`` before it. When the commands that run outside the main
-     checkout all run in live worktrees of this repo whose branches name one
-     task (``fix/t120-x`` names T120), the call is filed under it. Anything
-     else says nothing: a directory that is no worktree, ``cd $DIR`` or ``cd ~``
-     (not known), a branch that names no task or two, two tasks' worktrees in
-     one command. Why: on 2026-11-04 the Supervisor ran T120's tests in
+     each ``cd <dir>`` before it. Only when EVERY simple command runs in one
+     live worktree of this repo whose branch names one task (``fix/t120-x``
+     names T120) is the call filed under it. Anything else says nothing, and
+     the slots below decide: a command in the main checkout or in a directory
+     that is no worktree, ``cd $DIR`` or ``cd ~`` (not known), a branch that
+     names no task or two, two tasks' worktrees, and any form whose directory
+     this slot does not follow — a ``#`` comment, ``( … )``, ``$( … )`` or
+     backticks, a background ``&``, a pipe after ``cd``, ``pushd``/``popd``
+     (Stage 4 security P0: ``python3 -m pytest; cd <wt> && true`` must not file
+     a main-checkout test run under the worktree's task). A failure of the
+     slot itself (no ``git``, a timeout) also says nothing. Why: on 2026-11-04 the Supervisor ran T120's tests in
      ``wt-t120`` while the session's one pointer (slot 3) named T250, so they
      were filed under T250 and the Stop check paused T120 (T283 spike 6).
      The step limit and the sensitive-path hook keep the slots below: a
@@ -124,6 +129,7 @@ a hook that runs on every tool call in the repo can never crash or block on it.
 import json
 import os
 import re
+import shlex
 import subprocess
 import sys
 from datetime import datetime, timezone
@@ -366,45 +372,77 @@ def _task_id_from_state_file(event):
 GIT_TIMEOUT_S = 5
 
 
+SEPARATORS = frozenset({";", "&&", "||", "|", "&", "|&", ";;", "(", ")"})
+# Stage 4 (security P0): shell forms whose working directory this slot does not follow. Any of
+# them makes the slot say nothing: a subshell `( … )`, a background `&`, a pipeline `|`/`|&` (each
+# side is its own subshell), `pushd`/`popd`, and command substitution `$(…)` / backticks.
+UNFOLLOWED = frozenset({"(", ")", "&", "|&"})
+
+
 def _run_dirs(command, cwd):
     """Slot 2b: the directory each simple command of `command` runs in — the event's `cwd`, then
     each `cd <dir>` before it — or None for one that cannot be known (`cd $D`, `cd ~`, a relative
-    `cd` from an unknown directory). [None] when the text does not tokenize."""
-    import session_work  # lazy: it imports this module, and only slot 2b needs its tokenizer
-    segments = session_work._segments(command)
-    if segments is None:
+    `cd` from an unknown directory). [None] when the text does not tokenize, holds a `#` comment,
+    or uses a shell form in UNFOLLOWED, `pushd`/`popd`, `$(`/backticks, or a `|` after a `cd`."""
+    from shell_data import strip_heredoc_bodies  # lazy: only slot 2b needs it
+    if "$(" in command or "`" in command:
+        return [None]
+    lexer = shlex.shlex(strip_heredoc_bodies(command).replace("\n", " ; "), posix=True,
+                        punctuation_chars=True)
+    lexer.whitespace_split = True
+    lexer.commenters = ""
+    try:
+        tokens = list(lexer)
+    except ValueError:
         return [None]
     directory = cwd if isinstance(cwd, str) and os.path.isabs(cwd) else None
-    dirs = []
-    for tokens in segments:
-        if os.path.basename(tokens[0]) == "cd":
-            target = tokens[1] if len(tokens) == 2 else None
-            known = (target and "$" not in target and "`" not in target
-                     and not target.startswith("~") and (directory or os.path.isabs(target)))
-            directory = os.path.normpath(os.path.join(directory or "", target)) if known else None
+    dirs, current, last_head = [], [], None
+    for token in tokens + [";"]:
+        if token.startswith("#") or token in UNFOLLOWED:
+            return [None]
+        if token not in SEPARATORS:
+            current.append(token)
             continue
-        dirs.append(directory)
+        if token == "|" and last_head == "cd" and not current:
+            return [None]  # `cd X | …`: the `cd` ran in the pipeline's subshell
+        if current:
+            head = os.path.basename(current[0])
+            if head in ("pushd", "popd"):
+                return [None]
+            if head == "cd":
+                target = current[1] if len(current) == 2 else None
+                known = (target and "$" not in target and not target.startswith("~")
+                         and (directory or os.path.isabs(target)))
+                directory = os.path.normpath(os.path.join(directory or "", target)) if known else None
+                if token == "|":
+                    return [None]
+            else:
+                dirs.append(directory)
+            last_head, current = head, []
     return dirs
 
 
 def _worktree_branches(root):
     """[(real path, branch)] of each live worktree of the repo at `root`, the main checkout and
-    detached worktrees excluded; [] on any failure."""
-    done = subprocess.run(["git", "worktree", "list", "--porcelain"], cwd=root,
+    detached worktrees excluded; [] when `git` exits non-zero. Raises when `git` cannot run: the
+    caller treats that as "says nothing" (Stage 4 P2)."""
+    done = subprocess.run(["git", "worktree", "list", "--porcelain", "-z"], cwd=root,
                           capture_output=True, text=True, timeout=GIT_TIMEOUT_S)
     if done.returncode != 0:
         return []
     found, path = [], None
-    for line in done.stdout.splitlines():
-        if line.startswith("worktree "):
-            path = os.path.realpath(line[len("worktree "):].strip())
-        elif line.startswith("branch refs/heads/") and path and path != root:
-            found.append((path, line[len("branch refs/heads/"):].strip()))
+    for field in done.stdout.split("\0"):
+        if field.startswith("worktree "):
+            path = os.path.realpath(field[len("worktree "):])
+        elif field.startswith("branch refs/heads/") and path and path != root:
+            found.append((path, field[len("branch refs/heads/"):]))
     return found
 
 
 def _task_id_from_worktree(event):
-    """Slot 2b (T287): the one task whose worktree this `Bash` call runs in, or None."""
+    """Slot 2b (T287): the task whose worktree EVERY simple command of this `Bash` call runs in,
+    or None. A command in the main checkout, in a directory that is no worktree, in an unknown
+    directory, or in another task's worktree makes the whole call say nothing (Stage 4 P0)."""
     if event.get("tool_name") != "Bash":
         return None
     tool_input = event.get("tool_input")
@@ -416,18 +454,18 @@ def _task_id_from_worktree(event):
     if "cd" not in command and isinstance(cwd, str) and os.path.realpath(cwd) == root:
         return None  # the usual call: runs in the main checkout, no tokenizer, no `git`
     dirs = _run_dirs(command, cwd)
-    if None in dirs:
+    if not dirs or None in dirs:
         return None
     real = [os.path.realpath(d) for d in dirs]
-    if all(d == root for d in real):
-        return None  # the usual case: no `git` call
+    if any(d == root for d in real):
+        return None  # a command ran in the main checkout: no `git` call
     worktrees = _worktree_branches(root)
     branch_task = re.compile(task_id_pattern(root, bounded=True), re.IGNORECASE)
     tasks = set()
     for d in real:
         hits = [(p, b) for p, b in worktrees if d == p or d.startswith(p + os.sep)]
         if not hits:
-            continue  # the main checkout, or a directory that is no worktree: says nothing
+            return None  # a directory that is no worktree of this repo
         branch = max(hits, key=lambda hit: len(hit[0]))[1]
         named = {normalize_task_id(m) for m in branch_task.findall(branch)}
         if len(named) != 1 or None in named:
@@ -475,7 +513,10 @@ def resolve_task_id(event, per_call=False):
             return task_id
 
         if per_call:
-            task_id = _task_id_from_worktree(event)
+            try:  # Stage 4 P2: no `git`, a timeout or an OSError must not drop slots 3-5
+                task_id = _task_id_from_worktree(event)
+            except Exception:
+                task_id = None
             if task_id:
                 return task_id
 

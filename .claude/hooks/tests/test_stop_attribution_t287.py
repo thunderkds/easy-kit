@@ -544,9 +544,12 @@ def test_ac6_tracks_md_states_the_new_attribution():
     check = _tracks_section("Auto-mode check (Stop hook)")
     assert ("the trace hook files a `Bash` call that runs in a task's worktree under that task, "
             "before the session's active-task file") in check, check
-    assert ("count the Advocate calls this session made after a `resolve-question` Skill call with "
-            "`task=<ID>`, wherever the trace filed them") in check, check
-    assert "It does not read another session's calls." in check, check
+    assert "Every command of the call must run in that one worktree" in check, check
+    assert ("A command in the main checkout, in a directory that is no worktree, or in another "
+            "task's worktree blocks the filing.") in check, check
+    assert ("made after a `resolve-question` Skill call whose last top-level `task=<ID>` names the "
+            "task, wherever the trace filed them. Only a call that ran counts") in check, check
+    assert "it skips symlinks and entries with another session's id." in check, check
     limits = _tracks_section("Known limits")
     assert "The Stop check finds misfiled work by two signals only (T287)." in limits, limits
     assert "Other work filed under another task is still not found." in limits, limits

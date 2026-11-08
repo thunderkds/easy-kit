@@ -64,14 +64,20 @@ records from the last CLAUDE_AUTO_CHECK_WINDOW_S seconds (default 6h). Advocate 
 prompts carry no task ID, so their calls land in `_untagged.jsonl` unless the active-task state
 file is set — and then under whichever task it names. T287: check (3) and (5) therefore also count
 the Advocate calls this session (or a sub-agent of it) made after a `resolve-question` Skill call
-whose `args` say `task=<ID>`, up to the next such call, wherever the trace filed them; the larger
-of the two counts is used. Another session's calls are never read. (Tests run in a task's worktree
+whose `args` say `task=<ID>` (the last whole top-level token), up to the next such call, wherever
+the trace filed them; the larger of the two counts is used. Only a call whose `tool_result` is not an
+error counts. What keeps another session's calls out: the transcript and sub-agent files are read
+from this session's own path, symlinks are skipped, and an entry whose `sessionId` is not this
+session's is ignored. A file planted under this session's folder with this session's id is still
+read: the transcripts folder is protected only by the `.claude/settings.json` deny rules (T251). (Tests run in a task's worktree
 are filed under that task by the trace hook itself, T287 slot 2b in `lib/task_context.py`.)
 """
+import glob
 import hashlib
 import json
 import os
 import re
+import shlex
 import sys
 from datetime import datetime, timedelta, timezone
 
@@ -239,43 +245,76 @@ def is_advocate_call(record):
                 and field(summary, "prompt").startswith(ADVOCATE_PROMPT_PREFIX))
 
 
-DEBATE_TASK = re.compile(r"(?<![A-Za-z0-9_])task=([A-Za-z0-9_-]+)", re.I)
+DEBATE_TASK = re.compile(r"task=([A-Za-z0-9_-]+)", re.I)
+
+
+def _debate_task(args):
+    """The task a `resolve-question` call's `args` name: the last whole top-level `task=<ID>` token
+    (Stage 4 P3: a `task=` inside quoted question text does not count), or None."""
+    try:
+        tokens = shlex.split(str(args or ""))
+    except ValueError:
+        tokens = str(args or "").split()
+    named = [m.group(1).upper() for m in map(DEBATE_TASK.fullmatch, tokens) if m]
+    return named[-1] if named else None
+
+
+def _own_session_files(transcript_path):
+    """This session's transcript, then its sub-agents' — symlinks skipped (Stage 4 P2: a link to
+    another session's transcript is not this session's)."""
+    base = os.path.splitext(os.path.basename(transcript_path))[0]
+    pattern = os.path.join(os.path.dirname(transcript_path), glob.escape(base), "subagents",
+                           "agent-*.jsonl")
+    return [transcript_path] + [p for p in sorted(glob.glob(pattern)) if not os.path.islink(p)]
 
 
 def _debate_counts(transcript_path):
     """T287: {task ID: Advocate calls} for this session's Debates, from its transcript and its
     sub-agents' — each counted for the task the last `resolve-question` Skill call before it, in the
-    same file, named with `task=<ID>`. {} when the transcript cannot be read (counts nothing)."""
+    same file, named with `task=<ID>`. Stage 4: only an Advocate `tool_use` whose `tool_result` in
+    the same file is not an error counts (P1: a denied call never ran), and only entries whose
+    `sessionId` is this session's are read (P2). {} when the transcript cannot be read."""
     counts = {}
-    if not isinstance(transcript_path, str) or not os.path.isfile(transcript_path):
+    if (not isinstance(transcript_path, str) or not os.path.isfile(transcript_path)
+            or os.path.islink(transcript_path)):
         return counts
+    session_id = os.path.splitext(os.path.basename(transcript_path))[0]
     try:
-        import session_work  # lazy, as in session_owner
-        for path in session_work._session_files(transcript_path):
-            debate = None
+        for path in _own_session_files(transcript_path):
+            debate, pending, ran = None, {}, set()
             with open(path, encoding="utf-8") as f:
                 for line in f:
-                    if '"tool_use"' not in line:
+                    if '"tool_use"' not in line and '"tool_result"' not in line:
                         continue
                     try:
                         entry = json.loads(line)
                     except Exception:
                         continue
-                    message = entry.get("message") if isinstance(entry, dict) else None
+                    if not isinstance(entry, dict) or entry.get("sessionId") != session_id:
+                        continue
+                    message = entry.get("message")
                     content = message.get("content") if isinstance(message, dict) else None
-                    if entry.get("type") != "assistant" or not isinstance(content, list):
+                    if not isinstance(content, list):
                         continue
                     for block in content:
-                        if not (isinstance(block, dict) and block.get("type") == "tool_use"
+                        if not isinstance(block, dict):
+                            continue
+                        if entry.get("type") == "user" and block.get("type") == "tool_result":
+                            if block.get("is_error") is not True:
+                                ran.add(block.get("tool_use_id"))
+                            continue
+                        if not (entry.get("type") == "assistant" and block.get("type") == "tool_use"
                                 and isinstance(block.get("input"), dict)):
                             continue
                         name, tool_input = block.get("name"), block["input"]
                         if name == "Skill" and str(tool_input.get("skill", "")).strip() == "resolve-question":
-                            hit = DEBATE_TASK.search(str(tool_input.get("args") or ""))
-                            debate = hit.group(1).upper() if hit else None
+                            debate = _debate_task(tool_input.get("args"))
                         elif debate and is_advocate_call({"tool_name": name,
                                                           "summary": json.dumps(tool_input)}):
-                            counts[debate] = counts.get(debate, 0) + 1
+                            pending[block.get("id")] = debate
+            for use_id, task_id in pending.items():
+                if use_id is not None and use_id in ran:
+                    counts[task_id] = counts.get(task_id, 0) + 1
     except Exception as exc:
         warn(f"cannot read this session's Debates ({type(exc).__name__}) — not counted")
         return {}
