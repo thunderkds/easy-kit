@@ -42,23 +42,27 @@ Precedence — first match wins:
      and undocumented (measured on 2.1.312, `tasks/TASK_GUIDE_T196.md` F1–F3):
      if it moves, this slot yields nothing and resolution falls through.
   2b. **The worktree a ``Bash`` call runs in** (T287) — only when the caller
-     passes ``per_call=True``, which ``post_tool_trace.py`` alone does. The
-     directory each simple command runs in comes from the event's ``cwd`` and
-     each ``cd <dir>`` before it. Only when EVERY simple command runs in one
-     live worktree of this repo whose branch names one task (``fix/t120-x``
-     names T120) is the call filed under it. Anything else says nothing, and
-     the slots below decide: a command in the main checkout or in a directory
-     that is no worktree, ``cd $DIR`` or ``cd ~`` (not known), a branch that
-     names no task or two, two tasks' worktrees, and any form whose directory
-     this slot does not follow — a ``#`` comment, ``( … )``, ``$( … )`` or
-     backticks, a background ``&``, a pipe after ``cd``, ``pushd``/``popd``
-     (Stage 4 security P0: ``python3 -m pytest; cd <wt> && true`` must not file
-     a main-checkout test run under the worktree's task). A failure of the
-     slot itself (no ``git``, a timeout) also says nothing. Why: on 2026-11-04 the Supervisor ran T120's tests in
-     ``wt-t120`` while the session's one pointer (slot 3) named T250, so they
-     were filed under T250 and the Stop check paused T120 (T283 spike 6).
-     The step limit and the sensitive-path hook keep the slots below: a
-     safety stop sees the task it saw before T287.
+     passes ``per_call=True``, which ``post_tool_trace.py`` alone does. An
+     ALLOWLIST (fix round 2): a call is filed under a task only when the WHOLE
+     command is ``cd <dir> && cmd [&& cmd]...``, ``<dir>`` is an existing
+     searchable directory inside a live worktree of this repo, and that
+     worktree's branch names one task (``fix/t120-x`` names T120). Every other
+     shape says nothing and the slots below decide — see ``_leading_cd_dir``
+     for the rules: no ``;``/``||``/newline/``&``/pipe after the ``cd``, no
+     second ``cd`` or ``cd -``, no ``builtin``/``command``/``eval``/``exec``/
+     ``source``/``pushd``/``popd`` or shell keyword, no leading ``VAR=``, no
+     ``<<``, ``$``, backtick or ``#``, no ``~``/``CDPATH``/glob target, and no
+     argument that names ``..`` or an absolute path outside the worktree, no
+     inline-code flag (``-c``, ``-e``) and no quoted/parenthesised path. The
+     event's ``cwd`` only resolves a relative target; a call with no ``cd``
+     is never filed by it. A failure of the slot (no ``git``, a timeout) also
+     says nothing. Limits (``docs/claude-md/tracks.md`` ``### Known limits``):
+     it shows where the command started, not what it ran; a branch name that
+     contains the task ID is enough (C9). Why: on 2026-11-04 the Supervisor ran
+     T120's tests in ``wt-t120`` while the session's one pointer (slot 3) named
+     T250, so they were filed under T250 and the Stop check paused T120 (T283
+     spike 6). The step limit and the sensitive-path hook keep the slots below:
+     a safety stop sees the task it saw before T287.
   3. **The per-session state file** (T196; replaces T047's shared file),
      ``.claude/hooks/.state/active_task.d/<session_id>`` — a plain two-line file
      (``Txxx`` on line 1, an ISO-8601 UTC "written at" timestamp on line 2)
@@ -113,7 +117,7 @@ Deliberate decisions:
   legitimately contains a guide path (``cat tasks/TASK_GUIDE_T012.md``). Command
   text is free text that can quote arbitrary file content; scanning it is the
   same class of guess this module exists to remove. Such a call is
-  unattributed. Slot 2b (T287) reads only the ``cd`` targets — where the work
+  unattributed. Slot 2b (T287) reads only the leading ``cd`` target — where the work
   runs, not what it mentions — and takes the task from the worktree's branch,
   never from the command text.
 * **``tool_response`` is never read.** A tool's *output* describes what a file
@@ -372,54 +376,112 @@ def _task_id_from_state_file(event):
 GIT_TIMEOUT_S = 5
 
 
-SEPARATORS = frozenset({";", "&&", "||", "|", "&", "|&", ";;", "(", ")"})
-# Stage 4 (security P0): shell forms whose working directory this slot does not follow. Any of
-# them makes the slot say nothing: a subshell `( … )`, a background `&`, a pipeline `|`/`|&` (each
-# side is its own subshell), `pushd`/`popd`, and command substitution `$(…)` / backticks.
-UNFOLLOWED = frozenset({"(", ")", "&", "|&"})
+# Slot 2b is an ALLOWLIST (fix round 2). Only `cd <dir> && cmd [&& cmd]...` is understood; every
+# other shape says nothing. `cd` is the one word a blocklist cannot enumerate (`builtin cd`, `eval`,
+# `{ cd; }`, `if cd`, `cd -`, `CDPATH=`, a heredoc marker inside quotes, ...), so the rule is not
+# "find the bad forms" but "accept one good form".
+ANYWHERE_WORDS = re.compile(r"(?<![\w-])(?:cd|builtin|command|eval|exec|source|pushd|popd)(?![\w-])")
+HEAD_WORDS = frozenset({".", "if", "while", "until", "for", "case", "select", "function", "coproc",
+                        "time", "!", "{", "}", "(", ")", "do", "then", "else", "elif", "fi", "done",
+                        "esac", "in"})
+REDIRECTS = frozenset({">", ">>", "<", ">&", "<&", "&>", "&>>"})
+ASSIGNMENT = re.compile(r"[A-Za-z_][A-Za-z0-9_]*(?:\[[^\]]*\])?\+?=")
+TARGET_FORBIDDEN = re.compile(r"[*?\[\]{}$`]")
+OUTSIDE_OK = frozenset({"/dev/null"})
+# Inline code (`python3 -c`, `bash -lc`, `node -e`, `perl -e`, `ruby -e`) can `chdir` anywhere; a
+# quote or paren next to a `/` is a path inside such code (`os.chdir('/home')`). Both fail closed.
+INLINE_CODE = re.compile(r"-[A-Za-z]*[ce]|--(?:eval|exec|command)(?:=.*)?")
+CODE_WITH_PATH = re.compile(r"""['"()]""")
 
 
-def _run_dirs(command, cwd):
-    """Slot 2b: the directory each simple command of `command` runs in — the event's `cwd`, then
-    each `cd <dir>` before it — or None for one that cannot be known (`cd $D`, `cd ~`, a relative
-    `cd` from an unknown directory). [None] when the text does not tokenize, holds a `#` comment,
-    or uses a shell form in UNFOLLOWED, `pushd`/`popd`, `$(`/backticks, or a `|` after a `cd`."""
-    from shell_data import strip_heredoc_bodies  # lazy: only slot 2b needs it
-    if "$(" in command or "`" in command:
-        return [None]
-    lexer = shlex.shlex(strip_heredoc_bodies(command).replace("\n", " ; "), posix=True,
-                        punctuation_chars=True)
+def _escapes(token, worktree):
+    """True when `token` (or a piece of it) names a place outside `worktree`: `..`, `~`, or an
+    absolute path that is not inside it. Nothing proves a runner reads only its own directory, but a
+    plain `--rootdir <main>` or `../main/tests` must not be filed under the worktree (P2)."""
+    for piece in re.split(r"[\s=:,;]+", token):
+        if piece.startswith("~") or ".." in piece.split("/"):
+            return True
+        if piece.startswith("/") and piece not in OUTSIDE_OK:
+            real = os.path.realpath(piece)
+            if real != worktree and not real.startswith(worktree + os.sep):
+                return True
+    return False
+
+
+def _leading_cd_dir(command, cwd):
+    """Slot 2b: the existing directory that `command` changes into, when `command` is exactly
+    `cd <dir> && cmd [&& cmd]...` and nothing in it can move the shell or run a command elsewhere;
+    otherwise None. The rules (each one a Stage 4 finding, tests `test_round2_*`):
+
+    * `cd` is the first word and the only `cd`; `&&` is the only joiner after it. Never `;`, `||`,
+      a newline, a pipe or `&` after it, nor `cd -`, `~`, `$`, backticks or a glob in the target.
+    * the target exists (`isdir`) and is searchable, so the `cd` cannot fail and leave the command in
+      the event's directory; and its logical and physical paths agree (`cd W/link/..`).
+    * no heredoc `<<` anywhere (a body is not a command; a quoted marker hides one), no `$`, no
+      backticks, no comment, no leading `VAR=` before a word, and none of `builtin command eval exec
+      source pushd popd` or a shell keyword (`if while for time ! { function ...`) as a word.
+    * no argument that names `..`, `~` or an absolute path outside the worktree (`--rootdir <main>`),
+      no inline-code flag (`-c`, `-e`, `-lc`, `--eval`) and no argument that holds a quote or paren
+      next to a `/` (`os.chdir('/home')`).
+    """
+    if not isinstance(cwd, str) or not os.path.isabs(cwd):
+        cwd = None
+    command = command.replace("\\\n", " ")
+    if not command.startswith("cd ") or "\n" in command or "\r" in command:
+        return None
+    if "<<" in command or "$" in command or "`" in command:
+        return None
+    # keep in step with session_work.SEPARATORS / its shlex setup (same punctuation_chars lexer)
+    lexer = shlex.shlex(command, posix=True, punctuation_chars=True)
     lexer.whitespace_split = True
     lexer.commenters = ""
     try:
         tokens = list(lexer)
     except ValueError:
-        return [None]
-    directory = cwd if isinstance(cwd, str) and os.path.isabs(cwd) else None
-    dirs, current, last_head = [], [], None
-    for token in tokens + [";"]:
-        if token.startswith("#") or token in UNFOLLOWED:
-            return [None]
-        if token not in SEPARATORS:
-            current.append(token)
+        return None
+    if len(tokens) < 4 or tokens[0] != "cd" or tokens[2] != "&&":
+        return None
+    target = tokens[1]
+    if (not target or target.startswith(("-", "~")) or TARGET_FORBIDDEN.search(target)
+            or ANYWHERE_WORDS.search(target)):
+        return None
+    dotted = target.startswith(("/", "./", "../")) or target in (".", "..")
+    if not dotted and ("CDPATH" in command or os.environ.get("CDPATH")):
+        return None  # a bare name is looked up in $CDPATH first
+    if os.path.isabs(target):
+        joined = target
+    elif cwd:
+        joined = os.path.join(cwd, target)
+    else:
+        return None
+    directory = os.path.normpath(joined)
+    if (not os.path.isdir(directory) or not os.access(directory, os.X_OK)
+            or os.path.realpath(directory) != os.path.realpath(joined)):
+        return None
+    worktree = os.path.realpath(directory)
+    head, target_next = True, False  # head: the next word starts a command; target_next: a redirect's
+    for token in tokens[3:]:
+        if token in ("&&", "|"):
+            head = True
             continue
-        if token == "|" and last_head == "cd" and not current:
-            return [None]  # `cd X | …`: the `cd` ran in the pipeline's subshell
-        if current:
-            head = os.path.basename(current[0])
-            if head in ("pushd", "popd"):
-                return [None]
-            if head == "cd":
-                target = current[1] if len(current) == 2 else None
-                known = (target and "$" not in target and not target.startswith("~")
-                         and (directory or os.path.isabs(target)))
-                directory = os.path.normpath(os.path.join(directory or "", target)) if known else None
-                if token == "|":
-                    return [None]
-            else:
-                dirs.append(directory)
-            last_head, current = head, []
-    return dirs
+        if token in REDIRECTS:
+            target_next = True
+            continue
+        if re.fullmatch(r"[();&|<>]+", token):
+            return None  # `;` `||` `&` `|&` `(` `)` `;;` `<<` ...
+        if token.startswith("#") or ANYWHERE_WORDS.search(token):
+            return None
+        if target_next:
+            target_next = False
+        elif head:
+            if token in HEAD_WORDS or ASSIGNMENT.match(token):
+                return None
+            head = False
+            continue
+        if (INLINE_CODE.fullmatch(token) or (CODE_WITH_PATH.search(token) and "/" in token)
+                or _escapes(token, worktree)):
+            return None
+    return directory
 
 
 def _worktree_branches(root):
@@ -440,38 +502,30 @@ def _worktree_branches(root):
 
 
 def _task_id_from_worktree(event):
-    """Slot 2b (T287): the task whose worktree EVERY simple command of this `Bash` call runs in,
-    or None. A command in the main checkout, in a directory that is no worktree, in an unknown
-    directory, or in another task's worktree makes the whole call say nothing (Stage 4 P0)."""
+    """Slot 2b (T287): the task whose worktree a `Bash` call of the exact form
+    `cd <dir> && cmd [&& cmd]...` runs in (see `_leading_cd_dir`), or None. Anything else —
+    a directory that is the main checkout, no worktree, or a worktree whose branch names no task or
+    two — says nothing."""
     if event.get("tool_name") != "Bash":
         return None
     tool_input = event.get("tool_input")
     command = tool_input.get("command") if isinstance(tool_input, dict) else None
-    if not isinstance(command, str):
+    if not isinstance(command, str) or not command.startswith("cd "):
+        return None  # the usual call: no tokenizer, no `git`
+    directory = _leading_cd_dir(command, event.get("cwd"))
+    if not directory:
         return None
     root = os.path.realpath(_resolve_root())
-    cwd = event.get("cwd")
-    if "cd" not in command and isinstance(cwd, str) and os.path.realpath(cwd) == root:
-        return None  # the usual call: runs in the main checkout, no tokenizer, no `git`
-    dirs = _run_dirs(command, cwd)
-    if not dirs or None in dirs:
+    real = os.path.realpath(directory)
+    if real == root:
         return None
-    real = [os.path.realpath(d) for d in dirs]
-    if any(d == root for d in real):
-        return None  # a command ran in the main checkout: no `git` call
-    worktrees = _worktree_branches(root)
+    hits = [(p, b) for p, b in _worktree_branches(root) if real == p or real.startswith(p + os.sep)]
+    if not hits:
+        return None  # a directory that is no worktree of this repo
+    branch = max(hits, key=lambda hit: len(hit[0]))[1]
     branch_task = re.compile(task_id_pattern(root, bounded=True), re.IGNORECASE)
-    tasks = set()
-    for d in real:
-        hits = [(p, b) for p, b in worktrees if d == p or d.startswith(p + os.sep)]
-        if not hits:
-            return None  # a directory that is no worktree of this repo
-        branch = max(hits, key=lambda hit: len(hit[0]))[1]
-        named = {normalize_task_id(m) for m in branch_task.findall(branch)}
-        if len(named) != 1 or None in named:
-            return None
-        tasks |= named
-    return tasks.pop() if len(tasks) == 1 else None
+    named = {normalize_task_id(m) for m in branch_task.findall(branch)}
+    return named.pop() if len(named) == 1 and None not in named else None
 
 
 def _task_id_from_path_fields(tool_input):

@@ -143,7 +143,7 @@ FAILED .claude/hooks/tests/test_stop_attribution_t287.py::test_ac5_the_safety_ho
 
 The T120 fixtures pause on check (7) (`no test run in memory/event-trace/T120.jsonl`); the T242
 fixture pauses on check (3) (`the trace has 0`). The 9 that pass before the change are the
-negatives (AC 3, AC 4) and the stops that stay (AC 5): they must hold before and after.
+negatives (AC 3, AC 4) and the AC 5 tests that drive the step limit and the sensitive-path hook: they must hold before and after. (`test_ac5_the_text_of_the_stops_that_stay_is_unchanged` pins the bullets of `### Stops that stay` only; it does not run a stop.)
 
 **AFTER** (same command; first round at head `86a91d88`, Stage 4 round at `4d5a73ed`):
 
@@ -163,3 +163,54 @@ Against the real repo (`CLAUDE_PROJECT_DIR` = the main checkout), slot 2b files
 **DELTA**: An auto-mode task whose tests ran in its own worktree, or whose Debate's `resolve-question` call named it, is no longer paused for that work when the session's active-task file named another task; a task with no such work is still paused with the same message.
 
 **WITNESS**: [to be filled by the reviewer from `memory/event-trace/T287.jsonl` and the auto verify run — the implementing agent (common-infrastructure, 2026-11-08) ran BEFORE at 00:25:00Z and AFTER at head `86a91d88`, and is not a witness alone]
+
+## Fix round 2 (2026-11-08)
+
+An independent security re-check found a P0 in slot 2b (15 shapes in which `pytest` ran in the main checkout while the call was filed under T120, and the merge gate's `trace_shows_verification('T120')` accepted T120). A code-review and a 3-Advocate Debate followed. All were folded into this round.
+
+**What changed.** `.claude/hooks/lib/task_context.py`: the blocklist `_run_dirs` is gone. `_leading_cd_dir` is an ALLOWLIST. A `Bash` call is filed under a worktree's task only when the whole command is `cd <dir> && cmd [&& cmd]...` and:
+- `<dir>` is absolute or resolves (against the event `cwd`) to an existing, searchable directory (`os.path.isdir` + `os.access X_OK`) whose logical and physical paths agree; no `-`, `~`, `$`, backtick, glob, or `CDPATH` (for a bare name).
+- `&&` is the only joiner after the `cd`: never `;`, `||`, newline, `&`, `|&`, `(`, `)`; a pipe only after a later command.
+- no second `cd`, and no `builtin command eval exec source pushd popd` anywhere; no shell keyword (`if while until for case select function coproc time ! { }`, `.` as the first word of a command); no leading `VAR=` before a word; no `<<`, `$`, backtick or `#`.
+- no argument that names `..`, `~`, or an absolute path outside the worktree (`--rootdir <main>`); no inline-code flag (`-c`, `-e`, `-lc`, `--eval`) and no argument with a quote or paren next to a `/` (Debate residual: `python3 -c "import os;os.chdir('/home')"`).
+Anything else falls through to the pointer task (today's behaviour). A call with no `cd` is never filed by the event `cwd`. `stop_auto_mode_check.py` and the docs: only comments and text. Docs: `docs/claude-md/tracks.md` (`### Auto-mode check (Stop hook)` and `### Known limits`: the exact form, the forms that fall through, C9, the older `invokes_test_runner` weakness, what the filing does not prove) and the `task_context.py` docstring slot 2b.
+
+**Review findings.** P1 (`cd <wt> && git status; cd - && pytest`): rejected by the allowlist (`;`), test `review-P1-cd-dash-after-a-semicolon`. P2 tests added: `test_review_p2_a_debate_in_a_sub_agent_transcript_is_credited` (mutation M9), `test_review_p2_a_resolve_question_call_with_no_task_does_not_keep_the_earlier_task` (M10), the `popd`/`pushd` shapes (M3), the subdirectory honest shape for the `startswith(p + os.sep)` guard (M11), and the bare-relative / `./` shapes with an event `cwd` unlike the hook's cwd (M12). `test_ac5_the_stops_that_stay_are_unchanged` is renamed `test_ac5_the_text_of_the_stops_that_stay_is_unchanged` (it pins text only). P3: the dead `last_head` code went with `_run_dirs`; "keep in step with session_work" comments added at the lexer setup and at `_own_session_files`.
+
+**Not changed.** The fourth P1 case in the coordinator's note (event `cwd` after the command ran) is pinned: `test_round2_a_trailing_cd_is_not_filed_when_the_event_cwd_is_the_directory_after_it` (2 cases) and `test_round2_a_command_with_no_cd_is_not_filed_by_the_event_cwd`. `;` and newline after the `cd` are not kept (no existing honest test used them), so they fall to the pointer.
+
+**Red then green.** Tests committed red first (`5b767a87`: `29 failed, 55 passed`). After the later review and Debate tests were added, the same tests against the round-1 `task_context.py` (`git stash` of that file only):
+
+```
+$ python3 -B -m pytest .claude/hooks/tests/test_stop_attribution_t287.py -q -p no:cacheprovider    # round-1 task_context.py
+41 failed, 60 passed in 11.18s     (B03 B04 B05 B28 B06 B07 B08 B09 B10 B11 B12 B13 B24 B27 B14 B16 B18 B19, C3 x2, trailing cd x2, no-cd, CDPATH env, dotdot via symlink, -c/-e x6, ...)
+$ python3 -B -m pytest .claude/hooks/tests/test_stop_attribution_t287.py -q -p no:cacheprovider    # allowlist
+101 passed in 12.57s
+```
+
+Mutation controls (one `str.replace` each, restored by writing the original back, `-k` on the group shown):
+
+```
+M1  remove the existence check (isdir + access)          3 failed, 61 passed (nonexistent-dir-and-and, target-is-a-file-and-and, C3 pruned)
+M1b remove ONLY the isdir clause                         55 passed  (stays green BY DESIGN: os.access(X_OK) also fails on a missing path)
+M2  `||` treated as a joiner                             1 failed (B18)
+M3  ANYWHERE_WORDS never matches                         1+ failed (B03 cd-dash and the builtin/eval/popd shapes)
+M4  HEAD_WORDS / VAR= check removed                      1 failed (env-assignment-before-the-runner)
+M5  _escapes always False                                2 failed (B16, relative-dotdot-argument)
+M6  `$` and backtick guard removed                       2 failed (variable-argument, backtick-argument)
+M7  `;` allowed after the cd                             1 failed (semicolon-after-cd)
+M8  CDPATH rule removed                                  1 failed (cdpath env)
+M9  sub-agent files not read (stop_auto_mode_check)      1 failed (sub-agent transcript credited)
+M10 task-less resolve-question keeps the earlier task    1 failed
+M11 `real.startswith(p + os.sep)` -> `real == p`         1 failed (subdirectory-target)
+M12 relative cd joins the hook's cwd                     2 failed (bare-relative-name, C13 dot-slash)
+M13 logical == physical check removed                    1 failed (dotdot through a symlink)
+M14 inline-code flag rule removed                        5 failed (-c/-e shapes)
+M15 quote/paren + slash rule removed                     1 failed (debate-quote-and-slash-without-c)
+```
+
+The `<<` rule has three guards (the explicit `<<` test, the newline rule, the punctuation token check), so removing one leaves B14/B19 red-proof intact; no single-byte mutation of only that line can turn them red. That is intended.
+
+**Suite.** `python3 -B -m pytest .claude/hooks/tests tests -q -p no:cacheprovider`: `1 failed, 3644 passed, 25 subtests passed in 202.55s`. The 1 failure is the pre-existing `tests/test_spike_report_t283.py::test_the_real_report_is_valid` (`tasks/SPIKE_REPORT_T283.md` exists only on `feat/t283-karpathy-spikes`); T287 touches neither.
+
+**Accepted limits** (`### Known limits`): a script file in the worktree that does its own `cd`; a symlink in the worktree that points to main; any worktree of this repo on a branch whose name holds the task ID (C9); the gate's older `invokes_test_runner` counting a heredoc body or the far side of `||` as a run (not changed here).

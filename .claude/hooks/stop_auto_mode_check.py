@@ -262,6 +262,7 @@ def _debate_task(args):
 def _own_session_files(transcript_path):
     """This session's transcript, then its sub-agents' — symlinks skipped (Stage 4 P2: a link to
     another session's transcript is not this session's)."""
+    # keep in step with session_work._session_files (same folder layout; this one skips symlinks)
     base = os.path.splitext(os.path.basename(transcript_path))[0]
     pattern = os.path.join(os.path.dirname(transcript_path), glob.escape(base), "subagents",
                            "agent-*.jsonl")

@@ -328,6 +328,21 @@ ROUND2_SHAPES = {
     "semicolon-after-cd": "cd @WT@; python3 -m pytest -q",
     "env-assignment-before-the-runner": CD_W + "FOO=1 python3 -m pytest -q",
     "subshell-as-first-word": "(cd @WT@ && python3 -m pytest -q)",
+    # code-review P1: `cd -` after a `;` runs pytest in the directory the call started in
+    "review-P1-cd-dash-after-a-semicolon": CD_W + "git status; cd - && python3 -m pytest -q",
+    "review-P2-pushd": CD_W + "pushd @MAIN@ && python3 -m pytest -q",
+    "nonexistent-dir-and-and": "cd @WT@/nope && python3 -m pytest -q",
+    "target-is-a-file-and-and": "cd @WT@/setup.sh && python3 -m pytest -q",
+    "debate-python-c-chdir": CD_W + "python3 -c \"import os;os.chdir('/home');import pytest\"",
+    "debate-python-c-no-path": CD_W + 'python3 -c "import pytest"',
+    "debate-bash-lc": CD_W + "bash -lc 'python3 -m pytest -q'",
+    "debate-node-e": CD_W + "node -e 'process.exit(0)'",
+    "debate-perl-e": CD_W + "perl -e 'exit 0'",
+    "debate-ruby-e": CD_W + "ruby -e 'exit 0'",
+    "debate-quote-and-slash-without-c": CD_W + "python3 -m pytest -q \"os.chdir('/home')\"",
+    "variable-argument": CD_W + 'python3 -m pytest -q "$ARGS"',
+    "backtick-argument": CD_W + "python3 -m pytest -q `echo ok`",
+    "review-P2-popd": CD_W + "popd && python3 -m pytest -q",
 }
 
 
@@ -394,6 +409,18 @@ def test_round2_cdpath_in_the_environment_blocks_a_bare_relative_cd(tmp_path):
     assert trace(project, "T120") == [] and len(trace(project, "T250")) == 1
     s.call("Bash", {"command": "cd wt-t120 && python3 -m pytest -q"}, cwd=tmp_path)  # no CDPATH
     assert len(trace(project, "T120")) == 1
+
+
+def test_round2_a_dotdot_through_a_symlink_is_not_filed(tmp_path):
+    """`cd <wt>/lnk/..` lands in <wt> by the logical path but in lnk's target's parent by the
+    physical one (`set -P`, `cd -P`): the two disagree, so the slot says nothing."""
+    project = t120_project(tmp_path)
+    (tmp_path / "elsewhere" / "deep").mkdir(parents=True)
+    (tmp_path / "wt-t120" / "lnk").symlink_to(tmp_path / "elsewhere" / "deep")
+    s = Session(project, tmp_path)
+    s.point_at("T250")
+    s.call("Bash", {"command": f"cd {tmp_path / 'wt-t120' / 'lnk'}/.. && python3 -m pytest -q"})
+    assert trace(project, "T120") == [] and len(trace(project, "T250")) == 1
 
 
 # The honest shapes stay filed under the task (they were green before the allowlist, and stay so).
@@ -613,6 +640,33 @@ def test_p2_a_symlink_to_another_sessions_transcript_is_not_read(tmp_path):
     assert reason and T242_PAUSE in reason, reason
 
 
+def test_review_p2_a_debate_in_a_sub_agent_transcript_is_credited(tmp_path):
+    """Code-review P2(a): a Debate that sits only in `subagents/agent-*.jsonl`, with Advocate calls
+    that ran and entries carrying this session's id, counts for its task."""
+    project = t242_project(tmp_path)
+    s = t242_reviewed(project, tmp_path)
+    sub = Session.__new__(Session)
+    sub.transcript = s.transcript.parent / SID / "subagents" / "agent-real.jsonl"
+    sub.transcript.parent.mkdir(parents=True)
+    _transcript_debate(sub, sessionId=SID)
+    reason, _ = s.stop()
+    assert reason is None, reason
+
+
+def test_review_p2_a_resolve_question_call_with_no_task_does_not_keep_the_earlier_task(tmp_path):
+    """Code-review P2(b): a later `resolve-question` call that names no task ends the earlier
+    Debate for T242, so the Advocates after it count for no task."""
+    project = t242_project(tmp_path)
+    s = t242_reviewed(project, tmp_path)
+    s.point_at("T241")
+    s.call("Skill", {"skill": "resolve-question", "args": "task=T242 risk=Medium"})
+    s.call("Skill", {"skill": "resolve-question", "args": "risk=Medium"})
+    for n in (1, 2):
+        s.call("Agent", advocate_input(n))
+    reason, _ = s.stop()
+    assert reason and "the trace has 0" in reason, reason
+
+
 def test_p3_task_in_the_question_text_does_not_name_the_debate(tmp_path):
     """E9: only a whole top-level `task=` token names the Debate, and the last one wins."""
     project = t242_project(tmp_path)
@@ -687,7 +741,9 @@ STOPS_THAT_STAY = (
 )
 
 
-def test_ac5_the_stops_that_stay_are_unchanged():
+def test_ac5_the_text_of_the_stops_that_stay_is_unchanged():
+    """Pins the bullets of `### Stops that stay` only. It does not run a stop: the hook behaviour of
+    the stops is covered by the ac5 tests that drive the real hooks."""
     text = (ROOT / "docs" / "claude-md" / "tracks.md").read_text(encoding="utf-8")
     section = text.split("\n### Stops that stay\n", 1)[1].split("\n### ", 1)[0]
     bullets = tuple(l for l in section.splitlines() if l.startswith("- "))
@@ -703,15 +759,18 @@ def test_ac6_tracks_md_states_the_new_attribution():
     check = _tracks_section("Auto-mode check (Stop hook)")
     assert ("the trace hook files a `Bash` call that runs in a task's worktree under that task, "
             "before the session's active-task file") in check, check
-    assert "Every command of the call must run in that one worktree" in check, check
-    assert ("A command in the main checkout, in a directory that is no worktree, or in another "
-            "task's worktree blocks the filing.") in check, check
+    assert "only for the exact form `cd <dir> && cmd [&& cmd]...`" in check, check
+    assert "Any other form is not filed by its directory" in check, check
+    assert "A call with no `cd` is not filed by the session's directory." in check, check
+    assert "an inline-code flag (`-c`, `-e`, `-lc`)" in check, check
     assert ("made after a `resolve-question` Skill call whose last top-level `task=<ID>` names the "
             "task, wherever the trace filed them. Only a call that ran counts") in check, check
     assert "it skips symlinks and entries with another session's id." in check, check
     limits = _tracks_section("Known limits")
     assert "The Stop check finds misfiled work by two signals only (T287)." in limits, limits
     assert "Other work filed under another task is still not found." in limits, limits
+    assert "(C9)" in limits and "invokes_test_runner" in limits, limits
+    assert "The filing proves where the command started, not what it ran." in limits, limits
 
 
 def resolve_in(project, tmp_path, event, **kwargs):

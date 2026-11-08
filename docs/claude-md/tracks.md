@@ -312,12 +312,17 @@ row, else Low; a Decision record is Risk Low unless it says otherwise. The trace
 `memory/event-trace/_untagged.jsonl` (`CLAUDE_AUTO_CHECK_WINDOW_S`): Advocate prompts carry no task ID, so
 their calls land in `_untagged.jsonl` unless the active-task state file is set.
 Since T287, two more signals find the work. First, the trace hook files a `Bash` call that runs in a task's
-worktree under that task, before the session's active-task file. Every command of the call must run in that
-one worktree, and the worktree's branch must name the task (`fix/t120-x`). A command in the main checkout, in
-a directory that is no worktree, or in another task's worktree blocks the filing. So does a form whose
-directory the hook does not follow: a `#` comment, `( … )`, `$( … )`, a background `&`, a pipe after `cd`,
-`pushd` or `popd`. Then the session's active-task file decides, as before. So a test run in the worktree
-counts for item 7 and for the auto close-out. Second, items 3 and 5 also count the Advocate calls this session
+worktree under that task, before the session's active-task file. It does so only for the exact form
+`cd <dir> && cmd [&& cmd]...`, where `<dir>` is an existing, searchable directory inside a worktree whose
+branch names the task (`fix/t120-x`). Any other form is not filed by its directory, and the session's
+active-task file decides, as before. That covers: a `;`, `||`, newline, `&` or pipe after the `cd`, a second
+`cd` (`cd -` too), `builtin`, `command`, `eval`, `exec`, `source`, `pushd`, `popd`, a shell keyword
+(`if`, `while`, `for`, `time`, `!`, `{`, `function`), a leading `VAR=` before a word, a heredoc `<<`, `$`,
+backticks, a `#` comment, a directory that does not exist or is a file, the main checkout, a directory that is
+no worktree, a `~`, `..` or `CDPATH` target, and an argument that names `..` or an absolute path outside the
+worktree (`--rootdir <main>`), an inline-code flag (`-c`, `-e`, `-lc`), and an argument that holds a quote
+or paren next to a `/` (`os.chdir('/home')`). A call with no `cd` is not filed by the session's directory. So a test run in
+the worktree counts for item 7 and for the auto close-out. Second, items 3 and 5 also count the Advocate calls this session
 made after a `resolve-question` Skill call whose last top-level `task=<ID>` names the task, wherever the trace
 filed them. Only a call that ran counts: its result in the transcript is not an error. The check uses the
 larger count. It reads only this session's transcript files: it skips symlinks and entries with another
@@ -552,15 +557,26 @@ Read these before you rely on `[auto]`. T180 left them open, on purpose. T186 re
 - **Two auto tasks in one session can share evidence.** The auto-mode check counts the Advocate and
   Skill calls in `memory/event-trace/_untagged.jsonl` from the last 6 hours for every task. Advocate
   prompts carry no task ID. A second task can be credited with the first task's Advocates or reviews.
-- **The Stop check finds misfiled work by two signals only (T287).** A test call whose every command runs
-  in the task's worktree is filed under the task. A call that also runs a command in the main checkout is not. An Advocate call counts for the task that the Debate's `resolve-question` call
-  names with `task=<ID>`. Other work filed under another task is still not found. Examples: a test run in the
-  main checkout while the session's active-task file names another task; a `code-review` or
-  `security-review` Skill call made then; a Debate whose `resolve-question` call names no task. A test loop
-  (`for …; do python3 -m pytest; done`) is filed under the task, but the merge gate does not count a loop body
-  as a test run. A file planted in this session's transcript folder with this session's id is still read;
-  only the `.claude/settings.json` deny rules (T251) protect that folder. Point the session at the task
-  (minimal-track step 1) before you work on it.
+- **The Stop check finds misfiled work by two signals only (T287).** A `Bash` call of the exact form
+  `cd <dir> && cmd [&& cmd]...` whose `<dir>` is a task's worktree is filed under the task. Any other form is
+  not (see `### Auto-mode check (Stop hook)`). An Advocate call counts for the task that the Debate's
+  `resolve-question` call names with `task=<ID>`. Other work filed under another task is still not found.
+  Examples: a test run in the main checkout while the session's active-task file names another task; a
+  `code-review` or `security-review` Skill call made then; a Debate whose `resolve-question` call names no
+  task; a test run after a `cd` that uses `;`, or from a session that was already in the worktree.
+  Point the session at the task (minimal-track step 1) before you work on it. Four more limits:
+  - The filing proves where the command started, not what it ran. Inline code (`python3 -c`, `bash -c`,
+    `node -e`, `perl -e`, `ruby -e`) is refused, but a script file in the worktree that does its own `cd`,
+    or a symlink inside the worktree that points to main, is not seen. An agent that wants to mislead the
+    check can, so the trace is not a proof.
+  - A worktree of this repo on any branch whose name contains the task ID is credited to that task (C9):
+    `fix/t120-x` and `scratch/t120` both name T120.
+  - The merge gate's `invokes_test_runner` (older than T287, not changed here) counts a runner named in a
+    heredoc body, or on the far side of `||` (`true || python3 -m pytest`), as a test run. The filing rules
+    above keep such a call out of a worktree's trace, but a call filed by the session's active-task file
+    still passes the gate that way.
+  - A file planted in this session's transcript folder with this session's id is still read; only the
+    `.claude/settings.json` deny rules (T251) protect that folder.
 - **A hand-typed `☑ pass` in the `verify` row ends the check.** The auto-mode check skips a review file
   whose `verify` row says `☑ pass`, so an agent that types that row ends the run unchecked. The merge
   gate still blocks a hand-typed row at merge: it accepts only a row with an `auto-run by hook` run
