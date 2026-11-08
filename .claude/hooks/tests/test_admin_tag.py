@@ -407,6 +407,13 @@ def test_ac10_a_skip_falls_back_to_the_user_and_the_paste_limit_is_stated():
     assert "Known limit" in body and "without a code fence or a `>` quote" in body and "it counts" in body
 
 
+def test_ac8_admin_tag_states_the_main_push_rule():
+    body = admin_tag_section()
+    for needle in ("It may also push `main`", "own `[admin]` merge of the task branch into `main`",
+                   "`main` holds that branch's tip", "a `main` push with no such merge"):
+        assert needle in body, needle
+
+
 def test_ac8_ship_stays_the_users_under_admin():
     m = re.search(r"^### Admin tag[^\n]*\n(.*?)(?=^##+ |\Z)", _auto_mode_section(), re.M | re.S)
     assert m and re.search(r"`ship`[^.]*stays the user's", _norm(m.group(1))), "ship limit missing"

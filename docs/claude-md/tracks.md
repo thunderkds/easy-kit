@@ -486,9 +486,11 @@ command, from this session's transcript. It allows a `git merge` or `git push` o
    a commit message or a sub-agent's prompt does not count. A later request without the tag ends it. A
    tag typed in another session does not count.
 2. The command merges one task branch (`git merge <branch>`), or pushes a branch to the same branch name
-   (`git push origin <branch>`, `git push -u origin HEAD`). A force push (`-f`, `--force`,
-   `--force-with-lease`, `+<branch>`), a push to another branch such as `main`, `--no-verify`, `--all`,
-   `--tags`, a `git pull` and an octopus merge stay blocked.
+   (`git push origin <branch>`, `git push -u origin HEAD`). It may also push `main` (`git push origin
+   main`), but only after this session's own `[admin]` merge of the task branch into `main`, read from the
+   transcript, and only when `main` holds that branch's tip. A force push (`-f`, `--force`,
+   `--force-with-lease`, `+<branch>`), a push of any other ref or to another branch, a `main` push with no
+   such merge, `--no-verify`, `--all`, `--tags`, a `git pull` and an octopus merge stay blocked.
 3. The branch names the task of the request: the request names the task ID, or this session (or one of its
    sub-agents) worked on the task after the request.
 4. The branch tip commits the hook-written `auto-run by hook` verify result for the task, with its run
