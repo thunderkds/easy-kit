@@ -261,10 +261,22 @@ def test_ac4_the_gate_blocks_the_force_push_after_an_unbalanced_quote(gate, tmp_
     assert reason(shape(DOUBT["unbalanced-double-quote"], FORCE), fx.main, path) is not None
 
 
-def test_ac4_a_header_line_that_leaves_a_quote_open_is_not_read_as_a_heredoc():
-    """The body would start after a newline the scanner cannot place, so the text is kept."""
-    for command in ('cat <<EOF "a\nb"\nbody\nEOF\ntrue', 'cat <<EOF "a\n' + FORCE + '\nEOF'):
-        assert strip_heredoc_bodies(command) == command
+def test_ac4_a_header_line_that_leaves_a_quote_open_keeps_the_text():
+    """A quote that never closes puts the body start where the scanner cannot place it."""
+    command = 'cat <<EOF "a\n' + FORCE + "\nEOF"
+    assert strip_heredoc_bodies(command) == command
+
+
+def test_ac4_a_header_line_that_leaves_a_substitution_open_keeps_the_text():
+    """The newline is inside `$(`: the scanner cannot say where the body starts."""
+    command = "cat <<EOF $(echo\nx)\n" + FORCE + "\nEOF"
+    assert strip_heredoc_bodies(command) == command
+
+
+def test_ac4_a_quote_that_spans_the_header_line_closes_and_the_body_follows_it():
+    """Checked against bash and zsh: the body of `cat <<EOF "a<newline>b"` starts after `b"`."""
+    command = 'cat <<EOF "a\nb"\nbody\nEOF\ntrue'
+    assert "body" not in strip_heredoc_bodies(command)
 
 
 # ── Edge cases from the checklist ────────────────────────────────────────────────────────────────

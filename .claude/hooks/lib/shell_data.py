@@ -18,7 +18,10 @@ handled the same way, with the same two rules copied deliberately:
   words either side of it into a token that was never in the command — the exact
   way a data-stripping fix turns into a spurious invocation.
 * **Not a shell parser** (Simplicity First). Header recognition and terminator
-  matching only. A real tokenizer is the rabbit hole this file exists to avoid.
+  matching only. The header scan tracks quotes, `#` comments, backslashes and
+  `$(…)`-style nesting so it reads a `<<WORD` only where the shell does (T294);
+  it is not a tokenizer, and a doubt keeps the text. A real tokenizer is the
+  rabbit hole this file exists to avoid.
 
 **Fail-closed direction.** Everything here can only ever cause the caller to see
 *less* command text, so every uncertainty resolves toward stripping *less*:
@@ -27,6 +30,10 @@ handled the same way, with the same two rules copied deliberately:
   removed. Anything after the terminator is still command text and is still
   scanned — that is what keeps ``cat > f <<'E' … E`` followed by ``; git push``
   a blocked push rather than a way to smuggle one past the gate.
+* A `<<WORD` inside quotes, after a `#` comment, after a backslash, inside
+  `$(…)` or a backtick, or as part of a `<<<` here-string is **not a header**
+  (T294). Reading it as one hid the lines after it: ``echo "<<EOF"`` then
+  ``git push --force origin main`` then ``EOF`` lost its push to the strip.
 * An **unterminated** heredoc is left entirely alone. A shell would consume the
   rest of the input as body, so stripping it would arguably be accurate — but
   being wrong in that direction hides a real invocation, while being wrong in
@@ -127,29 +134,114 @@ def strip_heredoc_bodies(command):
 
     Returns `command` unchanged for non-strings and for anything with no `<<`
     in it. Never raises: callers run before every Bash call in the repo.
+
+    A `<<WORD` counts as a heredoc header only where the shell would read one
+    (T294): at the top level of the command, outside quotes, outside a `#`
+    comment, not escaped by a backslash, and not inside `$(…)`, a backtick,
+    `${…}`, `((…))` or `<(…)`. A scan from left to right tracks that state, and
+    everything it cannot place resolves toward **keeping the text** — an
+    unbalanced quote ends the scan, a header line that leaves a substitution or
+    quote open is not read as a heredoc, a `<<<` here-string never is one. Before
+    T294 the header was found by a plain regex search, so
+    ``echo "<<EOF"`` / ``git push --force origin main`` / ``EOF`` lost its middle
+    line to the strip, and the gate saw no push (gate hunt P1-1).
     """
     if not isinstance(command, str) or "<<" not in command:
         return command
 
     pieces = []
-    pos = 0
-    while True:
-        header = HEREDOC_HEADER_PATTERN.search(command, pos)
-        if not header:
-            break
-        # The body starts after the header's line, so the rest of that line
-        # (redirections, a second heredoc header, `&& cmd`) stays command text.
-        body_start = command.find("\n", header.end())
-        if body_start == -1:
-            break  # header with no body on this command — nothing to strip
-        terminator = _terminator_pattern(
-            header.group("tag"), allow_leading_tabs=bool(header.group("dash"))
-        ).search(command, body_start + 1)
-        if not terminator:
-            break  # unterminated: strip nothing, keep scanning the raw text
-        pieces.append(command[pos:body_start + 1])
-        pieces.append(" ")
-        pos = terminator.end()
+    pos = 0          # end of the text already copied into `pieces`
+    stack = []       # closers of the open contexts: `"`, `)`, `}` or a backtick
+    pending = None   # a real header whose body starts at the next top-level newline
+    i, size = 0, len(command)
+    while i < size:
+        char = command[i]
+        top = stack[-1] if stack else None
+        after = command[i + 1:i + 2]
+        if char == "\\":
+            i += 2  # the next character is literal, whatever it is
+            continue
+        if char == '"':
+            if top == '"':
+                stack.pop()
+            else:
+                stack.append('"')
+            i += 1
+            continue
+        if char == "`":
+            if top == "`":
+                stack.pop()
+            else:
+                stack.append("`")
+            i += 1
+            continue
+        if char == "$" and after in ("(", "{"):
+            stack.append(")" if after == "(" else "}")  # a quote inside starts afresh
+            i += 2
+            continue
+        if top == '"':
+            i += 1  # inside double quotes only the cases above are special
+            continue
+        if char == "'":
+            close = command.find("'", i + 1)
+            if close == -1:
+                break  # unbalanced quote: nothing after it can be placed
+            i = close + 1
+            continue
+        if char == "$" and after == "'":  # $'…' honours backslash escapes
+            j = i + 2
+            while j < size and command[j] != "'":
+                j += 2 if command[j] == "\\" else 1
+            if j >= size:
+                break
+            i = j + 1
+            continue
+        if char == "#" and (i == 0 or command[i - 1] in " \t\n;&|()<>"):
+            end = command.find("\n", i)
+            i = size if end == -1 else end  # a comment runs to the end of the line
+            continue
+        if char == "(":
+            if after == "(":  # `((` is arithmetic: a `<<` inside is a shift
+                stack.extend([")", ")"])
+                i += 2
+                continue
+            if stack or (i and command[i - 1] in "<>"):  # inside, or `<(` / `>(`
+                stack.append(")")
+            i += 1
+            continue
+        if char in ")}":
+            if top == char:
+                stack.pop()
+            i += 1
+            continue
+        if char == "<" and not stack and command.startswith("<<", i):
+            if command.startswith("<<<", i):
+                i += 3  # a here-string has no body
+                continue
+            header = HEREDOC_HEADER_PATTERN.match(command, i)
+            if header and pending is None:
+                pending = header
+                i = header.end()
+            else:
+                i += 2  # not a header, or a second one on the line (never read)
+            continue
+        if char == "\n" and pending is not None:
+            if stack:
+                pending = None  # the newline is inside a quote or substitution: cannot tell
+            else:
+                # The body starts after the header's line, so the rest of that line
+                # (redirections, `&& cmd`) stays command text.
+                terminator = _terminator_pattern(
+                    pending.group("tag"), allow_leading_tabs=bool(pending.group("dash"))
+                ).search(command, i + 1)
+                if not terminator:
+                    break  # unterminated: strip nothing, keep scanning the raw text
+                pieces.append(command[pos:i + 1])
+                pieces.append(" ")
+                pos = i = terminator.end()
+                pending = None
+                continue
+        i += 1
 
     if not pieces:
         return command

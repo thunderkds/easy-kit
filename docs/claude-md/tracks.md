@@ -607,14 +607,19 @@ Known limits:
   want merged.
 - For the gate, only an entry marked as typed by a human is a request: an entry with no origin, or a
   sub-agent's prompt, neither ends an `[auto]` request nor carries `[admin]`.
-- **The deny lists in item 2 are not complete (gate hunt, 2026-11-08, open).** A quoted `<<EOF` marker
-  (`echo "<<EOF"`, `echo '<<EOF'`, `# <<EOF`) hides the lines after it from the gate, in every mode. Repo
-  config the lists miss (`merge.<d>.driver`, `filter.<f>.smudge`, `filter.<f>.clean`, `diff.<d>.textconv`,
+- **The deny lists in item 2 are not complete (gate hunt, 2026-11-08, open).** Repo config the lists miss (`merge.<d>.driver`, `filter.<f>.smudge`, `filter.<f>.clean`, `diff.<d>.textconv`,
   `diff.external`, `gpg.program`, `core.editor`, `credential.helper` set to a path, `http.proxy`) and the
   hooks `post-index-change` and `pre-auto-gc` can run code during an allowed merge or push; a merge driver
   can also make `main` differ from the checked tree. Cheap hidden verbs (`v=push; git $v`,
   `timeout 20 git "push"`, `git send-pack`) and `git merge --message <branch>` are not caught. Treat
   `[admin]` as a guard against accidents, not against a hostile repo or a hostile agent.
+- The gate treats a heredoc body as data only after a `<<WORD` that the shell reads as a heredoc (T294):
+  not inside quotes, not after an unquoted `#`, not after a backslash, not inside `$(…)`, a backtick,
+  `${…}`, `((…))` or `<(…)`, and not a `<<<` here-string. Any other `<<WORD` keeps the lines after it as
+  command text, in every mode, so `echo "<<EOF"` followed by `git push --force origin main` is blocked.
+  When the scanner cannot tell, it keeps the text. A commit message written as `"$(cat <<'EOF' … EOF)"`
+  is therefore command text too: if its body names a `git push`, `git merge` or `git pull`, the gate
+  reads that as the verb.
 - The run record the gate trusts is a file in the trace anchors' directory
   (`.claude/hooks/lib/verify_record.py`), the same trust root as for `/verify`.
 - Repo config the gate does not read, such as a `core.hooksPath` hook run by `git commit`, and a model
