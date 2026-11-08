@@ -111,6 +111,13 @@ def test_ac2_a_command_that_is_not_a_flagged_runner_does_not_count(command):
     assert not gate.invokes_test_runner(command)
 
 
+@pytest.mark.parametrize("letter", sorted(set("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
+                                           - set("BuOsEI")))
+def test_ac2_no_other_single_letter_flag_is_on_the_list(letter):
+    assert not gate.invokes_test_runner(f"python3 -{letter} -m pytest")
+    assert not gate.invokes_test_runner(f"python3 -B -{letter} -m pytest")
+
+
 def test_ac2_a_trace_whose_only_command_is_a_mention_does_not_verify(tmp_path, monkeypatch):
     (tmp_path / "T901.jsonl").write_text(
         trace_record('echo "python3 -B -m pytest"') + "\n"
