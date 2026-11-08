@@ -98,9 +98,44 @@ datetime(2026, 11, 4, 0, 0, tzinfo=utc) stop=datetime(2026, 11, 4, 0, 0, tzinfo=
 AGREE
 ```
 
-**AFTER**: [same command, post-change] OR [verbatim excerpt of the new content]
+**AFTER**: captured 2026-11-08 in wt-t292 after the implementation commit.
 
-**DELTA**: [one sentence — what a user can now do that they could not before]
+```
+$ grep -rn "def parse_ts" .claude/hooks
+.claude/hooks/lib/auto_mode.py:67:def parse_ts(value):
+$ python3 -m pytest .claude/hooks/tests/test_parse_ts_single.py -q -p no:cacheprovider
+43 passed in 0.05s
+$ python3 -m pytest .claude/hooks/tests -q -k "parse_ts or session_work or stop_auto" -p no:cacheprovider
+132 passed, 2113 deselected in 10.64s
+$ python3 -m pytest .claude/hooks/tests tests -q -p no:cacheprovider
+4205 passed, 25 subtests passed in 256.11s (0:04:16)
+```
+
+**DELTA**: A fix to the timestamp parser now lands in every hook at once, because `stop_auto_mode_check.py` and `lib/session_work.py` bind the one `parse_ts` in `lib/auto_mode.py`.
 
 **WITNESS**: [who ran it and when — derived from `memory/event-trace/Txxx.jsonl`, never the
 implementing agent alone]
+
+---
+
+## Stage 4 self-review (implementer, T292)
+
+**Characterization (AC 1)**: the two old copies agreed on all 20 inputs of the table (aware `+00:00` and `+07:00`, naive, `Z`, lowercase `z`, fractional seconds, date only, leading space, empty, `None`, `0`, `1.5`, `[]`, `{}`, bytes, garbage, month 13, naive and aware `datetime` objects). No difference to list. The stop copy kept the aware-or-UTC step inside its `try`, the session_work copy outside it; that step cannot raise, so the outputs are the same. Naive input: both read it as UTC, so no "stricter" pick was needed.
+
+**Where the copy lives**: `.claude/hooks/lib/auto_mode.py`. Both callers already import it inside their fail-closed `try` (`stop_auto_mode_check.py` via `import auto_mode as am`, `session_work.py` via `import auto_mode`, `pre_bash_block_unsafe_merge.py` imports both). So there is no new import, no new failure mode, no cycle, no MANIFEST change (`.claude/hooks` is copied whole) and no change to the tests that copy lib files into temporary projects (AC 3). The existing broken-import tests (`tests/test_hooks_from_plugin.py` `test_d4_*`) passed in the full run.
+
+**Changes**: `lib/auto_mode.py` (+`parse_ts`), `lib/session_work.py` (`parse_ts = auto_mode.parse_ts`; unused `from datetime import datetime, timezone` removed), `stop_auto_mode_check.py` (`parse_ts = am.parse_ts`; its `datetime`, `timedelta`, `timezone` import is still used elsewhere), new `.claude/hooks/tests/test_parse_ts_single.py` (43 tests).
+
+**Red first**: the single-copy tests failed on the old code: `23 failed, 20 passed` (20 table cases through `auto_mode.parse_ts`, plus the three structure tests; the 20 session_work table cases passed because that copy already existed). Green after the change: `43 passed`.
+
+**Mutation controls (bytes changed, `-B`)**:
+- M1 `git diff --stat`: `.claude/hooks/lib/auto_mode.py | 2 ++`. The shared copy returns None when the input holds ".". Result: `4 failed, 39 passed` (fractional-second cases, through `auto_mode.parse_ts` and through `session_work.parse_ts`). Restored with `git checkout`; green `43 passed`.
+- M2 `git diff --stat`: `.claude/hooks/lib/session_work.py | 10 +++++++++-`. session_work gets its own `parse_ts` back. Result: `2 failed, 41 passed` (`test_ac2_session_work_uses_the_one_copy_not_its_own`, `test_ac2_ac4_exactly_one_parse_ts_def_under_the_hooks`). Restored; green.
+
+**Pin-test pre-flight (LR-0004)**: `grep -rn parse_ts` over `.claude/hooks/tests` and `tests` found one user, `test_t250_session_ownership.py:109` (`sw.parse_ts`), which still works because `session_work` keeps the name. No dedup, vital-slice, site or memory-budget test reads the changed text. Full suite `4205 passed, 25 subtests passed`.
+
+**Stale text (LR-0005)**: `grep -rn parse_ts` outside tests: only `tasks/` files (the guide's evidence lines `stop_auto_mode_check.py:150` and `session_work.py:33` describe the state before the task; the T250 and T284 reviews name the duplicate as a follow-up). No doc, site or map line states the old location. Nothing to fix.
+
+**Cut list (not done, out of scope)**: `lib/auto_mode.py` has a third inline copy of the same parse (`datetime.fromisoformat(str(entry.get("timestamp")).replace("Z", "+00:00"))` in the `[admin]` latest-request reader, about line 170) that could call `parse_ts`; `stop_auto_mode_check.py` line ~265 `_session_files` mirrors `session_work._session_files` by comment ("keep in step with"). Both left alone per "Touching other duplicated helpers".
+
+**Open risks**: none known. P3 only: the fully-qualified name `session_work.parse_ts` is now an alias, so `inspect.getsource` on it points at `auto_mode.py`.
