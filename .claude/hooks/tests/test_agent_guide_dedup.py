@@ -146,7 +146,8 @@ T069_BASELINE_REF = "8d6d56b"
 # REPOINTED AGAIN by T284 (AC 10) (`6258406b` -> `f46a854a`, T284's AC 10 commit; the same Tracks sentence gains "the Supervisor starts that run itself, waits, and on `skip`, `blocked` or `fail` merges nothing", from the user's request of 2026-11-08). Nothing collapsed. Repointed, NOT deleted.
 # REPOINTED AGAIN by T284 (AC 8, push of `main`) (`f46a854a` -> `250e04ee`, T284's docs commit; the same Tracks sentence gains "then push `main` after that merge", user decision 2026-11-08). Nothing collapsed. Repointed, NOT deleted.
 # REPOINTED AGAIN by T284 (Stage 4 fix round) (`250e04ee` -> `c566b2b6`, T284's Stage 4 docs commit; the Tracks paragraph's never-list gains "pulls", code-review finding 2026-11-08). Nothing collapsed. Repointed, NOT deleted.
-T070_BASELINE_REF = "c566b2b6"  # T284 Stage 4 (was 250e04ee)
+# REPOINTED AGAIN by T289 (`c566b2b6` -> `83ac3e7a`, T289's edit commit; the Tracks sentence's "on `skip`, `blocked` or `fail` merges nothing" becomes "on `blocked` or `fail` merges nothing", because a docs-only SKIP is now a pass: TASK_GUIDE_T289 AC 7, user request of 2026-11-08). Eight bytes shorter; nothing collapsed. Repointed, NOT deleted.
+T070_BASELINE_REF = "83ac3e7a"  # T289 (was c566b2b6)
 
 # T082's own edit commit (same commit as the repoint above). T082 adds a mandatory Base Rule bullet
 # to `general-agent-template.md` too (the same untrusted-content pointer) — a legitimate, required

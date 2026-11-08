@@ -512,7 +512,9 @@ T208_BLOCKED = {
     "pass-and-fail": _verdict_output("**Verdict: PASS**\n\n**Verdict:** FAIL"),
     "pass-and-fail-bold-sentence": _verdict_output("**Verdict: PASS. fine.**\n\n**Verdict: FAIL. not.**"),
     "blocked-word": _verdict_output("**Verdict: BLOCKED**"),
-    "skip-word": _verdict_output("**Verdict:** SKIP"),
+    # T289: a lone SKIP parses as `skip`, not `blocked`; `run()` turns it into `skip-pass` or `blocked`
+    # by git (`.claude/hooks/tests/test_auto_verify_skip_pass.py`, AC 3-5; the end-to-end `skip` case
+    # in BLOCKED_CASES above still ends `blocked` on a branch with no change).
     "passed-is-not-pass": _verdict_output("**Verdict: PASSED**"),
     "lower-case": _verdict_output("**Verdict: pass**"),
     "mid-sentence": _verdict_output("The report ends here: **Verdict: PASS** and nothing else"),

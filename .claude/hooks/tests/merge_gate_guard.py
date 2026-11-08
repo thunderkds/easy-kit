@@ -66,7 +66,13 @@ GATE_REL = ".claude/hooks/pre_bash_block_unsafe_merge.py"
 #          blocked; `[admin]` allows one merge or plain push of the request's own task branch, only
 #          with the hook's `auto-run by hook` verify result and its run record committed on that
 #          branch (`tasks/TASK_GUIDE_T284.md`). User request and scope answers, 2026-11-08.
-AUTHORISED_TASKS = ("T182", "T188", "T190", "T197", "T196", "T210", "T211", "T232", "T250", "T284")
+#   T289 — a run record that says `skip-pass` (a SKIP answer on a branch whose every changed path is
+#          docs-only) counts as a pass only when the gate itself repeats the path check between the
+#          record's `base` and `commit` (`record_confirms_pass`); the model's text is never read
+#          (`tasks/TASK_GUIDE_T289.md`, AC 1-6). User request, 2026-11-08; the Supervisor signs this
+#          line off at Stage 4.
+AUTHORISED_TASKS = ("T182", "T188", "T190", "T197", "T196", "T210", "T211", "T232", "T250", "T284",
+                    "T289")
 
 
 def _git(root, *args):
