@@ -3052,9 +3052,9 @@ On T278 a scratch copy that hid every section but `#skills` printed `2 under 44p
 A mutation that kept the file's size and second was not re-read: Python reused the cached bytecode and the test stayed green. Run mutation controls with `python3 -B` (or `PYTHONDONTWRITEBYTECODE=1`) and check the `git diff --stat` is non-empty. A second cause seen in T283 spikes: a mutation can stay green because another guard catches the same case, or because a regex still matches the renamed function; isolate the guard in its own test.
 **Files**: tests/test_claude_md_slim.py
 
-### 2026-11-08 — A docs-only task gets SKIP from auto verify, written as `blocked` (T283)
-The headless `/verify` answers SKIP when a diff has no runtime surface, and the hook records it as `☐ blocked`. The task then needs the user's own `/verify` before a merge; under `[admin]` the merge gate stays closed for it. A candidate follow-up is a real pass verdict for docs-only tasks (not started: it touches the verify gate).
-**Files**: .claude/hooks/stop_auto_verify.py
+### 2026-11-08 — A docs-only task gets SKIP from auto verify; T289 turns it into a git-checked pass (T283, T289)
+Before T289 the headless `/verify` answered SKIP for a diff with no runtime surface and the hook recorded `☐ blocked`, so T283 and T286 needed the user's typed `/verify T283` / `/verify T286` before the `[admin]` merge gate would open. T289 (merged 2026-11-08) lets the hook decide from `git diff` that every changed path is docs-only (`.md/.txt/.gitkeep` under `tasks/ memory/ docs/`, `test_*.py` and fixtures under the test dirs; `memory/MEMORY.md`, task guides, `docs/claude-md/`, `AGENTS.md`, `CLAUDE.md` and `PROJECT_*` stay out) and then write a `☑ pass ... skip (no runtime surface)` row with a `skip-pass` run record that the gate rechecks from git. Known limit: a model that can move local `refs/heads/main` can fake a docs-only diff (T182 record trust root).
+**Files**: .claude/hooks/stop_auto_verify.py, .claude/hooks/lib/verify_record.py
 
 ### 2026-11-08 — A gate fed by a shell-command reader needs an allowlist of words, not a blocklist (T287)
 Three rounds of "add the next `cd` form" (comments, subshells, `builtin cd`, `eval`, `{ }`, then zsh `chdir -`) each left a hole, and the consumer (`trace_shows_verification`) trusts the filed trace as merge evidence. Fail-closed reading means: accept a tiny exact form and let everything else fall to the old behaviour. Also check which shell the tool really runs (here zsh, which has `chdir`), and probe with the real shell, not only the hook.
@@ -3062,4 +3062,8 @@ Three rounds of "add the next `cd` form" (comments, subshells, `builtin cd`, `ev
 
 ### 2026-11-08 — A PreToolUse gate checks the world before the command, so a chained write defeats it (T284)
 The `[admin]` gate verified `main` and the verified tip before the command ran. `git add -A && git commit --amend && git push origin main` changed `main` after the check and published it; a push from a second clone, a planted `.git/hooks/pre-push`, and config keys such as `core.sshCommand` ran or published unchecked content the same way. Fixes: an `[admin]` command holds exactly one git write, the push and the merge must share one `--git-common-dir`, executable hooks and command-running config keys make the gate refuse. A static check of command text is still not an airtight boundary (user-global config, scripts that call git, a hook added after the check).
+**Files**: .claude/hooks/pre_bash_block_unsafe_merge.py
+
+### 2026-11-08 — The merge gate does not count `python3 -B -m pytest` as a test run (T289, T290)
+`invokes_test_runner` (`pre_bash_block_unsafe_merge.py`) returns False for `python3 -B -m pytest …`, so two tasks whose agents ran every test with `-B` (as the kit advises for mutation controls) had `evidence row present but no verified tool call` and the merge was blocked. Run the task's test file once without `-B` (`cd <worktree> && python3 -m pytest <file> -q`) so the trace records a counted run, or tell the spawn prompt to do the final run without `-B`. A candidate follow-up: let the gate's pattern accept interpreter flags.
 **Files**: .claude/hooks/pre_bash_block_unsafe_merge.py
