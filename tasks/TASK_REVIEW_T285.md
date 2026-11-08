@@ -49,10 +49,12 @@ Mode: auto
 1. Key the step counter per `agent_id` and leave the limit at 90 — RULE: `tasks/TASK_GUIDE_T285.md` § Requirement (user approved the T283 ranked list: "let do as your recommend")
 2. Shortened one sentence in `skills/resolve-question/SKILL.md` to 8177 bytes so it stays under the 8192-byte skill cap when merged with T284's edit of the same file (8190 bytes) — RULE: `AGENTS.md` § Non-Claude CLIs (Codex, Cursor) (8 KB skill-body cap)
 3. No cap on a task's total calls across runs, no migration of old counter files — RULE: `tasks/TASK_GUIDE_T285.md` § Approach (Cut list)
-4. Ran the Medium-risk security check as the Supervisor's own read of the 40-line hook diff plus the built-in `security-review` skill, not a three-Advocate Debate: no decision was open — SAFER OPTION: nothing in the diff changes a gate's meaning, only its counter key ⚠ decided for you — please review
+4. Ran the Medium-risk security check as the Supervisor's own read of the 40-line hook diff plus the built-in `security-review` skill, with no Debate because no choice was open — RULE: `docs/claude-md/tracks.md` § Debate size by Risk (a Debate settles an open choice; this diff changes a counter key only)
 Checks: tests `python3 -B -m pytest .claude/hooks/tests/test_step_limit_agent_scope.py .claude/hooks/tests/test_step_limit_session_scope.py .claude/hooks/tests/test_step_limit_self_clearing.py -q` — 28 passed; full suite `python3 -m pytest .claude/hooks/tests/ tests/ -q` — 1 failed, 3448 passed (the one failure is `tests/test_spike_report_t283.py`, expected until T283 merges); reviews code-review — 0 P0, 0 P1, 1 P3 (docstring wrap, fixed); security-review — no HIGH or MEDIUM; real run `python3 -B -m pytest .claude/hooks/tests/test_step_limit_agent_scope.py -q` — printed `7 passed` (auto-checked, not /verify)
 Memory: memory/decisions.md — T283–T288 Karpathy spikes (four adopted, three dropped) and T284 `[admin]` entries; memory/learnings.md — parallel agents share one step budget, stale `.pyc` in mutation controls, docs-only task SKIP written as blocked
-Not done: merge (yours); auto verify: running (T182)
+Not done: merge (yours); auto verify: ☑ pass (session 6d942b95-24b9-41d7-a3c3-e1cbcae672ee, commit bff7af6f3cf44fd98326991106907b49f964d722, log .claude/verify-runs/T285-bff7af6f3cf4.log)
+Paused: auto-mode check failed — Risk Medium: decision 4 (`SAFER OPTION`) is a choice — it is flagged ⚠ — so it must be `DEBATED` with exactly 2 Advocates named [report 5ee9e207b701]
+Paused: done not moved — Gate 6: the `UI: Visual regression` row is blank; Gate 6: the `UI: Design-system compliance` row is blank; Gate 6: the `UI: Responsiveness` row is blank
 
 ## Evidence
 
@@ -66,13 +68,13 @@ M2 `cleaned = _SESSION_SANITIZE_PATTERN.sub("", agent_id)[:_AGENT_MAX_LEN]` -> `
 M3 `if not isinstance(agent_id, str):` -> `if agent_id is None:` (non-string accepted): `2 failed, 5 passed` (ac5-fallback, ac5-still-limited red).
 M4 insert `if "agent_id" in event and not agent: sys.exit(0)` (bad agent_id means no limit): `2 failed, 5 passed` (ac5-fallback, ac5-still-limited red).
 Restored: `diff` against the saved good copy empty, `7 passed in 17.84s`. |
-| verify | ☐ pass / ☐ fail / ☐ N/A | [what was observed — must literally state "pass" or "fail" here too, e.g. "skill run, feature confirmed working — pass": the merge gate scans this Notes column for the word "pass", not just the Result column] |
+| verify | ☑ pass | auto-run by hook, session 6d942b95-24b9-41d7-a3c3-e1cbcae672ee, commit bff7af6f3cf44fd98326991106907b49f964d722, log .claude/verify-runs/T285-bff7af6f3cf4.log — pass; done not moved: Gate 6: the `UI: Visual regression` row is blank; Gate 6: the `UI: Design-system compliance` row is blank; Gate 6: the `UI: Responsiveness` row is blank |
 | Review scope bounded to the change's blast radius (affected set, not whole repo) | ☐ pass / ☐ fail | Not filled by the implementer: the Supervisor runs Stage 4. Changed: `.claude/hooks/pre_agent_step_limit.py`, new `.claude/hooks/tests/test_step_limit_agent_scope.py`, one sentence in `skills/resolve-question/SKILL.md`. Pin-test grep for `step_count`/`pre_agent_step_limit` in `.claude/hooks/tests/` and `tests/` found only main-thread-key pins (no `agent_id` in their events); all pass. |
 | Full smoke suite still green (no regression) | ☑ pass | `1 failed, 3448 passed` with the one failure unrelated and present on base (see Verification command row). |
 | **Companion score (easy-verifier)** | ☐ pass / ☐ fail / ☐ N/A | [`overall` and `change_risk` as the tool returned them, the scope, the ref, and the absolute path of the verifier report after a literal `report:` label — e.g. "overall 86 (>= 80), change_risk pass, scope changes, ref `main...HEAD`, report: `/home/me/.easy-verifier-reports/kit/score_changes_20261028T0530Z.html`". The gate reads the path that follows `report:` and nothing else, so with no label, or a path that is absent, the row is unscored — write ☑ N/A instead. ☑ N/A with a reason when neither companion tool was run: the merge gate blocks on ☑ fail only, never on an absent or N/A row] |
-| **UI: Visual regression (diff or verdict pasted)** | ☐ pass / ☐ fail / ☐ N/A | [screenshot path or LLM verdict — required for UI tasks, Hard-Stop Gate 6] |
-| **UI: Design-system compliance (tokens/colors/typography verified)** | ☐ pass / ☐ fail / ☐ N/A | [method used + output] |
-| **UI: Responsiveness at target viewports** | ☐ pass / ☐ fail / ☐ N/A | [viewports tested, any overflow findings] |
+| **UI: Visual regression (diff or verdict pasted)** | ☑ N/A | N/A — a hook change; no UI component (the guide has no UI/Design section) |
+| **UI: Design-system compliance (tokens/colors/typography verified)** | ☑ N/A | N/A — a hook change; no UI component (the guide has no UI/Design section) |
+| **UI: Responsiveness at target viewports** | ☑ N/A | N/A — a hook change; no UI component (the guide has no UI/Design section) |
 
 2026-11-08 note: Not covered by tests: the real `agent_id` to `resolve_task_id` path; a harness that omits `agent_id` falls back to today's behaviour (limit still in force).
 
