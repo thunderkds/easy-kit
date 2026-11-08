@@ -17,7 +17,9 @@ RAW = (ROOT / "AGENTS.md").read_bytes()
 # Measured at commit 46c013fc (the last commit that changed AGENTS.md; branch base 4c076b6c, main 8f00098c).
 # T284 (the `[admin]` tag, unmerged) also edits AGENTS.md; after T284 merges, the Supervisor re-measures this
 # cap at merge time (merge order: T284, then T286).
-AGENTS_MD_BYTE_CAP = 21732
+# T289: lowered 21732 -> 21724 (ratchet down): the Tracks sentence lost "`skip`, " (8 bytes) because a
+# docs-only SKIP is now a pass. Measured at commit 83ac3e7a.
+AGENTS_MD_BYTE_CAP = 21724
 
 
 def _norm(t: str) -> str:
@@ -40,7 +42,7 @@ def _byte_cap_problem(data: bytes):
     )
 
 
-def test_agents_md_is_at_most_21732_bytes():
+def test_agents_md_is_at_most_21724_bytes():
     assert _byte_cap_problem(RAW) is None, _byte_cap_problem(RAW)
 
 
