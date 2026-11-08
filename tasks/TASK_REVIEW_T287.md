@@ -65,16 +65,16 @@ session (`resolve-question` `task=T242`, its documented `Args:`).
 
 | Check | Result | Notes / output snippet |
 |-------|--------|------------------------|
-| **New test(s) cover Acceptance Criteria (file paths pasted)** | ☐ pass / ☐ fail | [test file path(s) — required before Done] |
-| Verification command run | ☐ pass / ☐ fail | [paste actual output] |
-| Negative cases hold | ☐ pass / ☐ fail | [paste the red run against the prior content, or the mutation diff (`git diff --stat`, non-empty) before each verdict] |
+| **New test(s) cover Acceptance Criteria (file paths pasted)** | ☑ pass | `.claude/hooks/tests/test_stop_attribution_t287.py` (19 tests, written first; 6 red against the unchanged hooks at `a4e0221b`, see BEFORE). AC 1b/2: `test_ac2_t120_*` (2); AC 1c/2: `test_ac2_t242_advocates_of_its_own_debate_are_found`; AC 3: `test_ac3_*` (5); AC 4: `test_ac4_*` (7); AC 5: `test_ac5_*` (3); AC 6: `test_ac6_tracks_md_states_the_new_attribution`. After `86a91d88`: `19 passed in 3.01s` |
+| Verification command run | ☑ pass | `python3 -m pytest .claude/hooks/tests/test_stop_attribution_t287.py -q` → `19 passed in 3.01s` (head `86a91d88`) |
+| Negative cases hold | ☑ pass | AC 3/AC 4 negatives pass before and after the change (9 of the BEFORE run's passes). Six byte-changing mutation controls, each `git diff --stat` non-empty, red then restored (`git checkout`) green: M1 `stop_auto_mode_check.py \| 2 +-` (credit every trace file to every task) → `test_ac4_another_sessions_debate_is_not_credited` `1 failed` / `1 passed`; M2 `task_context.py \| 8 ++++----` (slot 2b after the pointer) → `test_ac2_t120_tests_run_in_its_worktree_are_found` `1 failed` / `1 passed`; M3 `task_context.py \| 2 +-` (any worktree counts) → `test_ac4_a_test_run_in_another_tasks_worktree_is_not_credited_to_the_pointer` `1 failed` / `1 passed`; M4 `stop_auto_mode_check.py \| 2 +-` (a Debate counts for every task) → `test_ac4_advocates_of_a_debate_for_another_task_are_not_credited` `1 failed` / `1 passed`; M5 `task_context.py \| 2 +-` (`per_call=True` by default, reaches the safety hook and step limit) → `test_ac5_the_safety_hook_and_the_step_limit_still_resolve_by_the_pointer` `1 failed` / `1 passed`; M6 `stop_auto_mode_check.py \| 2 +-` (sum, not max) → `test_ac3_an_advocate_filed_right_is_not_counted_twice` `1 failed` / `1 passed` |
 | verify | ☐ pass / ☐ fail / ☐ N/A | [what was observed — must literally state "pass" or "fail" here too, e.g. "skill run, feature confirmed working — pass": the merge gate scans this Notes column for the word "pass", not just the Result column] |
 | Review scope bounded to the change's blast radius (affected set, not whole repo) | ☐ pass / ☐ fail | [what was reviewed vs. skipped, and why] |
-| Full smoke suite still green (no regression) | ☐ pass / ☐ fail | |
+| Full smoke suite still green (no regression) | ☑ pass | `python3 -m pytest .claude/hooks/tests/ tests/ -q` at head `86a91d88` (2026-11-08T00:35:07Z–00:38:31Z): `1 failed, 3562 passed, 25 subtests passed in 203.28s`. The 1 failure is `tests/test_spike_report_t283.py::test_the_real_report_is_valid` — `tasks/SPIKE_REPORT_T283.md is not written yet`: that file is only on `feat/t283-karpathy-spikes`, the test came in with `faa5180f`, and T287 touches neither (no regression from this change) |
 | **Companion score (easy-verifier)** | ☐ pass / ☐ fail / ☐ N/A | [`overall` and `change_risk` as the tool returned them, the scope, the ref, and the absolute path of the verifier report after a literal `report:` label — e.g. "overall 86 (>= 80), change_risk pass, scope changes, ref `main...HEAD`, report: `/home/me/.easy-verifier-reports/kit/score_changes_20261028T0530Z.html`". The gate reads the path that follows `report:` and nothing else, so with no label, or a path that is absent, the row is unscored — write ☑ N/A instead. ☑ N/A with a reason when neither companion tool was run: the merge gate blocks on ☑ fail only, never on an absent or N/A row] |
-| **UI: Visual regression (diff or verdict pasted)** | ☐ pass / ☐ fail / ☐ N/A | [screenshot path or LLM verdict — required for UI tasks, Hard-Stop Gate 6] |
-| **UI: Design-system compliance (tokens/colors/typography verified)** | ☐ pass / ☐ fail / ☐ N/A | [method used + output] |
-| **UI: Responsiveness at target viewports** | ☐ pass / ☐ fail / ☐ N/A | [viewports tested, any overflow findings] |
+| **UI: Visual regression (diff or verdict pasted)** | ☑ N/A | pure hook code and doctrine text: no UI component, no `site/` change |
+| **UI: Design-system compliance (tokens/colors/typography verified)** | ☑ N/A | pure hook code and doctrine text: no UI component, no `site/` change |
+| **UI: Responsiveness at target viewports** | ☑ N/A | pure hook code and doctrine text: no UI component, no `site/` change |
 
 ---
 
@@ -113,9 +113,19 @@ The T120 fixtures pause on check (7) (`no test run in memory/event-trace/T120.js
 fixture pauses on check (3) (`the trace has 0`). The 9 that pass before the change are the
 negatives (AC 3, AC 4) and the stops that stay (AC 5): they must hold before and after.
 
-**AFTER**: [same command, post-change] OR [verbatim excerpt of the new content]
+**AFTER** (same command, head `86a91d88`):
 
-**DELTA**: [one sentence — what a user can now do that they could not before]
+```
+$ python3 -m pytest .claude/hooks/tests/test_stop_attribution_t287.py -q
+...................                                                      [100%]
+19 passed in 3.01s
+```
 
-**WITNESS**: [who ran it and when — derived from `memory/event-trace/Txxx.jsonl`, never the
-implementing agent alone]
+Against the real repo (`CLAUDE_PROJECT_DIR` = the main checkout), slot 2b files
+`cd /home/hungnguyenhuu/workspace/pets/wt-t287 && python3 -m pytest -q` under `T287` (branch
+`feat/t287-stop-attribution`), and `ls -la` / `cd <main checkout> && git status` under nothing new
+(0.1 ms and 0.2 ms: no tokenizer, no `git`).
+
+**DELTA**: An auto-mode task whose tests ran in its own worktree, or whose Debate's `resolve-question` call named it, is no longer paused for that work when the session's active-task file named another task; a task with no such work is still paused with the same message.
+
+**WITNESS**: [to be filled by the reviewer from `memory/event-trace/T287.jsonl` and the auto verify run — the implementing agent (common-infrastructure, 2026-11-08) ran BEFORE at 00:25:00Z and AFTER at head `86a91d88`, and is not a witness alone]
