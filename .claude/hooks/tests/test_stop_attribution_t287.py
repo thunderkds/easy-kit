@@ -340,6 +340,31 @@ ROUND2_SHAPES = {
     "debate-perl-e": CD_W + "perl -e 'exit 0'",
     "debate-ruby-e": CD_W + "ruby -e 'exit 0'",
     "debate-quote-and-slash-without-c": CD_W + "python3 -m pytest -q \"os.chdir('/home')\"",
+    # fix round 3: zsh's `chdir` is `cd`, so the COMMAND WORDS are an allowlist too
+    "N01-chdir-dash": CD_W + "chdir - && python3 -m pytest -q",
+    "N19-quoted-chdir": CD_W + "'chdir' - && python3 -m pytest -q",
+    "N20-chdir-minus-one": CD_W + "chdir -1 && python3 -m pytest -q",
+    "N20-chdir-plus-one": CD_W + "chdir +1 && python3 -m pytest -q",
+    "N20-numeric-argument": CD_W + "ls -1 && python3 -m pytest -q",
+    "N20-dash-argument": CD_W + "cat - && python3 -m pytest -q",
+    "word-env": CD_W + "env python3 -m pytest -q",
+    "word-make": CD_W + "make test",
+    "word-xargs": CD_W + "echo x | xargs python3 -m pytest -q",
+    "word-find": CD_W + "find . -name x -exec python3 -m pytest -q {} +",
+    "word-bash": CD_W + "bash ./run-tests.sh",
+    "word-sudo": CD_W + "sudo python3 -m pytest -q",
+    "word-path-to-runner": CD_W + "./venv/bin/pytest -q",
+    "word-after-a-pipe": CD_W + "python3 -m pytest -q | zsh",
+    "word-after-timeout": CD_W + "timeout 5 env python3 -m pytest -q",
+    "timeout-with-a-flag": CD_W + "timeout -k 5 30 python3 -m pytest -q",
+    "python-m-other-module": CD_W + "python3 -m json.tool",
+    "python-absolute-script": CD_W + "python3 /dev/null",
+    "git-dash-C": CD_W + "git -C . status && python3 -m pytest -q",
+    "git-work-tree": CD_W + "git --work-tree=. status && python3 -m pytest -q",
+    "N14-argfile": CD_W + "python3 -m pytest -q @args.txt",
+    "N26-non-ascii-space": CD_W + "python3 -m pytest -q a\u00a0b",
+    "N26-zero-width": CD_W + "python3 -m pytest -q a\u200bb",
+    "N26-control-char": CD_W + "python3 -m pytest -q a\x0bb",
     "variable-argument": CD_W + 'python3 -m pytest -q "$ARGS"',
     "backtick-argument": CD_W + "python3 -m pytest -q `echo ok`",
     "review-P2-popd": CD_W + "popd && python3 -m pytest -q",
@@ -423,6 +448,26 @@ def test_round2_a_dotdot_through_a_symlink_is_not_filed(tmp_path):
     assert trace(project, "T120") == [] and len(trace(project, "T250")) == 1
 
 
+@pytest.mark.parametrize("command", [
+    "cd @WT@ && python3 -m pytest -q m",                       # N02: `m` is a symlink to main
+    "cd @WT@ && python3 -m pytest -q --rootdir=m m",           # N03
+    "cd @WT@ && python3 -m pytest -q m/tests",                 # N04
+    "cd @WT@ && cat m/setup.sh",                               # a read through the link
+    "cd @WT@ && env PYTEST_ADDOPTS=--rootdir=m pytest",        # N24 (`env` is no allowed word either)
+    "cd @WT@ && python3 m/setup.sh",                           # a script path through the link
+], ids=["N02", "N03", "N04", "cat-through-link", "N24", "script-through-link"])
+def test_round3_a_relative_path_through_a_symlink_to_main_is_not_filed(tmp_path, command):
+    """The link lives inside the worktree and points to the main checkout: the argument is
+    relative, so only its real path shows it leaves the worktree."""
+    project = t120_project(tmp_path)
+    (tmp_path / "wt-t120" / "m").symlink_to(project)
+    s = Session(project, tmp_path)
+    s.point_at("T250")
+    s.call("Bash", {"command": _expand(command, tmp_path, project)})
+    assert trace(project, "T120") == [] and len(trace(project, "T250")) == 1
+    assert not gate_sees_test_run(project, tmp_path, "T120")
+
+
 # The honest shapes stay filed under the task (they were green before the allowlist, and stay so).
 def _symlinked(tmp_path, project):
     (tmp_path / "link-to-wt").symlink_to(tmp_path / "wt-t120")
@@ -449,6 +494,12 @@ HONEST_SHAPES = [
     ("C13-relative-dotdot", "cd ../wt-t120 && python3 -m pytest -q", "project", "T120", None),
     ("C13-relative-dot-slash", "cd ./wt-t120 && python3 -m pytest -q", "tmp", "T120", None),
     ("bare-relative-name", "cd wt-t120 && python3 -m pytest -q", "tmp", "T120", None),
+    ("python-flag-then-module", "cd @WT@ && python3 -B -m pytest -q", None, "T120", None),
+    ("unittest", "cd @WT@ && python3 -m unittest -q", None, "T120", None),
+    ("python-relative-script", "cd @WT@ && python3 tests/run.py -q", None, "T120", None),
+    ("pytest-and-py.test", "cd @WT@ && pytest -q && py.test -q", None, "T120", None),
+    ("timeout-then-runner", "cd @WT@ && timeout 60 python3 -m pytest -q", None, "T120", None),
+    ("git-and-reading-commands", "cd @WT@ && git log -1 && ls && cat setup.sh | head -1 | wc -l && grep v1 setup.sh && echo ok && true && python3 -m pytest -q", None, "T120", None),
     ("dot-argument", "cd @WT@ && python3 -m pytest .", None, "T120", None),
     ("absolute-path-inside-the-worktree", "cd @WT@ && python3 -m pytest -q @WT@/setup.sh", None, "T120", None),
     ("C1-path-with-spaces", 'cd "@TMP@/wt t122" && python3 -m pytest -q', None, "T122", _spaced),
