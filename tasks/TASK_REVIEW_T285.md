@@ -43,6 +43,17 @@ Not done: merge (yours); <auto verify: running (T182) | auto verify: <result> | 
 
 -->
 
+## Auto decisions
+
+Mode: auto
+1. Key the step counter per `agent_id` and leave the limit at 90 — RULE: `tasks/TASK_GUIDE_T285.md` § Requirement (user approved the T283 ranked list: "let do as your recommend")
+2. Shortened one sentence in `skills/resolve-question/SKILL.md` to 8177 bytes so it stays under the 8192-byte skill cap when merged with T284's edit of the same file (8190 bytes) — RULE: `AGENTS.md` § Non-Claude CLIs (Codex, Cursor) (8 KB skill-body cap)
+3. No cap on a task's total calls across runs, no migration of old counter files — RULE: `tasks/TASK_GUIDE_T285.md` § Approach (Cut list)
+4. Ran the Medium-risk security check as the Supervisor's own read of the 40-line hook diff plus the built-in `security-review` skill, not a three-Advocate Debate: no decision was open — SAFER OPTION: nothing in the diff changes a gate's meaning, only its counter key ⚠ decided for you — please review
+Checks: tests `python3 -B -m pytest .claude/hooks/tests/test_step_limit_agent_scope.py .claude/hooks/tests/test_step_limit_session_scope.py .claude/hooks/tests/test_step_limit_self_clearing.py -q` — 28 passed; full suite `python3 -m pytest .claude/hooks/tests/ tests/ -q` — 1 failed, 3448 passed (the one failure is `tests/test_spike_report_t283.py`, expected until T283 merges); reviews code-review — 0 P0, 0 P1, 1 P3 (docstring wrap, fixed); security-review — no HIGH or MEDIUM; real run `python3 -B -m pytest .claude/hooks/tests/test_step_limit_agent_scope.py -q` — printed `7 passed` (auto-checked, not /verify)
+Memory: memory/decisions.md — T283–T288 Karpathy spikes (four adopted, three dropped) and T284 `[admin]` entries; memory/learnings.md — parallel agents share one step budget, stale `.pyc` in mutation controls, docs-only task SKIP written as blocked
+Not done: merge (yours); auto verify: running (T182)
+
 ## Evidence
 
 | Check | Result | Notes / output snippet |
