@@ -442,10 +442,11 @@ def test_p2_a_forged_sub_agent_transcript_is_not_read(tmp_path):
 
 
 def test_p2_a_symlink_to_another_sessions_transcript_is_not_read(tmp_path):
-    """E8: `subagents/agent-x.jsonl` links to another session's transcript of a T242 Debate."""
+    """E8: `subagents/agent-x.jsonl` links to a file outside this session's folder. It is skipped
+    even when its entries carry this session's id (the symlink guard, not the `sessionId` one)."""
     project = t242_project(tmp_path)
     other = Session(project, tmp_path, OTHER_SID)
-    _transcript_debate(other, sessionId=OTHER_SID)
+    _transcript_debate(other, sessionId=SID)
     s = t242_reviewed(project, tmp_path)
     link = s.transcript.parent / SID / "subagents" / "agent-x.jsonl"
     link.parent.mkdir(parents=True)
