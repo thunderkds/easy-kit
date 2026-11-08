@@ -334,6 +334,8 @@ filed them. Only a call that ran counts: its result in the transcript is not an 
 larger count. It reads only this session's transcript files: it skips symlinks and entries with another
 session's id.
 
+Since T293 a Debate counts only from the start of its task's change window. The Skill call and each Advocate must be dated at or after the first change of the task's files in this session: the earliest call that `lib/session_work.py` counts as work on the task, the same test T250 uses. A Debate before that start does not count; a missing or unparsable timestamp does not count. There is no upper bound. A task with no recorded change window keeps the whole-session rule: no dated change was found, the transcript could not be read, or the reader failed (one stderr line). The Advocate trace records obey the same window: a record in `<ID>.jsonl` or `_untagged.jsonl` counts only when it is dated at or after the start, and a missing or unparsable date does not count. A Debate that runs before any file of the task changes is therefore not counted: make the first change to a task file (the guide, the review file or the failing test in its worktree) before the Debate. When the Stop check pauses a task and the transcript held Debate calls before the start, the reason ends with `(a Debate was found before the task's first change in this session; rerun it after the first change)`.
+
 It never loops: on the second fire (`stop_hook_active`) it allows the stop and appends
 `Paused: auto-mode check failed — <reasons>` to the report, ending in a stamp, `[report <stamp>]`. The
 stamp is a hash of the report block, not counting its `Paused:`, `Closed:`, `Not done:` and `- verify:` lines. A task whose last
@@ -656,7 +658,8 @@ Read these before you rely on `[auto]`. T180 left them open, on purpose. T186 re
 - **The Stop check finds misfiled work by two signals only (T287).** A `Bash` call of the exact form
   `cd <dir> && cmd [&& cmd]...` whose `<dir>` is a task's worktree is filed under the task. Any other form is
   not (see `### Auto-mode check (Stop hook)`). An Advocate call counts for the task that the Debate's
-  `resolve-question` call names with `task=<ID>`. Other work filed under another task is still not found.
+  `resolve-question` call names with `task=<ID>`, if it is dated at or after the task's first change in this
+  session (T293). Other work filed under another task is still not found.
   Examples: a test run in the main checkout while the session's active-task file names another task; a
   `code-review` or `security-review` Skill call made then; a Debate whose `resolve-question` call names no
   task; a test run after a `cd` that uses `;`, or from a session that was already in the worktree.
@@ -677,6 +680,23 @@ Read these before you rely on `[auto]`. T180 left them open, on purpose. T186 re
     still passes the gate that way.
   - A file planted in this session's transcript folder with this session's id is still read; only the
     `.claude/settings.json` deny rules (T251) protect that folder.
+  - A Debate counts only from the task's first change in this session (T293). A Debate that ran before the
+    task's first change does not count, even in the same session: the task's window starts at the first
+    call that `session_work.py` sees as work on it. A change it cannot see (a path held in a shell variable,
+    code passed to an interpreter, work in the main checkout of a minimal-track task) leaves the task
+    with no window or a later one: with no window, every Debate of the session counts, as before T293.
+    There is no upper bound, so a Debate after the task's last change still counts. Times of the work and of the
+    Debate come from the transcript, and the trace's Advocate records follow the same rule with the trace
+    hook's own timestamp. No time comes from git or file times, so clock skew with them does not matter.
+  - A session that resumes a task and writes the report must rerun the Debate (T293). The Advocate records
+    of an earlier session now fall before the window of the task's first change in the new session, and
+    that session's transcript is not read, so they do not count.
+  - The window reader does not skip symlinks and does not filter `sessionId` (T293). It uses
+    `session_work._session_files`, shared with the merge gate (T250), which reads every
+    `subagents/agent-*.jsonl` under this session's folder. A transcript file planted or linked there, with
+    an early work call for the task, moves the window start earlier, so an older Debate counts again. It is
+    the same trust root as the planted-file limit above (T251): only the `.claude/settings.json` deny rules
+    protect the folder.
 - **A `skip-pass` rests on the local `main` ref (T289).** The path check judges the branch against
   `refs/heads/main`, a mutable local ref: `git update-ref refs/heads/main <a commit with the branch's runtime
   change>` makes that change part of "main" and the diff look docs-only. This is part of the T182 record

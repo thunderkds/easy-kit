@@ -591,17 +591,19 @@ def t242_project(tmp_path):
 
 
 def t242_run(project, tmp_path, debate_task="T242", advocates=2, args=None):
-    """The T242 shape: the Debate runs while the pointer still names T241; then the Supervisor
-    points the session at T242 and runs the tests and both reviews."""
+    """The T242 shape: the Supervisor writes T242's review file, then the Debate runs while the
+    pointer still names T241; then the Supervisor points the session at T242 and runs the tests and
+    both reviews. T293: the review file comes first because a Debate counts only from the task's
+    first change in the session (`test_debate_window.py`)."""
     s = Session(project, tmp_path)
     s.request("plan and run T242 [auto]", seconds_ago=900)
     s.point_at("T241")
+    s.call("Write", {"file_path": str(project / "tasks" / "TASK_REVIEW_T242.md"), "content": "x"})
     s.call("Skill", {"skill": "resolve-question",
                      "args": args or f"task={debate_task} risk=Medium"})
     for n in range(1, advocates + 1):
         s.call("Agent", advocate_input(n))
     s.point_at("T242")
-    s.call("Write", {"file_path": str(project / "tasks" / "TASK_REVIEW_T242.md"), "content": "x"})
     s.call("Bash", {"command": "python3 -m pytest -q"})
     s.call("Skill", {"skill": "code-review", "args": "task=T242"})
     s.call("Skill", {"skill": "security-review"})
@@ -737,9 +739,10 @@ def test_ac3_an_advocate_filed_right_is_not_counted_twice(tmp_path):
     s = Session(project, tmp_path)
     s.request("run T242 [auto]")
     s.point_at("T242")
+    # T293: the review file is written first; a Debate before the task's first change does not count
+    s.call("Write", {"file_path": str(project / "tasks" / "TASK_REVIEW_T242.md"), "content": "x"})
     s.call("Skill", {"skill": "resolve-question", "args": "task=T242 risk=Medium"})
     s.call("Agent", advocate_input(1))
-    s.call("Write", {"file_path": str(project / "tasks" / "TASK_REVIEW_T242.md"), "content": "x"})
     s.call("Bash", {"command": "python3 -m pytest -q"})
     s.call("Skill", {"skill": "code-review", "args": "task=T242"})
     s.call("Skill", {"skill": "security-review"})
