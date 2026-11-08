@@ -63,6 +63,7 @@ REAL = {
     "comment-on-previous-line": "# note <<X\ncat <<EOF\n{push}\nEOF",
     "hash-inside-word": "echo a#b <<EOF\n{push}\nEOF",
     "subshell": "(cat <<EOF\n{push}\nEOF\n)",
+    "after-ansi-c-escaped-quote": "echo $'\\'' > f <<EOF\n{push}\nEOF",
 }
 
 
@@ -349,7 +350,7 @@ def test_premise_the_shell_runs_the_push_after_a_hidden_marker(tmp_path, shell, 
 
 @pytest.mark.skipif(not SHELLS, reason="no bash or zsh")
 @pytest.mark.parametrize("shell", SHELLS)
-@pytest.mark.parametrize("name", ["plain", "single-quoted-tag", "dash-tab-end"])
+@pytest.mark.parametrize("name", ["plain", "single-quoted-tag", "dash-tab-end", "after-ansi-c-escaped-quote"])
 def test_premise_the_shell_does_not_run_the_body_of_a_real_heredoc(tmp_path, shell, name):
     command = shape(REAL[name])
     assert not pushed_by(shell, command, tmp_path), f"{shell} ran the body of {name}"

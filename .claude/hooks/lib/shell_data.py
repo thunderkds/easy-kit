@@ -215,10 +215,7 @@ def strip_heredoc_bodies(command):
             i += 1
             continue
         if char == "<" and not stack and command.startswith("<<", i):
-            if command.startswith("<<<", i):
-                i += 3  # a here-string has no body
-                continue
-            header = HEREDOC_HEADER_PATTERN.match(command, i)
+            header = HEREDOC_HEADER_PATTERN.match(command, i)  # `<<<` never matches
             if header and pending is None:
                 pending = header
                 i = header.end()
