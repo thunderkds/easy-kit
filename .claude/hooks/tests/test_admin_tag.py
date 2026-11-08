@@ -404,3 +404,59 @@ def test_ac9_agents_md_tracks_paragraph_names_admin():
 def test_ac8_ship_stays_the_users_under_admin():
     m = re.search(r"^### Admin tag[^\n]*\n(.*?)(?=^##+ |\Z)", _auto_mode_section(), re.M | re.S)
     assert m and re.search(r"`ship`[^.]*stays the user's", _norm(m.group(1))), "ship limit missing"
+
+
+# ── AC 10 — with `[admin]` the Supervisor starts the auto verify run and merges only on a pass ──
+AC10_NEEDLES = ("the Supervisor starts the run itself",
+                "`python3 .claude/hooks/stop_auto_verify.py --start <ID>`",
+                "waits for the verdict", "never runs `/verify` in its own session",
+                "Only on a pass does it go on to merge and push",
+                "On `skip`, `blocked` or `fail` it merges nothing")
+
+
+def admin_tag_section(text=None):
+    text = TRACKS.read_text(encoding="utf-8") if text is None else text
+    m = re.search(r"^### Admin tag[^\n]*\n(.*?)(?=^##+ |\Z)", text, re.M | re.S)
+    return _norm(m.group(1)) if m else ""
+
+
+def test_ac10_admin_tag_section_states_the_verify_run_and_the_pass_only_merge():
+    body = admin_tag_section()
+    for needle in AC10_NEEDLES:
+        assert needle in body, needle
+
+
+def test_ac10_agents_md_states_the_supervisor_starts_the_run():
+    lines = (ROOT / "AGENTS.md").read_text(encoding="utf-8").splitlines()
+    para = lines[lines.index("## Tracks") + 1]
+    assert "starts that run itself" in para and "`skip`, `blocked` or `fail` merges nothing" in para
+
+
+@pytest.mark.parametrize("cut", AC10_NEEDLES)
+def test_ac10_mutation_control_dropping_a_statement_is_caught(cut):
+    """Byte-changing mutation: the real section with one statement removed must fail the check."""
+    original = TRACKS.read_text(encoding="utf-8")
+    raw = re.search(r"^### Admin tag[^\n]*\n(.*?)(?=^##+ |\Z)", original, re.M | re.S).group(0)
+    words = r"\s+".join(re.escape(w) for w in cut.split())
+    mutated_section, hits = re.subn(words, "", raw)
+    assert hits == 1 and mutated_section.encode() != raw.encode()
+    mutated = original.replace(raw, mutated_section)
+    assert mutated != original
+    body = admin_tag_section(mutated)
+    assert body and not all(n in body for n in AC10_NEEDLES)
+
+
+@pytest.mark.parametrize("verdict", ["blocked", "fail"])
+def test_ac10_a_hook_row_that_is_not_a_pass_blocks_the_admin_merge(gate, tmp_path, verdict):
+    """A SKIP verdict is written as `☐ blocked`; it and a fail must never unlock the merge."""
+    fx = gate(kanban(ready=("T900",)))
+    fx.task_file("TASK_GUIDE_T900.md", GUIDE_VACATED.format(tid="T900"), commit=True)
+    verified = git(fx.wt, "rev-parse", "HEAD")
+    verify_record.write_record(merge_gate.ROOT, "T900", verified, verdict, "s-1", "log.txt")
+    cells = verify_record.row_cells(verified, verdict, "s-1", "log.txt")
+    fx.task_file("TASK_REVIEW_T900.md", REVIEW.format(tid="T900", result=cells[0],
+                                                      notes=cells[1]), commit=True)
+    path = session(tmp_path, fx, "do it [admin]")
+    for command, cwd in ((MERGE + " feat/t900-x", fx.main), (PUSH + " origin feat/t900-x", fx.wt)):
+        text = reason(command, cwd, path)
+        assert text is not None and "auto verify" in text, (command, text)
