@@ -292,6 +292,159 @@ def test_p0_a_test_run_outside_the_worktree_is_not_filed_under_the_task(tmp_path
     assert not gate_sees_test_run(project, tmp_path, "T120")
 
 
+# Fix round 2 (independent security re-check, P0): slot 2b is an ALLOWLIST. A call is filed under a
+# worktree's task only when the whole command is `cd <dir> && cmd [&& cmd]...` with `<dir>` an
+# existing directory that is the worktree. Every shape below ran pytest in the MAIN checkout, or did
+# not run it, and used to be filed under T120 (the merge gate then accepted T120). The ids are the
+# reviewer's: B = bypass shapes, C = environment cases.
+CD_W = "cd @WT@ && "
+ROUND2_SHAPES = {
+    "B03-cd-dash": CD_W + "cd - && python3 -m pytest -q",
+    "B04-nonexistent-dir-semicolon": "cd @WT@/nope; python3 -m pytest -q",
+    "B05-nonexistent-dir-or": "cd @WT@/nope || python3 -m pytest -q",
+    "B28-target-is-a-file": "cd @WT@/setup.sh; python3 -m pytest -q",
+    "B06-builtin-cd": CD_W + "builtin cd @MAIN@ && python3 -m pytest -q",
+    "B07-command-cd": CD_W + "command cd @MAIN@ && python3 -m pytest -q",
+    "B08-cdpath": CD_W + "CDPATH=@TMP@ cd repo && python3 -m pytest -q",
+    "B09-eval": CD_W + 'eval "cd @MAIN@" && python3 -m pytest -q',
+    "B10-brace-group": CD_W + "{ cd @MAIN@; } && python3 -m pytest -q",
+    "B11-if": CD_W + "if cd @MAIN@; then :; fi; python3 -m pytest -q",
+    "B12-while": CD_W + "while cd @MAIN@; do break; done; python3 -m pytest -q",
+    "B13-bang": CD_W + "! cd @MAIN@; python3 -m pytest -q",
+    "B24-time": CD_W + "time cd @MAIN@; python3 -m pytest -q",
+    "B27-function": CD_W + "function f { cd @MAIN@; }; f; python3 -m pytest -q",
+    "B14-quoted-heredoc-marker": CD_W + 'echo "<<EOF"\ncd @MAIN@\nEOF\npython3 -m pytest -q',
+    "B19-pytest-inside-a-heredoc-body": CD_W + "cat <<EOF\npython3 -m pytest -q\nEOF",
+    "B18-pytest-on-the-far-side-of-or": CD_W + "true || python3 -m pytest -q",
+    "B16-runner-pointed-at-main": CD_W + "python3 -m pytest -q --rootdir @MAIN@ @MAIN@",
+    "relative-dotdot-argument": CD_W + "python3 -m pytest -q ../repo/tests",
+    "second-cd-in-a-nested-shell": CD_W + "bash -c 'cd @MAIN@ && python3 -m pytest -q'",
+    "cd-with-an-expansion": "cd @WT@* && python3 -m pytest -q",
+    "cd-with-a-variable": "cd $WT && python3 -m pytest -q",
+    "cd-home": "cd ~ && python3 -m pytest -q",
+    "cd-with-flag": "cd -P @WT@ && python3 -m pytest -q",
+    "only-a-cd": "cd @WT@",
+    "newline-after-cd": "cd @WT@\npython3 -m pytest -q",
+    "semicolon-after-cd": "cd @WT@; python3 -m pytest -q",
+    "env-assignment-before-the-runner": CD_W + "FOO=1 python3 -m pytest -q",
+    "subshell-as-first-word": "(cd @WT@ && python3 -m pytest -q)",
+}
+
+
+def _expand(command, tmp_path, project):
+    return (command.replace("@WT@", str(tmp_path / "wt-t120")).replace("@MAIN@", str(project))
+            .replace("@TMP@", str(tmp_path)))
+
+
+@pytest.mark.parametrize("name", list(ROUND2_SHAPES))
+def test_round2_a_command_outside_the_allowlist_is_not_filed_under_the_task(tmp_path, name):
+    project = t120_project(tmp_path)
+    s = Session(project, tmp_path)
+    s.point_at("T250")
+    s.call("Bash", {"command": _expand(ROUND2_SHAPES[name], tmp_path, project)})
+    assert trace(project, "T120") == [], name
+    assert len(trace(project, "T250")) == 1, name
+    assert not gate_sees_test_run(project, tmp_path, "T120"), name
+
+
+@pytest.mark.parametrize("command", ["cd @WT@ && python3 -m pytest -q", "cd @WT@; python3 -m pytest -q"],
+                         ids=["and-and", "semicolon"])
+def test_round2_c3_a_pruned_worktree_directory_is_not_filed_under_the_task(tmp_path, command):
+    """C3: `git worktree list` still lists a worktree whose directory is gone (prunable). `cd` into
+    it fails, so the runner would run in the event's directory."""
+    project = t120_project(tmp_path)
+    shutil.rmtree(tmp_path / "wt-t120")
+    s = Session(project, tmp_path)
+    s.point_at("T250")
+    s.call("Bash", {"command": _expand(command, tmp_path, project)})
+    assert trace(project, "T120") == []
+    assert len(trace(project, "T250")) == 1
+    assert not gate_sees_test_run(project, tmp_path, "T120")
+
+
+@pytest.mark.parametrize("command", ["python3 -m pytest -q; cd @WT@", "python3 -m pytest -q && cd @WT@"],
+                         ids=["semicolon", "and-and"])
+def test_round2_a_trailing_cd_is_not_filed_when_the_event_cwd_is_the_directory_after_it(
+        tmp_path, command):
+    """If the PostToolUse `cwd` is the directory AFTER the command ran, this call ran pytest in the
+    main checkout and then moved: only a leading `cd <dir> &&` may name the directory."""
+    project = t120_project(tmp_path)
+    s = Session(project, tmp_path)
+    s.point_at("T250")
+    s.call("Bash", {"command": _expand(command, tmp_path, project)}, cwd=tmp_path / "wt-t120")
+    assert trace(project, "T120") == []
+    assert len(trace(project, "T250")) == 1
+    assert not gate_sees_test_run(project, tmp_path, "T120")
+
+
+def test_round2_a_command_with_no_cd_is_not_filed_by_the_event_cwd(tmp_path):
+    project = t120_project(tmp_path)
+    s = Session(project, tmp_path)
+    s.point_at("T250")
+    s.call("Bash", {"command": "python3 -m pytest -q"}, cwd=tmp_path / "wt-t120")
+    assert trace(project, "T120") == [] and len(trace(project, "T250")) == 1
+
+
+def test_round2_cdpath_in_the_environment_blocks_a_bare_relative_cd(tmp_path):
+    project = t120_project(tmp_path)
+    s = Session(project, tmp_path)
+    s.point_at("T250")
+    env = dict(hook_env(project, tmp_path), CDPATH=str(tmp_path / "decoy"))
+    s.call("Bash", {"command": "cd wt-t120 && python3 -m pytest -q"}, cwd=tmp_path, env=env)
+    assert trace(project, "T120") == [] and len(trace(project, "T250")) == 1
+    s.call("Bash", {"command": "cd wt-t120 && python3 -m pytest -q"}, cwd=tmp_path)  # no CDPATH
+    assert len(trace(project, "T120")) == 1
+
+
+# The honest shapes stay filed under the task (they were green before the allowlist, and stay so).
+def _symlinked(tmp_path, project):
+    (tmp_path / "link-to-wt").symlink_to(tmp_path / "wt-t120")
+
+
+def _spaced(tmp_path, project):
+    _git(project, "worktree", "add", "-q", "-b", "fix/t122-spaced", str(tmp_path / "wt t122"))
+
+
+def _nested(tmp_path, project):
+    _git(project, "worktree", "add", "-q", "-b", "fix/t123-nested", str(project / "nested-wt"))
+
+
+def _subdir(tmp_path, project):
+    (tmp_path / "wt-t120" / "sub").mkdir()
+
+
+HONEST_SHAPES = [
+    ("H1-absolute", "cd @WT@ && python3 -m pytest -q", None, "T120", None),
+    ("H2-several-and-and", "cd @WT@ && git status --short && python3 -m pytest -q -x", None, "T120", None),
+    ("H3-pipe-after-the-runner", "cd @WT@ && python3 -m pytest -q 2>&1 | tail -3", None, "T120", None),
+    ("H4-redirect", "cd @WT@ && python3 -m pytest -q > /dev/null 2>&1", None, "T120", None),
+    ("H5-line-continuation", "cd @WT@ && python3 -m pytest \\\n  -q", None, "T120", None),
+    ("C13-relative-dotdot", "cd ../wt-t120 && python3 -m pytest -q", "project", "T120", None),
+    ("C13-relative-dot-slash", "cd ./wt-t120 && python3 -m pytest -q", "tmp", "T120", None),
+    ("bare-relative-name", "cd wt-t120 && python3 -m pytest -q", "tmp", "T120", None),
+    ("dot-argument", "cd @WT@ && python3 -m pytest .", None, "T120", None),
+    ("absolute-path-inside-the-worktree", "cd @WT@ && python3 -m pytest -q @WT@/setup.sh", None, "T120", None),
+    ("C1-path-with-spaces", 'cd "@TMP@/wt t122" && python3 -m pytest -q', None, "T122", _spaced),
+    ("C4-symlink-to-the-worktree", "cd @TMP@/link-to-wt && python3 -m pytest -q", None, "T120", _symlinked),
+    ("C11-worktree-nested-in-main", "cd @MAIN@/nested-wt && python3 -m pytest -q", None, "T123", _nested),
+    ("subdirectory-target", "cd @WT@/sub && python3 -m pytest -q", None, "T120", _subdir),
+]
+
+
+@pytest.mark.parametrize("name", [h[0] for h in HONEST_SHAPES])
+def test_round2_the_honest_shapes_are_still_filed_under_the_task(tmp_path, name):
+    _, command, cwd_kind, task, setup = next(h for h in HONEST_SHAPES if h[0] == name)
+    project = t120_project(tmp_path)
+    if setup:
+        setup(tmp_path, project)
+    s = Session(project, tmp_path)
+    s.point_at("T250")
+    cwd = {"project": project, "tmp": tmp_path, None: project}[cwd_kind]
+    s.call("Bash", {"command": _expand(command, tmp_path, project)}, cwd=cwd)
+    assert len(trace(project, task)) == 1, name
+    assert trace(project, "T250") == [], name
+
+
 def test_p2_slot_2b_failing_falls_through_to_the_pointer(tmp_path):
     """E5: with no `git` on PATH slot 2b fails; the call is still filed by the session pointer."""
     project = t120_project(tmp_path)
