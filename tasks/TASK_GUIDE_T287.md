@@ -57,6 +57,9 @@ From the T283 spike report, section `### 6. No check-ins` and `## Recommendation
 | # | Criterion (testable) | Traces to requirement |
 |---|----------------------|-----------------------|
 | 1 | Reproduce first: for each of T219, T226, T242 and T120, write a test fixture (a trace file plus a report) that shows the Stop check pausing although the work ran. The root cause of each is written in `tasks/TASK_REVIEW_T287.md` with a file:line. If the 6 stops have more than one cause, each cause gets its own AC row before any fix | Requirement |
+| 1a | Cause A (T219, T226): the Stop check ran before Stage 4 had run (the Supervisor ended its turn right after a background spawn). The work had not run: a real stop. Rows dropped, nothing changed (`tasks/TASK_REVIEW_T287.md` § Root causes) | AC 1, "do not force a pass" |
+| 1b | Cause B (T120 ×2): a main-session `Bash` call that runs in a task's worktree is filed under that task, not under the session pointer's task, so check (7) and the close-out's Gate 5 find the test run in `memory/event-trace/<ID>.jsonl` | Requirement |
+| 1c | Cause C (T242 ×2): an Advocate `Agent` call this session made after a `resolve-question` Skill call with `task=<ID>` counts for that task, wherever the pointer filed it | Requirement |
 | 2 | After the fix, a task whose tests, `code-review`, `security-review` and Advocate calls are in its own trace (or in a trace the session ownership rules attribute to it) is not paused for missing evidence | Requirement |
 | 3 | Negative: a task with no such calls in any attributed trace is still paused, with the same message as today | every stop stays |
 | 4 | Negative: a call made by another session for another task is not credited to this task (T250 session ownership still holds) | T250 rule |
