@@ -88,7 +88,6 @@
 
 ### In Progress
 
-- [ ] **T293** — A Debate counts for its task only inside that task's work window | common-infrastructure | C2 | Risk: Medium | P2 | Guide: `tasks/TASK_GUIDE_T293.md` | T287 review `P3 session window`; user 2026-11-08: "push and start all as parallel" | Started 2026-11-08: branch `feat/t293-debate-window`, worktree `../wt-t293`
 
 
 
@@ -98,6 +97,7 @@
 
 
 ### Ready for Review
+- [ ] **T293** — A Debate counts for its task only inside that task's work window | common-infrastructure | C2 | Risk: Medium | P2 | Guide: `tasks/TASK_GUIDE_T293.md` | T287 review `P3 session window`; user 2026-11-08: "push and start all as parallel" | Started 2026-11-08: branch `feat/t293-debate-window`, worktree `../wt-t293`
 - [ ] **T291** — Merge gate counts a test run with interpreter flags (`python3 -B -m pytest`) | common-infrastructure | C1 | Risk: High | P1 | Guide: `tasks/TASK_GUIDE_T291.md` | User 2026-11-08: "push and start all as parallel"; T289/T290 merges were blocked by it | Started 2026-11-08: branch `feat/t291-gate-runner-flags`, worktree `../wt-t291`
 - [ ] **T292** — One `parse_ts` for the hooks | common-infrastructure | C1 | Risk: Low | P2 | Guide: `tasks/TASK_GUIDE_T292.md` | User 2026-11-08: "push and start all as parallel" | Started 2026-11-08: branch `feat/t292-one-parse-ts`, worktree `../wt-t292`
 
