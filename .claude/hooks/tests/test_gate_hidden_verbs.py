@@ -83,6 +83,7 @@ BENIGN = [
     "which git", "command -v git", "git --version", "git commit -m x && git log -1",
     "for f in a b; do git add $f; done", "if [ -f x ]; then git status; fi", "xargs -n1 git status",
     "ln -s /usr/bin/git ~/bin/git", "docker run -v $PWD:/x img", "curl -s https://x/{a,b}",
+    "find . -name x | xargs -I{} cp {} /tmp", "timeout 20 pytest -q", "timeout -k 5 20 python3 -m pytest",
 ]
 
 

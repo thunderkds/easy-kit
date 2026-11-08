@@ -21,6 +21,11 @@ non-kit project. Inside one, input it cannot read is a block: it cannot tell the
 
 T284: while the session's latest user request carries `[auto]` or `[admin]`, a merge, push or pull
 is blocked, unless `[admin]` allows that one command (see `auto_mode_blocker`).
+
+T296: in that mode a git word or git verb that is not a plain literal word is a block too
+(`hidden_git_verb`); a `git merge` option's value is never read as the branch (`_merge_sources`);
+a branch push goes only to the repository's own remote; `invokes_test_runner` reads backslashes
+as the shell does.
 """
 import json
 import os
@@ -1327,7 +1332,8 @@ def session_owned_in_progress(rows, command, cwd, transcript_path):
 #     pass row never counts.
 #   * round 3: one git write per command; push and merge in the same repository; no executable
 #     merge/push hook and no repo config that can run a command; `-c` refused anywhere before the
-#     verb; a hidden git verb (quotes, `${IFS}`, `$(…)`, backticks, `eval`) is a block in auto mode.
+#     verb; a hidden git verb (quotes, `${IFS}`, `$(…)`, backticks, `eval`; since T296 also a `$`, brace
+#     or glob in the git word or verb or its wrapper chain, and `send-pack`) is a block in auto mode.
 # The gate's other checks then still run. No transcript, or one that cannot be read, means no
 # request is known: the rule does not apply and the gate is exactly as before T284.
 AUTO_MODE_PATTERNS = [p for p in BLOCKED_PATTERNS if not p.endswith(r"rebase\b")]
@@ -1361,7 +1367,6 @@ DATA_HEADS = frozenset({"echo", "printf", "grep", "egrep", "fgrep", "rg", "ag"})
 PUBLISH_VERBS = frozenset({"push", "merge", "pull", "send-pack", "http-push"})
 NONLITERAL = re.compile(r"[$`{}*?\[]")
 PLAIN_VERB = re.compile(r"[A-Za-z][A-Za-z0-9-]*")
-DURATION = re.compile(r"\d+(?:\.\d+)?[smhd]?")
 TEST_BRACKETS = frozenset({"[", "[["})
 HIDDEN_DEPTH_LIMIT = 6
 FUTURE_SLACK_S = 60  # B11: a commit dated later than now + this is not trusted as "added after"
@@ -1545,9 +1550,8 @@ def _hidden_in_command(words, depth):
     for k, word in enumerate(words):
         if wrapped and word in ("-S", "--split-string") and k + 1 < len(words):
             return hidden_git_verb(words[k + 1], depth + 1)  # `env -S 'git "push" x'`
-        if k and (word.startswith("-") or DURATION.fullmatch(word)
-                  or ENV_ASSIGNMENT_PREFIX.match(word + " ")):
-            continue
+        if k and (word.startswith("-") or ENV_ASSIGNMENT_PREFIX.match(word + " ")):
+            continue  # a wrapper's option, or a `VAR=value` it sets: not a command word
         base = _basename(word)
         if base == "git" and (wrapped or k == 0 or word == "git"):
             return _hidden_git_words(words[k:])
