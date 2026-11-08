@@ -67,8 +67,56 @@ Not done: merge (yours); <auto verify: running (T182) | auto verify: <result> | 
 > **before any implementation commit exists**; if it does not (docs, templates, skill-instruction
 > text), BEFORE is the **verbatim prior content** of what changed — a quoted excerpt, not a command.
 
-**BEFORE**: [pasted timestamped command output showing the thing absent/failing, captured before the
-first implementation commit] OR [verbatim excerpt of the prior content, for non-executable changes]
+**BEFORE** (captured 2026-11-08 at HEAD `bc5ccc34`, before any implementation commit; the unchanged
+gate, the repo's own `gate` fixture with a passed auto verify of T900, driven through `main()` with no
+tag, a typed `[auto]` request and a typed `[admin]` request; then the same command line run for real
+in `bash -c` and `zsh -c` inside a throwaway clone with a throwaway bare remote under pytest's tmp dir,
+`HOME` isolated). Script: the Supervisor-scratchpad file `capture_t296.py` (not in the repo). A
+`real push landed` of True means `refs/heads/feat/t900-x` exists on the bare remote afterwards. The
+last line is the `send-pack` form, run with the bare remote at `../origin.git`:
+
+```
+2026-11-08T15:25:31Z  'v=push; git $v origin feat/t900-x'
+    gate: none=ALLOWED [auto]=ALLOWED [admin]=ALLOWED   real push landed: bash=True zsh=True
+2026-11-08T15:25:31Z  'g=git; $g push origin feat/t900-x'
+    gate: none=ALLOWED [auto]=ALLOWED [admin]=ALLOWED   real push landed: bash=True zsh=True
+2026-11-08T15:25:31Z  'v=pu; git ${v}sh origin feat/t900-x'
+    gate: none=ALLOWED [auto]=ALLOWED [admin]=ALLOWED   real push landed: bash=True zsh=True
+2026-11-08T15:25:31Z  'git {p..p}ush origin feat/t900-x'
+    gate: none=ALLOWED [auto]=ALLOWED [admin]=ALLOWED   real push landed: bash=True zsh=True
+2026-11-08T15:25:31Z  "git $'push' origin feat/t900-x"
+    gate: none=ALLOWED [auto]=ALLOWED [admin]=ALLOWED   real push landed: bash=True zsh=True
+2026-11-08T15:25:31Z  "$'git' push origin feat/t900-x"
+    gate: none=ALLOWED [auto]=ALLOWED [admin]=ALLOWED   real push landed: bash=True zsh=True
+2026-11-08T15:25:31Z  'env -i git "push" origin feat/t900-x'
+    gate: none=ALLOWED [auto]=ALLOWED [admin]=ALLOWED   real push landed: bash=True zsh=True
+2026-11-08T15:25:31Z  'timeout 20 git "push" origin feat/t900-x'
+    gate: none=ALLOWED [auto]=ALLOWED [admin]=ALLOWED   real push landed: bash=True zsh=True
+2026-11-08T15:25:31Z  'nice git "push" origin feat/t900-x'
+    gate: none=ALLOWED [auto]=ALLOWED [admin]=ALLOWED   real push landed: bash=True zsh=True
+2026-11-08T15:25:31Z  'bash -c \'git "push" origin feat/t900-x\''
+    gate: none=ALLOWED [auto]=ALLOWED [admin]=ALLOWED   real push landed: bash=True zsh=True
+2026-11-08T15:25:31Z  'git send-pack ../origin.git feat/t900-x'
+    gate: none=ALLOWED [auto]=ALLOWED [admin]=ALLOWED   real push landed: bash=True zsh=True
+```
+All 11 forms: ALLOWED by the gate in all three modes, and the push landed in both shells.
+
+Tests written first, run against the unchanged hooks (2026-11-08T15:30:30Z, HEAD `bc5ccc34` plus the
+two new test files, no implementation commit):
+
+```
+$ python3 -m pytest .claude/hooks/tests/test_gate_hidden_verbs.py .claude/hooks/tests/test_slot2b_brace_glob.py -q -p no:cacheprovider
+114 failed, 268 passed
+  failed by test (count): hidden form flagged (unit) 34, gate blocks each hidden form in [auto]/[admin] 22,
+  block names its reason 3, merge options with a value 8, real repo + merge.defaultToUpstream 1,
+  plain branch still the target (--message) 1, slot 2b brace/glob not filed 12, backslash mention
+  not a test run (trace gate) 5, backslash mention (slot 2b + gate) 3, continuation joins a word 1,
+  continuation cannot glue a path 1, real runs still count (py\<nl>test) 1, branch move not filed 5,
+  clone with another origin refused 1, --output/--ext-diff reason 3, rev-parse doc 1, known-limits
+  text 2, hidden-verb limit text 1, corpus merge sources 6, corpus test-run answers 4
+  passed (the guards that must hold before and after): ordinary [auto]/[admin] commands, [admin]
+  push/merge forms, no-tag behaviour, quoted globs and plain runs still filed, the old corpus answers
+```
 
 **AFTER**: [same command, post-change] OR [verbatim excerpt of the new content]
 
