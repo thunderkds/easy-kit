@@ -424,7 +424,8 @@ def test_ac10_a_skip_falls_back_to_the_user_and_the_paste_limit_is_stated():
 def test_ac8_admin_tag_states_the_main_push_rule():
     body = admin_tag_section()
     for needle in ("It may also push `main`", "own `[admin]` merge of the task branch into `main`",
-                   "must carry only that merge", "a `main` push with no such merge", "the rule names `main` only",
+                   "allows only two shapes", "`git ls-remote origin refs/heads/main`",
+                   "`git merge-tree --write-tree`", "it ran with `main` checked out", "the rule names `main` only",
                    "on the remote `origin` only"):
         assert needle in body, needle
 
@@ -961,3 +962,15 @@ def test_r2_any_dash_c_before_merge_or_push_is_refused(gate, tmp_path, command, 
     path = session(tmp_path, fx, "do it [admin]")
     text = reason(command, fx.main if where == "main" else fx.wt, path)
     assert text is not None and "-c" in text, text
+
+
+def test_r2_b7_the_push_url_check_holds_on_its_own(gate, tmp_path, monkeypatch):
+    """Defence in depth: with the config-key check stubbed open, a push URL that differs from the
+    fetch URL is still refused (the URL equality check alone)."""
+    fx = gate(kanban(ready=("T900",)))
+    auto_verified(fx)
+    path = session(tmp_path, fx, "do it [admin]")
+    monkeypatch.setattr(merge_gate, "_push_config_is_plain", lambda *a, **k: True)
+    assert reason(PUSH + " origin feat/t900-x", fx.wt, path) is None  # control
+    git(fx.main, "config", "remote.origin.pushurl", "https://attacker.example/x.git")
+    assert reason(PUSH + " origin feat/t900-x", fx.wt, path) is not None

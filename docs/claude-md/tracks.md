@@ -489,17 +489,26 @@ command, from this session's transcript. It allows a `git merge` or `git push` o
 2. The command merges one task branch (`git merge <branch>`), or pushes a branch to the same branch name
    (`git push origin <branch>`, `git push -u origin HEAD`), on the remote `origin` only (for a bare
    `git push`, `branch.<b>.pushRemote`, `remote.pushDefault` and `branch.<b>.remote` are unset or
-   `origin`). It may also push `main` (`git push origin main`; the rule names `main` only), but only after
-   this session's own `[admin]` merge of the task branch into `main`: the merge call is in the transcript
-   after the request and its result is not an error. The pushed `main` must carry only that merge: either
-   a fast-forward to commits of the task branch, or exactly one merge commit whose parents are
-   `origin/main` and the branch tip. A force push (`-f`, `--force`, `--force-with-lease`, `+<branch>`), a
-   push of any other ref, another remote, a `main` push with no such merge or with any other commit on it,
-   `--no-verify`, `--all`, `--tags`, a `git pull` and an octopus merge stay blocked.
+   `origin`). The push URL of `origin` must equal its fetch URL, and no `url.<x>.insteadOf`,
+   `url.<x>.pushInsteadOf`, `remote.<name>.pushurl`, `remote.<name>.receivepack`, `push.followTags` or
+   `core.hooksPath` may be set. Any `git -c <key>=<value>` (or `--config-env`) before the verb is refused.
+   It may also push `main` (`git push origin main`; the rule names `main` only), but only after this
+   session's own `[admin]` merge of the task branch: the merge call is in the transcript after the
+   request, its result is not an error, and it ran with `main` checked out. The gate then reads the
+   remote's real `main` with `git ls-remote origin refs/heads/main` (never the local `origin/main` ref)
+   and allows only two shapes: `main` is the branch tip and contains the remote's `main` (a
+   fast-forward), or `main` is one merge commit whose parents are the remote's `main` and the branch tip
+   and whose tree equals `git merge-tree --write-tree` of those two. If `ls-remote` fails, times out or
+   returns nothing, or `merge-tree` fails or finds a conflict, the push is blocked: a merge that resolves
+   a conflict is yours to push. A force push (`-f`, `--force`, `--force-with-lease`, `+<branch>`), a push
+   of any other ref, another remote, `--no-verify`, `--all`, `--tags`, a `git pull` and an octopus merge
+   stay blocked.
 3. The branch names the task of the request: the request text names the task ID, and no negation such as
    "not" or "don't" stands before it in its clause; or the task is the one task whose
-   `tasks/TASK_GUIDE_<ID>.md` was first added to the repo after the request. Work that only names an
-   existing task (an edit, a `touch`, an `Agent` spawn) does not make it the request's task.
+   `tasks/TASK_GUIDE_<ID>.md` was first added to the repo after the request. The date is git's own
+   record of the commit, and a commit dated more than 60 seconds in the future is ignored. A negation
+   after the ID in the same clause ("T900 is not ready", "T900 must wait") also leaves it out. Work that
+   only names an existing task (an edit, a `touch`, an `Agent` spawn) does not make it the request's task.
 4. The branch tip commits the hook-written `auto-run by hook` verify result for the task, with its run
    record for that commit, and the result says pass. A hand-typed pass row does not count.
 
@@ -528,6 +537,14 @@ Known limits:
   want merged.
 - For the gate, only an entry marked as typed by a human is a request: an entry with no origin, or a
   sub-agent's prompt, neither ends an `[auto]` request nor carries `[admin]`.
+- The run record the gate trusts is a file in the trace anchors' directory
+  (`.claude/hooks/lib/verify_record.py`), the same trust root as for `/verify`.
+- Repo config the gate does not read, such as a `core.hooksPath` hook run by `git commit`, and a model
+  that runs git through `python3 -c` or a script, are out of the gate's reach (the T211 limit).
+- `git merge -s ours` publishes nothing unverified, but it drops the task's changes from `main`.
+- A `tool_result` with no `is_error` field counts as a result that is not an error.
+- The remote `origin` itself is trusted: the gate checks that its push URL equals its fetch URL, not
+  that the URL is the one you meant.
 
 ### The Supervisor never
 
