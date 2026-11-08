@@ -83,7 +83,7 @@ $ python3 -B -m pytest .claude/hooks/tests/test_locked_oracle.py -q -p no:cachep
 ```
 Script: scratchpad `before_replay.sh` (fixture built in a temp dir; no repo file touched).
 
-**AFTER** (2026-11-08T06:5xZ, same fixture and event, hook present, not yet wired in settings.json): the new hook denies the T082-style Edit.
+**AFTER** (2026-11-08T06:55Z, same fixture and event, hook present, not yet wired in settings.json): the new hook denies the T082-style Edit.
 ```
 --- the new hook, as a test would call it:
 {"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "deny", "permissionDecisionReason": "[hook:locked-oracle] .claude/hooks/tests/test_agent_guide_dedup.py is the Locked oracle of tasks/TASK_GUIDE_T066.md while T066 is In Progress; agent 'common-infrastructure' may not edit it. Stop and report to the Supervisor. ..."}}
