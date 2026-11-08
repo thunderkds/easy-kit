@@ -47,12 +47,12 @@ Not done: merge (yours); <auto verify: running (T182) | auto verify: <result> | 
 
 | Check | Result | Notes / output snippet |
 |-------|--------|------------------------|
-| **New test(s) cover Acceptance Criteria (file paths pasted)** | ☑ pass | `.claude/hooks/tests/test_debate_window.py`, 21 tests in round 1 (32 after round 2: +4 trace-record, +1 no-window trace, +3 hint, +2 fallback, +1 doc pin extended), written first: `16 failed, 5 passed` on the unchanged hooks at `eb85573c` (the 5 passing are today's behaviour: AC 1 x3, AC 4 x2). AC 1: `test_ac1_*` (3). AC 2: `test_ac2_*` (5 incl. 2 parametrized). AC 3: `test_ac3_*` (6 parametrized). AC 4: `test_ac4_*` (2, with a control). AC 5: `test_ac5_*`. Window reader: `test_work_*` (4). Round 2 red run on the round-1 code: `7 failed, 25 passed`. After round 2: `32 passed in 5.65s` (plain `python3 -m pytest`). |
-| Verification command run | ☑ pass | `python3 -m pytest .claude/hooks/tests/test_debate_window.py -q -p no:cacheprovider` -> `32 passed in 5.65s`; `python3 -m pytest .claude/hooks/tests -q -k "debate or stop_auto or session_work"` covered by the full run below. |
+| **New test(s) cover Acceptance Criteria (file paths pasted)** | ☑ pass | `.claude/hooks/tests/test_debate_window.py`, 21 tests in round 1 (35 after round 3; 32 after round 2: +4 trace-record, +1 no-window trace, +3 hint, +2 fallback, +1 doc pin extended), written first: `16 failed, 5 passed` on the unchanged hooks at `eb85573c` (the 5 passing are today's behaviour: AC 1 x3, AC 4 x2). AC 1: `test_ac1_*` (3). AC 2: `test_ac2_*` (5 incl. 2 parametrized). AC 3: `test_ac3_*` (6 parametrized). AC 4: `test_ac4_*` (2, with a control). AC 5: `test_ac5_*`. Window reader: `test_work_*` (4). Round 2 red run on the round-1 code: `7 failed, 25 passed`. After round 2: `32 passed in 5.65s`. After round 3: `35 passed in 7.20s` (plain `python3 -m pytest`). |
+| Verification command run | ☑ pass | `python3 -m pytest .claude/hooks/tests/test_debate_window.py -q -p no:cacheprovider` -> `35 passed in 7.20s`; `python3 -m pytest .claude/hooks/tests -q -k "debate or stop_auto or session_work"` covered by the full run below. |
 | Negative cases hold | ☑ pass | Nine mutation controls (table below), each with a non-empty `git diff --stat` before its verdict; every one turns at least one test red, and the restored tree is `21 passed`. |
 | verify | ☐ pass / ☐ fail / ☐ N/A | [left for the auto verify run / Supervisor; not run by the implementing agent] |
 | Review scope bounded to the change's blast radius (affected set, not whole repo) | ☑ pass | Reviewed: `session_work.py` (callers `load_work`, `worked_on`: `pre_bash_block_unsafe_merge.py`, `stop_auto_mode_check.py`, T250/T252 tests), `stop_auto_mode_check.py` (`check_task`, `main`), `tracks.md`. Skipped: the other Stop checks, the report format, the 6-hour `_untagged.jsonl` fallback (cut list). |
-| Full smoke suite still green (no regression) | ☑ pass | `python3 -m pytest .claude/hooks/tests tests -p no:cacheprovider` after round 2 (clean tree) -> `4194 passed in 248.17s (0:04:08)`. (One earlier run showed 1 failure, `test_memory_usage_report.py::test_script_does_not_touch_the_real_repository`, because this review file was edited while the suite ran; it passes alone and in the clean rerun.) |
+| Full smoke suite still green (no regression) | ☑ pass | `python3 -m pytest .claude/hooks/tests tests -p no:cacheprovider` after round 3 (clean tree, no edits during the run) -> `4197 passed in 283.13s (0:04:43)` (round 2: `4194 passed`). (One earlier run showed 1 failure, `test_memory_usage_report.py::test_script_does_not_touch_the_real_repository`, because this review file was edited while the suite ran; it passes alone and in the clean rerun.) |
 | **Companion score (easy-verifier)** | ☑ N/A | Companion tool not run by the implementing agent. |
 | **UI: Visual regression (diff or verdict pasted)** | ☑ N/A | No UI component. |
 | **UI: Design-system compliance (tokens/colors/typography verified)** | ☑ N/A | No UI component. |
@@ -153,3 +153,15 @@ Mutation controls, round 2 (`python3 -B`, `git diff --stat` 1 file, 1+/1- each; 
 | N5 | hint always added | 2 failed (`test_p2_3_the_pause_has_no_hint_*`) |
 | N6 | unreadable transcript fails closed (`datetime.max`) | 1 failed (`test_p3_1_a_transcript_that_cannot_be_read_*`) |
 | N7 | raising window reader fails closed | 1 failed (`test_p3_1_a_window_reader_that_raises_*`) |
+
+## Stage 4 round 3 (re-review: three surviving mutants, two doc fixes)
+
+The three new tests pass on the round-2 code on purpose: they pin behaviour that was already right but not covered. Each is proven by a mutation (`python3 -B`, `git diff --stat` 1 file, 1+/1-; restored tree `35 passed`).
+
+| # | Mutation | Test that turns red |
+|---|----------|---------------------|
+| R1 | trace boundary `>=` -> `>` in `advocate_records_in_window` | 1 failed: `test_r3_a_trace_record_at_the_exact_start_of_the_window_counts` (both trace records dated exactly at the window start) |
+| R2 | `dropped` = `len(mine)` instead of `len(mine) - counted` (false hint) | 1 failed: `test_r3_one_advocate_inside_the_window_is_too_few_and_gives_no_hint` |
+| R3 | hint removed from the Risk High (D10) reason | 1 failed: `test_r3_the_risk_high_reason_carries_the_hint` (a High task with 3 Advocates dated before the window; asserts the exact `Risk High, but no decision was DEBATED with 3 Advocates (<hint>)`) |
+
+Docs: `tracks.md` Known limits has a new bullet (a session that resumes a task and writes the report must rerun the Debate, because the Advocate records of an earlier session fall before the window), and the sentence "Times come from the transcript for both the work and the Debate" is reworded so it no longer contradicts the trace-record sentence ("Times of the work and of the Debate come from the transcript, and the trace's Advocate records follow the same rule with the trace hook's own timestamp. No time comes from git or file times"). `test_ac5_tracks_md_states_the_window_rule` pins both.
