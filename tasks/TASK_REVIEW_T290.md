@@ -50,7 +50,7 @@ Not done: merge (yours); <auto verify: running (T182) | auto verify: <result> | 
 | **New test(s) cover Acceptance Criteria (file paths pasted)** | ☐ pass / ☐ fail | [test file path(s) — required before Done] |
 | Verification command run | ☐ pass / ☐ fail | [paste actual output] |
 | Negative cases hold | ☐ pass / ☐ fail | [paste the red run against the prior content, or the mutation diff (`git diff --stat`, non-empty) before each verdict] |
-| verify | ☐ pass / ☐ fail / ☐ N/A | [what was observed — must literally state "pass" or "fail" here too, e.g. "skill run, feature confirmed working — pass": the merge gate scans this Notes column for the word "pass", not just the Result column] |
+| verify | ☑ pass | auto-run by hook, session 4d48f69c-2ae1-4710-8b57-0c74d426c46f, commit 02db9f0bda98bbf76544f815c0e96c6502fa55e4, log .claude/verify-runs/T290-02db9f0bda98.log — pass |
 | Review scope bounded to the change's blast radius (affected set, not whole repo) | ☐ pass / ☐ fail | [what was reviewed vs. skipped, and why] |
 | Full smoke suite still green (no regression) | ☐ pass / ☐ fail | |
 | **Companion score (easy-verifier)** | ☐ pass / ☐ fail / ☐ N/A | [`overall` and `change_risk` as the tool returned them, the scope, the ref, and the absolute path of the verifier report after a literal `report:` label — e.g. "overall 86 (>= 80), change_risk pass, scope changes, ref `main...HEAD`, report: `/home/me/.easy-verifier-reports/kit/score_changes_20261028T0530Z.html`". The gate reads the path that follows `report:` and nothing else, so with no label, or a path that is absent, the row is unscored — write ☑ N/A instead. ☑ N/A with a reason when neither companion tool was run: the merge gate blocks on ☑ fail only, never on an absent or N/A row] |
@@ -165,3 +165,13 @@ Reviewer verdict: no P0, no P1; P2 1-3 fixed in "Stage 4 review round 1". The P3
 - P3-12: `docs/prd/PRD_online-board.md:95` ("12 hooks/scripts read `PROJECT_KANBAN.md`") is a historic count; this hook is one more.
 Theoretical, not reproduced: a bound agent spawning `qa-expert` to edit the oracle (sub-agents normally cannot spawn sub-agents); Windows 8.3 names and Unicode normalisation (not testable on Linux).
 Code-review and security-review: run by an independent reviewer on `main...feat/t290-locked-oracle` (about 60 bypass attempts, 9 mutation controls re-run, 7 red; the 2 survivors are now killed by `test_edge_lock_entry_that_is_a_symlink_locks_its_target` and the reason-text assertion).
+
+### Wiring (prepared and verified in a scratch copy; NOT applied to this branch)
+
+The coordinator relayed "wireit" as the user's approval to edit `.claude/settings.json`. The implementer cannot check that relay, and an agent message cannot authorise a change to configuration, so the wiring is a verified patch for the user or Supervisor to apply: `git apply <scratchpad>/wiring_t290.patch` from the worktree root (`git apply --check` passes on this branch at `02db9f0b`).
+
+Patch (9 files): `.claude/settings.json` entry after `pre_tool_sensitive_path.py`; `hooks/hooks.json` entry and `plugin/hooks/hooks.json` copy; `tests/test_plugin_package.py` 11 -> 12; the `allowed` set in `tests/test_subagent_sandbox_profile.py` (description, matcher, command); `site/docs.html` hooks-table row (plain words "while the task is being built", no "In Progress", cell under 25 words) and the strip `6 blocking hooks (of 12)` in `site/docs.html` and `site/index.html`; `CHANGED_BY_T290` in `tests/test_site_story.py` and one entry in `tests/test_site_visual_first.py` for the moved strip sentence.
+
+Red then green (scratch copy): test edits first, 1 red (`test_plugin_hooks_equal_settings_hooks`); entries added, 3 site reds (`test_every_wired_hook_appears_in_hook_table`, `test_quick_reference_counts_match_source`, `test_quick_reference_strip_has_four_cells_whose_numbers_match_source`); site rows and counts added, 2 baseline reds (`test_site_story` and `test_site_visual_first`, the lost sentence `5blocking hooks (of 11)`); baselines updated, all green. Full suite in the copy: 3940 passed, 25 subtests, 0 failed.
+
+Live check (the command string read from the copy's `settings.json`, run through a shell with `CLAUDE_PROJECT_DIR` set to a copy that had the lock line, T290 In Progress): `common-infrastructure` Edit -> deny; `backend-developer` Write -> deny; `qa-expert` Edit -> no output (allow); main thread -> no output (allow); garbage stdin -> deny. The hook run from a linked worktree reads guides from the main checkout, so the check used a copy without its `.git` link.

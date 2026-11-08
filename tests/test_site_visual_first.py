@@ -425,6 +425,8 @@ DUPLICATES_OF_A_VISUAL_LABEL = {
     "425dc05dbb62": "Settings tool lead says 4 deny rules (T251)",
     # T261: the Minimal track item names the /simplify pass and its read-only reviewer exception.
     "1a657ee69be4": "Minimal track item gains the /simplify pass (T261)",
+    # T290: the locked-oracle hook is wired, so the quick-reference strip says 6 blocking hooks (of 12).
+    "d3c9027831fe": "the strip says 6 blocking hooks (of 12) (T290)",
 }
 
 

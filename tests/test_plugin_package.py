@@ -41,7 +41,7 @@ def hook_list(doc, root_var):
 def test_plugin_hooks_equal_settings_hooks():
     plugin = hook_list(load(HOOKS_JSON), "${CLAUDE_PLUGIN_ROOT}")
     settings = hook_list(load(SETTINGS_JSON), "$CLAUDE_PROJECT_DIR")
-    assert len(settings) == 11
+    assert len(settings) == 12
     assert plugin == settings
 
 

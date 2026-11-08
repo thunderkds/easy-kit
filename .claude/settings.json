@@ -74,6 +74,16 @@
         ]
       },
       {
+        "description": "Deny a sub-agent other than qa-expert an Edit or Write to a task guide's Locked oracle files while that task's board row is In Progress",
+        "matcher": "Edit|Write|MultiEdit|NotebookEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/pre_tool_locked_oracle.py"
+          }
+        ]
+      },
+      {
         "description": "Deterministic guardrail — kill a task's run after CLAUDE_STEP_LIMIT tool calls to prevent infinite loops / token waste",
         "matcher": ".*",
         "hooks": [
