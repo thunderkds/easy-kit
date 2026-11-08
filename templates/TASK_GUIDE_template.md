@@ -79,7 +79,7 @@ If docs/legacy/ exists (legacy mode): also read `docs/legacy/risk-hotspots.md` a
 
 > Fill **Success Criteria** and **Verification Command** at Stage 2 (before spawning the agent). The reviewer fills **Evidence** at Stage 4/5 in `tasks/TASK_REVIEW_T[NNN].md`,
 > copied from `templates/TASK_REVIEW_template.md`. A task is **not done** until every row has evidence. Rule: the implementing agent must NOT be the sole author of its own
-> acceptance test — the Supervisor writes or signs off on the oracle first, so code and test can't be wrong together. Optional — use only when the Supervisor or `qa-expert` wrote the oracle test first: add a line of its own that starts with **Locked oracle**: and lists the oracle files in backticks, comma-separated. While this task's board row is In Progress, a hook denies every sub-agent except `qa-expert` an Edit or Write to those files; the lock ends when the row leaves In Progress.
+> acceptance test — the Supervisor writes or signs off on the oracle first, so code and test can't be wrong together. Optional — use only when the Supervisor or `qa-expert` wrote the oracle test first: add a line of its own that starts with **Locked oracle**: followed by exact file paths, backticked or bare, comma-separated (no glob, directory or `:line`; any other spelling locks nothing). Once the hook is wired in `.claude/settings.json`, it denies every sub-agent except `qa-expert` an Edit or Write to those files while this task's board row is In Progress; the lock ends when the row leaves In Progress. It stops accidents, not an adversary.
 
 ### Success Criteria (observable, pass/fail)
 

@@ -32,7 +32,8 @@ def board(**sections):
     """A PROJECT_KANBAN.md body. sections: Todo / In_Progress / Ready_for_Review / Done -> [task id]."""
     out = ["# PROJECT_KANBAN.md", "", "## Board", ""]
     for title in ("Todo", "In Progress", "Ready for Review", "Done"):
-        out += [f"### {title}"] + [f"- [ ] **{t}** — a row | x" for t in sections.get(title.replace(" ", "_"), [])] + [""]
+        ids = sections.get(title.replace(" ", "_"), [])
+        out += [f"### {title}"] + [f"- [ ] **{t}** — a row | x" for t in ids] + [""]
     out += ["## Blocked", ""] + [f"- **{t}** — waits" for t in sections.get("Blocked", [])] + [""]
     return "\n".join(out)
 
@@ -138,7 +139,8 @@ def test_ac3_same_edit_denied_in_progress_then_allowed_after_the_move(locked):
 
 
 def test_ac3_a_mention_in_another_row_does_not_keep_the_lock(tmp_path):
-    kanban = board(Done=["T066"]).replace("### In Progress\n", "### In Progress\n- [ ] **T999** — follows up **T066** later\n")
+    mention = "### In Progress\n- [ ] **T999** — follows up **T066** later\n"
+    kanban = board(Done=["T066"]).replace("### In Progress\n", mention)
     root = make_project(tmp_path, kanban, {"T066": lock_guide(ORACLE)})
     assert verdict(run_hook(root, edit_event(root, agent_type="common-infrastructure"))) == "allow"
 
@@ -197,13 +199,18 @@ def test_ac4_unreadable_board_fails_closed(tmp_path):
 
 def test_ac4_unreadable_guide_fails_closed(locked):
     (locked / "tasks" / "TASK_GUIDE_T077.md").mkdir()  # a directory where a guide file should be
-    assert verdict(run_hook(locked, edit_event(locked, path="tests/other.py", agent_type="common-infrastructure"))) == "deny"
+    other = edit_event(locked, path="tests/other.py", agent_type="common-infrastructure")
+    assert verdict(run_hook(locked, other)) == "deny"
     assert verdict(run_hook(locked, edit_event(locked, path="tests/other.py", agent_id=None))) == "allow"
 
 
 def test_ac4_lock_line_with_no_id_in_the_file_name_is_in_force(tmp_path):
     root = make_project(tmp_path, board(), {"NOTES": lock_guide(ORACLE)})
-    assert verdict(run_hook(root, edit_event(root, agent_type="common-infrastructure"))) == "deny"
+    proc = run_hook(root, edit_event(root, agent_type="common-infrastructure"))
+    assert verdict(proc) == "deny"
+    # denied by the lock itself (names the guide), not by the generic unreadable-input path
+    assert "Locked oracle of tasks/TASK_GUIDE_NOTES.md while its task is In Progress" in reason(proc)
+    assert "unreadable" not in reason(proc)
 
 
 def test_ac4_import_failure_denies_a_bound_caller_and_passes_the_supervisor(locked, tmp_path):
@@ -293,6 +300,42 @@ def test_edge_only_the_in_progress_task_of_two_locks_a_file(tmp_path):
     assert verdict(run_hook(root, edit_event(root, path=SECOND, agent_type="common-infrastructure"))) == "deny"
 
 
+def test_edge_lock_entry_that_is_a_symlink_locks_its_target(tmp_path):
+    root = make_project(tmp_path, board(In_Progress=["T066"]), {"T066": lock_guide("tests/alias_oracle.py")})
+    (root / "tests").mkdir()
+    (root / "tests" / "real_oracle.py").write_text("x", encoding="utf-8")
+    (root / "tests" / "alias_oracle.py").symlink_to(root / "tests" / "real_oracle.py")
+    for path in ("tests/real_oracle.py", "tests/alias_oracle.py"):
+        assert verdict(run_hook(root, edit_event(root, path=path, agent_type="backend-developer"))) == "deny", path
+
+
+# --- The accepted format is pinned: anything else locks nothing (a stated limit) ----------
+
+@pytest.mark.parametrize("line", [
+    f"**Locked oracle:** `{ORACLE}`",       # colon inside the bold
+    f"Locked oracle: `{ORACLE}`",           # no bold
+    f"  **Locked oracle**: `{ORACLE}`",     # not at line start
+    f"> **Locked oracle**: `{ORACLE}`",     # inside a quote
+    f"**locked oracle**: `{ORACLE}`",       # wrong case
+], ids=["colon-in-bold", "no-bold", "indented", "quoted", "lowercase"])
+def test_format_malformed_lock_line_locks_nothing(tmp_path, line):
+    guide = f"# TASK_GUIDE — T066\n\n{line}\n"
+    root = make_project(tmp_path, board(In_Progress=["T066"]), {"T066": guide})
+    assert verdict(run_hook(root, edit_event(root, agent_type="common-infrastructure"))) == "allow"
+
+
+def test_format_lowercase_task_id_in_the_guide_name_locks_nothing(tmp_path):
+    root = make_project(tmp_path, board(In_Progress=["T066"]), {"t066": lock_guide(ORACLE)})
+    assert verdict(run_hook(root, edit_event(root, agent_type="common-infrastructure"))) == "allow"
+
+
+@pytest.mark.parametrize("entry", [f"{ORACLE}:12", ".claude/hooks/tests/", ".claude/hooks/tests/*.py"],
+                         ids=["line-number", "directory", "glob"])
+def test_format_line_number_directory_and_glob_do_not_lock_the_file(tmp_path, entry):
+    root = make_project(tmp_path, board(In_Progress=["T066"]), {"T066": lock_guide(entry)})
+    assert verdict(run_hook(root, edit_event(root, agent_type="common-infrastructure"))) == "allow"
+
+
 # --- Worktrees: the implementer edits the oracle through its worktree path ----------------
 
 def _git(cwd, *args):
@@ -364,7 +407,7 @@ TEMPLATE = REPO / "templates" / "TASK_GUIDE_template.md"
 
 def test_ac5_template_documents_the_optional_locked_oracle_line():
     text = TEMPLATE.read_text(encoding="utf-8")
-    line = next(l for l in text.splitlines() if "**Locked oracle**:" in l)
+    line = next(row for row in text.splitlines() if "**Locked oracle**:" in row)
     assert not line.startswith("**Locked oracle**:"), "the template line must stay inert"
     assert "In Progress" in line and "qa-expert" in line
 
@@ -382,5 +425,23 @@ def test_ac5_implementer_guides_need_no_mention():
 
 def test_the_one_line_of_doctrine_names_the_lock():
     text = (REPO / "docs" / "claude-md" / "pipeline-stages.md").read_text(encoding="utf-8")
-    line = next(l for l in text.splitlines() if "Locked oracle" in l)
+    line = next(row for row in text.splitlines() if "Locked oracle" in row)
     assert "In Progress" in line and "qa-expert" in line
+
+
+def test_the_template_and_doctrine_say_the_hook_must_be_wired_and_state_the_limit():
+    template = next(row for row in TEMPLATE.read_text(encoding="utf-8").splitlines() if "**Locked oracle**:" in row)
+    doctrine = next(row for row in (REPO / "docs" / "claude-md" / "pipeline-stages.md").read_text(
+        encoding="utf-8").splitlines() if "Locked oracle" in row)
+    for line in (template, doctrine):
+        assert "wired in `.claude/settings.json`" in line
+        assert "stops accidents, not an adversary" in line
+    assert "no glob, directory or `:line`" in template
+
+
+def test_the_hook_docstring_states_the_adversary_limit_and_the_format():
+    doc = HOOK.read_text(encoding="utf-8").split('"""')[1]
+    for phrase in ("remove the lock line", "move the board row", "create a new guide", "edit this hook",
+                   "stops accidents, not an adversary", "`**Locked oracle**:` at the start of a line",
+                   "no glob, directory or `:line`"):
+        assert phrase in doc, phrase

@@ -30,8 +30,15 @@ an implementer that edits the oracle through `../wt-txxx/...` is caught. Case is
 case-insensitive file system cannot dodge the lock. Guides and the board are read from the main
 checkout when the session runs inside a linked worktree (the row moves on main).
 
-Known limits (cut list, TASK_GUIDE_T290): writes through `Bash` (`sed -i`, `>`) are not parsed;
-a hard link to the oracle is a different path; the plugin copy of this hook is not wired.
+Accepted format: `**Locked oracle**:` at the start of a line, then exact file paths, in backticks or
+bare, comma-separated (no glob, directory or `:line`). Any other spelling (`**Locked oracle:**`, no
+bold, indented, quoted, another case, a lowercase task ID that no board row matches) locks nothing.
+
+Known limits (cut list, TASK_GUIDE_T290): the lock stops accidents, not an adversary. A bound
+sub-agent can remove the lock line from the guide, move the board row, create a new guide or
+edit this hook; behaviour is unchanged on purpose, because implementers tick guide checklists.
+Writes through `Bash` (`sed -i`, `>`) are not parsed; a hard link to the oracle is a different
+path; the plugin copy of this hook is not wired.
 """
 import glob
 import json
