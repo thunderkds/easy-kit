@@ -50,7 +50,7 @@ Not done: merge (yours); <auto verify: running (T182) | auto verify: <result> | 
 | **New test(s) cover Acceptance Criteria (file paths pasted)** | pass | `.claude/hooks/tests/test_parse_ts_single.py` (43 tests, 23 red on the old code, green after) |
 | Verification command run | pass | `python3 -m pytest .claude/hooks/tests tests -q -p no:cacheprovider` -> `4205 passed, 25 subtests passed` (see Demonstration AFTER) |
 | Negative cases hold | pass | M1 `lib/auto_mode.py` +2 lines -> `4 failed, 39 passed`; M2 `lib/session_work.py` +9/-1 lines -> `2 failed, 41 passed`; independent reviewer ran 5 more mutations, each red (4, 8, 10, 2, 1 failed) |
-| verify | ☐ pass / ☐ fail / ☐ N/A | [what was observed — must literally state "pass" or "fail" here too, e.g. "skill run, feature confirmed working — pass": the merge gate scans this Notes column for the word "pass", not just the Result column] |
+| verify | ☑ pass | auto-run by hook, session 1b260f90-5dfc-4408-8d11-2547c8125473, commit 417b92bf17837853542e94b2ffcfa05e829d3fc7, log .claude/verify-runs/T292-417b92bf1783.log — pass |
 | Review scope bounded to the change's blast radius (affected set, not whole repo) | pass | Independent Stage 4 code-review (read-only): 36 inputs through old copies (`git show main:`) and new `parse_ts`, identical; fail-closed import paths tested; no P0, P1 or P2; two P3 notes, no change needed. Reviewed: the 3 changed hook files, the 2 callers, `pre_bash_block_unsafe_merge.py` import guard. Skipped: unrelated hooks |
 | Full smoke suite still green (no regression) | pass | `4205 passed, 25 subtests passed in 256.11s` |
 | **Companion score (easy-verifier)** | ☑ N/A | Not run: Low-risk refactor of one helper; the independent code-review and the 36-input comparison cover it |
