@@ -200,7 +200,7 @@ def decide(event, root):
         if lock_key == key and in_progress(task_id, kanban):
             return (f"{os.path.relpath(real, root) if is_under(real, root) else real} is the Locked oracle "
                     f"of {guide} while {task_id or 'its task'} is In Progress; {agent} may not edit it. "
-                    "Stop and report to the Supervisor, who or qa-expert changes the oracle.")
+                    "Stop and report to the Supervisor. The Supervisor or qa-expert changes the oracle.")
     return None
 
 

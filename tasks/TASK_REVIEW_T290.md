@@ -83,9 +83,45 @@ $ python3 -B -m pytest .claude/hooks/tests/test_locked_oracle.py -q -p no:cachep
 ```
 Script: scratchpad `before_replay.sh` (fixture built in a temp dir; no repo file touched).
 
-**AFTER**: [same command, post-change] OR [verbatim excerpt of the new content]
+**AFTER** (2026-11-08T06:5xZ, same fixture and event, hook present, not yet wired in settings.json): the new hook denies the T082-style Edit.
+```
+--- the new hook, as a test would call it:
+{"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "deny", "permissionDecisionReason": "[hook:locked-oracle] .claude/hooks/tests/test_agent_guide_dedup.py is the Locked oracle of tasks/TASK_GUIDE_T066.md while T066 is In Progress; agent 'common-infrastructure' may not edit it. Stop and report to the Supervisor. ..."}}
+exit=0
+$ python3 -B -m pytest .claude/hooks/tests/test_locked_oracle.py -q -p no:cacheprovider
+68 passed
+```
 
-**DELTA**: [one sentence — what a user can now do that they could not before]
+**DELTA**: A task guide can name its oracle test on a `**Locked oracle**:` line, and while the task is In Progress a sub-agent other than `qa-expert` can no longer edit that file (the T082 `<` to `<=` weakening is denied), yet the lock ends when the row leaves In Progress.
 
 **WITNESS**: [who ran it and when — derived from `memory/event-trace/T290.jsonl`, never the
 implementing agent alone]
+
+---
+
+## Stage 4 self-review (implementer, common-infrastructure; the Supervisor runs code-review and security-review separately)
+
+**Scope**: `.claude/hooks/pre_tool_locked_oracle.py` (new, 222 lines), `.claude/hooks/tests/test_locked_oracle.py` (new, 68 tests), `plugin/.claude/hooks/pre_tool_locked_oracle.py` (symlink; `tests/test_plugin_source.py:73` requires one per hook), `templates/TASK_GUIDE_template.md` (one sentence, appended to an existing line: `test_vital_slice.py` caps the template at 205 lines), `docs/claude-md/pipeline-stages.md` (one line in Stage 2). `AGENTS.md` unchanged (21732 bytes). `.claude/settings.json`, `hooks/hooks.json`, `plugin/hooks/hooks.json`, `PROJECT_KANBAN.md`, `memory/**` untouched.
+
+**Design choices that go past the spike** (each has a test): path identity by real path with case folded; a path inside any git worktree of the repo compares by its path in that checkout (the T082 incident happened through a worktree path); a session inside a linked worktree reads the guides and board of the main checkout (the row moves there); fail closed on a missing `agent_type`, bad stdin, an edit with no path, an unreadable guide or board, a lock line in a guide with no task ID, a lib import failure (denies bound callers only).
+
+**Mutation controls** (byte-changing, `git diff --stat` non-empty before each verdict, restored afterwards; output in scratchpad `mutate_out.txt`):
+
+| # | Mutation | Result |
+|---|----------|--------|
+| M1 | lookup never denies (`for ... in locks` -> `in []`) | 34 failed (AC1, AC7, edge, worktree) |
+| M2 | row-status check always In Progress (`if True:`) | 10 failed (AC3 x6, edge) |
+| M3 | main thread counted as bound | 5 failed (AC2 main, AC7, AC4 x3) |
+| M4 | `easy-kit:qa-expert` dropped from JUDGES | 1 failed |
+| M5 | `realpath` -> `abspath` | 1 failed (symlink alias) |
+| M6 | bad stdin no longer denied | 13 failed |
+| M7 | worktree not recognised as same repo | 2 failed |
+| M8 | worktree session reads its own board | 1 failed |
+| M9 | case folding removed | 1 failed |
+| M10 | missing agent_type counted as judge | 3 failed |
+| M11 | `Locked oracle` appended to `agents/qa.md` | 1 failed (AC5) |
+| M12 | template line made live | 1 failed (AC5) |
+
+**Known limits** (stated, not fixed): `Bash` writes (`sed -i`, `>`) are not parsed; a hard link to the oracle is a different path; a sub-agent can edit the guide (drop the lock line) or the board row, so the lock stops accidents, not an adversary; the plugin copy is not wired until the Supervisor adds the `hooks/hooks.json` entry.
+
+**Pin-test pre-flight** (LR-0004): full suite with this diff, 3927 passed, 0 failed (baseline on `main` before the change: no failures). Wiring the hook later makes 5 pin tests fail until companion edits land (found by applying the wiring to a throwaway copy): `tests/test_plugin_package.py::test_plugin_hooks_equal_settings_hooks` (`len(settings) == 11`; also needs `hooks/hooks.json` and `plugin/hooks/hooks.json` entries), `tests/test_subagent_sandbox_profile.py::test_sc5_supervisor_settings_have_no_permissions_or_sandbox` (names every changed settings line), `tests/test_site_content.py` x3 (`test_every_wired_hook_appears_in_hook_table`, `test_quick_reference_counts_match_source`, `test_quick_reference_strip_has_four_cells_whose_numbers_match_source`: `site/docs.html` needs a hook-table row, and `5 blocking hooks (of 11)` becomes `6 ... (of 12)` in `docs.html` and the `index.html` hero strip, which also moves `tests/test_site_visual_first.py` and `tests/test_site_story.py` hash baselines; the page must not say "In Progress").
