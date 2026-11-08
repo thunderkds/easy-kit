@@ -271,6 +271,7 @@ def test_ac4_a_command_in_two_tasks_worktrees_keeps_the_pointer(tmp_path):
 # not run at all, is never filed under the task. Every simple command must run in that worktree.
 @pytest.mark.parametrize("command", [
     "true # ; cd {wt} ; python3 -m pytest -q",                 # E1: pytest sits in a comment
+    "cd {wt} && true # ; python3 -m pytest -q",                # E1 after the `cd`: only the comment guard
     "python3 -m pytest -q; cd {wt} && true",                   # E2: tests ran in the main checkout
     "cd /tmp && python3 -m pytest -q; cd {wt} && true",        # E3: tests ran in a non-worktree
     "(cd {wt}) ; python3 -m pytest -q",                        # E4: a subshell `cd` does not last
@@ -279,7 +280,7 @@ def test_ac4_a_command_in_two_tasks_worktrees_keeps_the_pointer(tmp_path):
     "pushd {wt} && python3 -m pytest -q",                      # pushd / popd: not followed
     "cd {wt} && python3 -m pytest -q &",                       # a trailing `&`
     "cd {wt} && echo $(python3 -m pytest -q)",                 # command substitution
-], ids=["e1-comment", "e2-main-then-cd", "e3-tmp-then-cd", "e4-subshell", "background-cd",
+], ids=["e1-comment", "e1-comment-after-cd", "e2-main-then-cd", "e3-tmp-then-cd", "e4-subshell", "background-cd",
         "piped-cd", "pushd", "trailing-amp", "substitution"])
 def test_p0_a_test_run_outside_the_worktree_is_not_filed_under_the_task(tmp_path, command):
     project = t120_project(tmp_path)
@@ -407,13 +408,17 @@ def t242_reviewed(project, tmp_path):
 
 
 def _transcript_debate(s, task_args="task=T242 risk=Medium", **extra):
-    """A Debate written to the transcript only (no trace records): `extra` keys every entry."""
+    """A Debate written to the transcript only (no trace records), each call with a non-error
+    `tool_result`, so only the guard under test can drop it: `extra` keys every entry."""
     entries = [("Skill", {"skill": "resolve-question", "args": task_args})] + [
         ("Agent", advocate_input(n)) for n in (1, 2)]
     for i, (name, tool_input) in enumerate(entries):
         s._entry(dict({"type": "assistant", "timestamp": _ago(0), "message": {"role": "assistant",
                        "content": [{"type": "tool_use", "id": f"toolu_d{i}", "name": name,
                                     "input": tool_input}]}}, **extra))
+        s._entry(dict({"type": "user", "timestamp": _ago(0), "message": {"role": "user",
+                       "content": [{"type": "tool_result", "tool_use_id": f"toolu_d{i}",
+                                    "content": "done", "is_error": False}]}}, **extra))
     return entries
 
 
