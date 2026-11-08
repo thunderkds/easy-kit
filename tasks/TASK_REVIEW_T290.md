@@ -101,7 +101,7 @@ implementing agent alone]
 
 ## Stage 4 self-review (implementer, common-infrastructure; the Supervisor runs code-review and security-review separately)
 
-**Scope**: `.claude/hooks/pre_tool_locked_oracle.py` (new, 222 lines), `.claude/hooks/tests/test_locked_oracle.py` (new, 68 tests), `plugin/.claude/hooks/pre_tool_locked_oracle.py` (symlink; `tests/test_plugin_source.py:73` requires one per hook), `templates/TASK_GUIDE_template.md` (one sentence, appended to an existing line: `test_vital_slice.py` caps the template at 205 lines), `docs/claude-md/pipeline-stages.md` (one line in Stage 2). `AGENTS.md` unchanged (21732 bytes). `.claude/settings.json`, `hooks/hooks.json`, `plugin/hooks/hooks.json`, `PROJECT_KANBAN.md`, `memory/**` untouched.
+**Scope**: `.claude/hooks/pre_tool_locked_oracle.py` (new, 222 lines), `.claude/hooks/tests/test_locked_oracle.py` (new, 80 tests after the review fixes), `plugin/.claude/hooks/pre_tool_locked_oracle.py` (symlink; `tests/test_plugin_source.py:73` requires one per hook), `templates/TASK_GUIDE_template.md` (one sentence, appended to an existing line: `test_vital_slice.py` caps the template at 205 lines), `docs/claude-md/pipeline-stages.md` (one line in Stage 2). `AGENTS.md` unchanged (21732 bytes). `.claude/settings.json`, `hooks/hooks.json`, `plugin/hooks/hooks.json`, `PROJECT_KANBAN.md`, `memory/**` untouched.
 
 **Design choices that go past the spike** (each has a test): path identity by real path with case folded; a path inside any git worktree of the repo compares by its path in that checkout (the T082 incident happened through a worktree path); a session inside a linked worktree reads the guides and board of the main checkout (the row moves there); fail closed on a missing `agent_type`, bad stdin, an edit with no path, an unreadable guide or board, a lock line in a guide with no task ID, a lib import failure (denies bound callers only).
 
@@ -125,3 +125,31 @@ implementing agent alone]
 **Known limits** (stated, not fixed): `Bash` writes (`sed -i`, `>`) are not parsed; a hard link to the oracle is a different path; a sub-agent can edit the guide (drop the lock line) or the board row, so the lock stops accidents, not an adversary; the plugin copy is not wired until the Supervisor adds the `hooks/hooks.json` entry.
 
 **Pin-test pre-flight** (LR-0004): full suite with this diff, 3927 passed, 0 failed (baseline on `main` before the change: no failures). Wiring the hook later makes 5 pin tests fail until companion edits land (found by applying the wiring to a throwaway copy): `tests/test_plugin_package.py::test_plugin_hooks_equal_settings_hooks` (`len(settings) == 11`; also needs `hooks/hooks.json` and `plugin/hooks/hooks.json` entries), `tests/test_subagent_sandbox_profile.py::test_sc5_supervisor_settings_have_no_permissions_or_sandbox` (names every changed settings line), `tests/test_site_content.py` x3 (`test_every_wired_hook_appears_in_hook_table`, `test_quick_reference_counts_match_source`, `test_quick_reference_strip_has_four_cells_whose_numbers_match_source`: `site/docs.html` needs a hook-table row, and `5 blocking hooks (of 11)` becomes `6 ... (of 12)` in `docs.html` and the `index.html` hero strip, which also moves `tests/test_site_visual_first.py` and `tests/test_site_story.py` hash baselines; the page must not say "In Progress").
+
+### Stage 4 review round 1 (Supervisor code-review + security-review: no P0, no P1) and what was done
+
+| Finding | Action |
+|---|---|
+| P2-1: a bound sub-agent can remove the lock line, move the row, create a guide or edit the hook | Stated in the hook docstring and in one clause ("It stops accidents, not an adversary") in the template sentence and the `pipeline-stages.md` line. Behaviour unchanged on purpose (implementers tick guide checklists). Test: `test_the_hook_docstring_states_the_adversary_limit_and_the_format`, `test_the_template_and_doctrine_say_the_hook_must_be_wired_and_state_the_limit` |
+| P2-2: template and doctrine said the hook denies, but it is not wired yet | Both now say "Once the hook is wired in `.claude/settings.json`"; template still 205 lines (same line extended) |
+| P2-3: accepted format undocumented | Documented in the docstring and template (`**Locked oracle**:` at line start, exact paths, backticked or bare, comma-separated, no glob, directory or `:line`). Pinned by `test_format_*`: `**Locked oracle:**`, no bold, indented, quoted, lowercase, a lowercase task ID in the guide name, `:12`, a directory and a glob each lock nothing |
+| P3-9: two survivors | New `test_edge_lock_entry_that_is_a_symlink_locks_its_target`; `test_ac4_lock_line_with_no_id_in_the_file_name_is_in_force` now asserts the reason text (`Locked oracle of tasks/TASK_GUIDE_NOTES.md while its task is In Progress`, not `unreadable`) |
+| P3-11: ruff | E741 (`l`, two places) and 3 lines over 120 columns fixed; `ruff check --line-length 120` clean on the hook and the test |
+| P3 4-8, 10, 12 | Not done; recorded below |
+
+**Mutation controls added in round 1** (`git diff --stat` non-empty, restored, 80 passed after; output `mutate2_out.txt` in the scratchpad):
+
+| # | Mutation | Result |
+|---|----------|--------|
+| M13 | `realpath` -> `abspath` in `lock_table` (lock entry that is a symlink) | 1 failed: `test_edge_lock_entry_that_is_a_symlink_locks_its_target` |
+| M14 | a guide with no task ID raises (denied by the generic error path) instead of by the lock | 1 failed: `test_ac4_lock_line_with_no_id_in_the_file_name_is_in_force` (reason text) |
+| M15 | lock-line regex accepts `**Locked oracle:**` | 1 failed: `test_format_malformed_lock_line_locks_nothing[colon-in-bold]` |
+
+**Known limits, not fixed (P3 4-8, 10, 12, one line each; the reviewer's numbering, the wording is the implementer's reading of each)**:
+- P3-4: a lock covers only the exact file; a rename or copy of the oracle is a new path.
+- P3-5: `Bash` writes (`sed -i`, `>`) and a hard link are not covered.
+- P3-6: a sub-agent can edit the guide, the board row, or this hook (see P2-1).
+- P3-7: an unreadable guide or board denies every non-judge sub-agent edit until it is readable (fail closed).
+- P3-8: the plugin copy and `.claude/settings.json` are not wired until the user approves the entries.
+- P3-10: the hook reads every `tasks/TASK_GUIDE_*.md` on each bound edit (about 30 ms at 235 guides).
+- P3-12: the lowercase task ID in a guide name matches no board row, so that guide locks nothing.
