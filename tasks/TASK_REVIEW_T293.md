@@ -47,12 +47,12 @@ Not done: merge (yours); <auto verify: running (T182) | auto verify: <result> | 
 
 | Check | Result | Notes / output snippet |
 |-------|--------|------------------------|
-| **New test(s) cover Acceptance Criteria (file paths pasted)** | ☑ pass | `.claude/hooks/tests/test_debate_window.py`, 21 tests, written first: `16 failed, 5 passed` on the unchanged hooks at `eb85573c` (the 5 passing are today's behaviour: AC 1 x3, AC 4 x2). AC 1: `test_ac1_*` (3). AC 2: `test_ac2_*` (5 incl. 2 parametrized). AC 3: `test_ac3_*` (6 parametrized). AC 4: `test_ac4_*` (2, with a control). AC 5: `test_ac5_*`. Window reader: `test_work_*` (4). At `116c3b32`: `21 passed in 3.17s` (plain `python3 -m pytest`). |
-| Verification command run | ☑ pass | `python3 -m pytest .claude/hooks/tests/test_debate_window.py -q -p no:cacheprovider` -> `21 passed in 3.17s`; `python3 -m pytest .claude/hooks/tests -q -k "debate or stop_auto or session_work"` covered by the full run below. |
+| **New test(s) cover Acceptance Criteria (file paths pasted)** | ☑ pass | `.claude/hooks/tests/test_debate_window.py`, 21 tests in round 1 (32 after round 2: +4 trace-record, +1 no-window trace, +3 hint, +2 fallback, +1 doc pin extended), written first: `16 failed, 5 passed` on the unchanged hooks at `eb85573c` (the 5 passing are today's behaviour: AC 1 x3, AC 4 x2). AC 1: `test_ac1_*` (3). AC 2: `test_ac2_*` (5 incl. 2 parametrized). AC 3: `test_ac3_*` (6 parametrized). AC 4: `test_ac4_*` (2, with a control). AC 5: `test_ac5_*`. Window reader: `test_work_*` (4). Round 2 red run on the round-1 code: `7 failed, 25 passed`. After round 2: `32 passed in 5.65s` (plain `python3 -m pytest`). |
+| Verification command run | ☑ pass | `python3 -m pytest .claude/hooks/tests/test_debate_window.py -q -p no:cacheprovider` -> `32 passed in 5.65s`; `python3 -m pytest .claude/hooks/tests -q -k "debate or stop_auto or session_work"` covered by the full run below. |
 | Negative cases hold | ☑ pass | Nine mutation controls (table below), each with a non-empty `git diff --stat` before its verdict; every one turns at least one test red, and the restored tree is `21 passed`. |
 | verify | ☐ pass / ☐ fail / ☐ N/A | [left for the auto verify run / Supervisor; not run by the implementing agent] |
 | Review scope bounded to the change's blast radius (affected set, not whole repo) | ☑ pass | Reviewed: `session_work.py` (callers `load_work`, `worked_on`: `pre_bash_block_unsafe_merge.py`, `stop_auto_mode_check.py`, T250/T252 tests), `stop_auto_mode_check.py` (`check_task`, `main`), `tracks.md`. Skipped: the other Stop checks, the report format, the 6-hour `_untagged.jsonl` fallback (cut list). |
-| Full smoke suite still green (no regression) | ☑ pass | `python3 -m pytest .claude/hooks/tests tests -q -p no:cacheprovider` at `116c3b32` -> `4183 passed, 25 subtests passed in 264.98s (0:04:24)` |
+| Full smoke suite still green (no regression) | ☑ pass | `python3 -m pytest .claude/hooks/tests tests -p no:cacheprovider` after round 2 (clean tree) -> `4194 passed in 248.17s (0:04:08)`. (One earlier run showed 1 failure, `test_memory_usage_report.py::test_script_does_not_touch_the_real_repository`, because this review file was edited while the suite ran; it passes alone and in the clean rerun.) |
 | **Companion score (easy-verifier)** | ☑ N/A | Companion tool not run by the implementing agent. |
 | **UI: Visual regression (diff or verdict pasted)** | ☑ N/A | No UI component. |
 | **UI: Design-system compliance (tokens/colors/typography verified)** | ☑ N/A | No UI component. |
@@ -128,3 +128,28 @@ Restored tree: `21 passed`. Script: `scratchpad/mutate.py` (not committed).
 - **P2 (behaviour):** a Debate before the task's first change no longer counts. A planning Debate with no earlier edit to a task file pauses at Stop. Stated in `tracks.md` ("write the task's guide or review file first").
 - **P3:** `session_window` and `session_owner` now share `_task_worktrees` (one place for the worktree list). `_debate_counts` changed shape (`calls`, `window_start`), no other caller. Stale-text grep (LR-0005) for `_debate_counts`, `debates(task_id`, `load_work`, `session window`, `named with task=`: the hits are the changed code, `tracks.md` (updated) and `TASK_REVIEW_T287.md` (the `P3 session window` row, updated to "Fixed in T293"). No hit in `README.md`, `site/`, `agents/`, `docs/main-flow.md`.
 - **Pin tests (LR-0004):** `test_stop_attribution_t287.py` (3 tests red after the change: the Debate came before the review file; fixed in `t242_run`), `test_t250_session_ownership.py`, `test_t252_marked_ownership.py` (still pass: they break `load_work`, which `session_owner` still uses), `test_agent_guide_dedup.py`, `test_vital_slice.py`, memory budget tests: part of the full run, green.
+
+## Stage 4 round 2 (coordinator review: three P2, one P3)
+
+| Finding | Handling |
+|---------|----------|
+| **P2-1** the window applied only to the transcript count; old Advocate records in `<ID>.jsonl` (no time limit) and `_untagged.jsonl` (6 h) still counted | **Fixed.** `advocate_records_in_window(records, start)`: with a window, a trace Advocate record counts only when its `timestamp` is at or after the start (`>=`); a missing or unparsable one does not count. No window = every record counts (AC 4). The window is read only when the trace holds an Advocate record. Tests (`test_p2_1_*`): old record in `T242.jsonl` (3 days), old record in `_untagged.jsonl` (2 h), bad timestamp, record inside the window counts (both files), and a no-window task still counts a 3-day-old record. Red first on the round-1 code: `7 failed, 25 passed` (the 7: 3 of P2-1, 1 hint, 2 P3-1, 1 doc pin). |
+| **P2-2** `session_work._session_files` skips no symlink and filters no `sessionId` | **Not changed in code** (shared with the merge gate). New Known limits bullet in `tracks.md`: a planted transcript file can move the window start earlier (same trust root as T251). |
+| **P2-3** wording, and no reason for the pause | **Done.** `tracks.md` now says: make the first change to a task file (the guide, the review file or the failing test in its worktree) before the Debate. The pause reasons (the `DEBATED` count reason and the Risk High reason) end with `(a Debate was found before the task's first change in this session; rerun it after the first change)` when the transcript held Advocate calls of this task's Debates dated before the window. Tests `test_p2_3_*`: hint present; absent with no Debate; absent for a Debate of another task. Trace records alone do not add the hint (as asked). |
+| **P3-1** the two `session_window` fallbacks had no test | **Done.** `test_p3_1_a_transcript_that_cannot_be_read_*` (`work_entries` returns None) and `test_p3_1_a_window_reader_that_raises_*` (the `except` branch: `work_start` is made to raise in the project's copy of the lib; stderr names `Debate window unknown (RuntimeError)`). Both use a 3-day-old trace record, so they fail if the fallback fails closed. |
+
+Pin tests repointed (LR-0004): `test_stop_attribution_t287.py::test_ac3_an_advocate_filed_right_is_not_counted_twice` wrote the review file after the Debate; with the trace side windowed it now writes it first (one move of one line).
+
+Docs matched to the code: hook docstring (trace records, hint), `tracks.md` Auto-mode check paragraph and Known limits (trace records, wording, symlink limit).
+
+Mutation controls, round 2 (`python3 -B`, `git diff --stat` 1 file, 1+/1- each; restored tree `32 passed`):
+
+| # | Mutation | Red result |
+|---|----------|------------|
+| N1 | trace window filter always true | 4 failed (`test_p2_1_*` x3, `test_p3_1_a_transcript_that_cannot_be_read_*`) |
+| N2 | trace record with a bad date counts | 1 failed (`test_p2_1_a_trace_record_with_a_bad_timestamp_does_not_count`) |
+| N3 | window not passed to the trace count | 5 failed |
+| N4 | hint never added | 1 failed (`test_p2_3_the_pause_names_a_debate_found_before_the_window`) |
+| N5 | hint always added | 2 failed (`test_p2_3_the_pause_has_no_hint_*`) |
+| N6 | unreadable transcript fails closed (`datetime.max`) | 1 failed (`test_p3_1_a_transcript_that_cannot_be_read_*`) |
+| N7 | raising window reader fails closed | 1 failed (`test_p3_1_a_window_reader_that_raises_*`) |
