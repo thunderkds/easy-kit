@@ -132,6 +132,30 @@ def test_fix2_a_name_with_step_limit_in_a_done_status_is_not_a_stop():
         assert al.classify(handback(status)) is None, status
 
 
+def test_fix2_each_kind_of_name_is_cut_out_on_its_own():
+    # A stopping verb sits right after the name, so only the name cut keeps these out. Each name
+    # is built so that exactly one alternative of NAME_TOKENS cuts it.
+    for status in (
+        "ready-for-review. Branch feat/step-limit stopped diverging from main.",        # path
+        "ready-for-review. Notes in /tmp/step_limit fired no warning.",                  # path
+        "ready-for-review. `step-limit.py` fired once per run now.",                     # file
+        "ready-for-review. `pre_agent_step_limit.py` fired once per run now.",           # file
+        "ready-for-review. Branch t999-step-limit-fix stopped diverging from main.",     # compound
+        "ready-for-review. The step-limit-per-agent counter fired once per run now.",    # compound
+    ):
+        assert al.classify(handback(status)) is None, status
+
+
+def test_fix2_the_step_limit_named_without_a_stopping_verb_is_not_a_stop():
+    assert al.classify(handback("ready-for-review. The step-limit hook now counts per agent.")) is None
+    assert al.classify(handback("ready-for-review. I read the step limit and left it as is.")) is None
+
+
+def test_fix2_a_stopping_verb_before_the_name_is_a_stop():
+    got = al.classify(handback("ready-for-review. A call was killed by the step-limit hook."))
+    assert got is not None and got[0] == "stopped"
+
+
 def test_fix2_the_same_words_in_a_real_stop_are_a_stopped_row():
     got = al.classify(handback("blocked. The step-limit hook stopped me on feat/t999-step-limit-fix."))
     assert got is not None and got[0] == "stopped"
