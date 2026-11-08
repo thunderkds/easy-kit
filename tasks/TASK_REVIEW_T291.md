@@ -67,8 +67,17 @@ Not done: merge (yours); <auto verify: running (T182) | auto verify: <result> | 
 > **before any implementation commit exists**; if it does not (docs, templates, skill-instruction
 > text), BEFORE is the **verbatim prior content** of what changed — a quoted excerpt, not a command.
 
-**BEFORE**: [pasted timestamped command output showing the thing absent/failing, captured before the
-first implementation commit] OR [verbatim excerpt of the prior content, for non-executable changes]
+**BEFORE** (captured 2026-11-08T15:50:39+07:00, before any implementation commit, on `eb85573c`; the hook is loaded with its bare `main()` call stripped, as `test_merge_gate_t210.py` does):
+
+```
+$ python3 before.py   # calls m.invokes_test_runner(c) for each command
+2026-11-08T15:50:39.611214+07:00
+'python3 -B -m pytest x.py' -> False
+'python3 -m pytest x.py' -> True
+'python3 -u -B -m unittest' -> False
+'python -I -m pytest' -> False
+'py -B -m pytest' -> False
+```
 
 **AFTER**: [same command, post-change] OR [verbatim excerpt of the new content]
 
