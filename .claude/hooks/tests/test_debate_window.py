@@ -20,6 +20,7 @@ Every fixture drives the real hooks, as `test_stop_attribution_t287.py` does.
 Run with: python3 -m pytest .claude/hooks/tests/test_debate_window.py -q
 """
 import json
+import os
 import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -31,7 +32,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "lib"))
 import session_work as sw  # noqa: E402
 from test_stop_attribution_t287 import (  # noqa: E402
     ROOT, SID, T120_ROW, T242_PAUSE, Session, _tracks_section, advocate_input, kit_project,
-    t242_project, t242_reviewed)
+    t242_project, t242_reviewed, trace)
 
 HOUR = timedelta(hours=1)
 SECOND = timedelta(seconds=1)
@@ -190,6 +191,124 @@ def test_ac4_control_the_same_task_without_the_debate_still_pauses(tmp_path):
     assert reason and "T300: 1 `DEBATED` line(s) need ≥2" in reason and "the trace has 0" in reason
 
 
+# -- P2-1: the trace records obey the window too --------------------------------------------------
+HINT = "a Debate was found before the task's first change in this session; rerun it after the first change"
+
+
+def _advocates_to_trace(s, file_name, age):
+    """Two Advocate `Agent` calls through the real trace hook, filed in `memory/event-trace/
+    <file_name>.jsonl` (`T242` through the pointer, `_untagged` with the pointer removed); then their
+    records are dated `age` ago, as if an earlier Debate had run."""
+    state = s.project / ".claude" / "hooks" / ".state" / "active_task.d" / s.sid
+    if file_name == "_untagged":
+        state.unlink()
+    for n in (1, 2):
+        s.call("Agent", advocate_input(n))
+    path = s.project / "memory" / "event-trace" / f"{file_name}.jsonl"
+    lines = []
+    for line in path.read_text(encoding="utf-8").splitlines():
+        record = json.loads(line)
+        if record.get("tool_name") == "Agent":
+            record["timestamp"] = (datetime.now(timezone.utc) - age).isoformat()
+        lines.append(json.dumps(record))
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def _trace_run(tmp_path, file_name, age):
+    project = t242_project(tmp_path)
+    s = t242_reviewed(project, tmp_path)
+    _advocates_to_trace(s, file_name, age)
+    assert [r["tool_name"] for r in trace(project, file_name)].count("Agent") == 2
+    return s
+
+
+@pytest.mark.parametrize("file_name,age", [("T242", 3 * 24 * HOUR), ("_untagged", 2 * HOUR)],
+                         ids=["old-record-in-the-task-file", "old-record-in-untagged"])
+def test_p2_1_an_advocate_trace_record_before_the_window_does_not_count(tmp_path, file_name, age):
+    reason, _ = _trace_run(tmp_path, file_name, age).stop()
+    assert reason and T242_PAUSE in reason, reason
+
+
+@pytest.mark.parametrize("file_name", ["T242", "_untagged"])
+def test_p2_1_an_advocate_trace_record_inside_the_window_counts(tmp_path, file_name):
+    reason, stderr = _trace_run(tmp_path, file_name, timedelta(0)).stop()
+    assert reason is None, (reason, stderr)
+
+
+def test_p2_1_a_trace_record_with_a_bad_timestamp_does_not_count(tmp_path):
+    s = _trace_run(tmp_path, "T242", timedelta(0))
+    path = s.project / "memory" / "event-trace" / "T242.jsonl"
+    lines = []
+    for line in path.read_text(encoding="utf-8").splitlines():
+        record = json.loads(line)
+        if record.get("tool_name") == "Agent":
+            record["timestamp"] = "not a date"
+        lines.append(json.dumps(record))
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    reason, _ = s.stop()
+    assert reason and T242_PAUSE in reason, reason
+
+
+def test_p2_1_a_task_with_no_window_counts_old_trace_records(tmp_path):
+    """AC 4 for the trace side: the minimal record has no window, so a 3-day-old record counts."""
+    project = kit_project(tmp_path, [T300_ROW], {"tasks/MINIMAL_LOG.md": T300_RECORD,
+                                                  "setup.sh": "echo v1\n"})
+    s = Session(project, tmp_path)
+    s.request("start it [auto]")
+    s.point_at("T300")
+    s.call("Bash", {"command": "python3 -m pytest -q"})
+    _advocates_to_trace(s, "T300", 3 * 24 * HOUR)
+    reason, stderr = s.stop()
+    assert reason is None, (reason, stderr)
+
+
+# -- P2-3: the pause says why ---------------------------------------------------------------------
+def test_p2_3_the_pause_names_a_debate_found_before_the_window(tmp_path):
+    reason, _ = _stop(tmp_path, lambda s, start: _debate(s, start - 5 * HOUR,
+                                                         start - 5 * HOUR + SECOND))
+    assert reason and T242_PAUSE in reason and HINT in reason, reason
+
+
+def test_p2_3_the_pause_has_no_hint_when_no_debate_was_found(tmp_path):
+    reason, _ = _stop(tmp_path, lambda s, start: None)
+    assert reason and T242_PAUSE in reason and "a Debate was found" not in reason, reason
+
+
+def test_p2_3_the_pause_has_no_hint_for_a_debate_of_another_task(tmp_path):
+    reason, _ = _stop(tmp_path, lambda s, start: _debate(s, start - 5 * HOUR, start - 5 * HOUR,
+                                                         args="task=T241 risk=Medium"))
+    assert reason and "a Debate was found" not in reason, reason
+
+
+# -- P3-1: the "no window" fallbacks of session_window --------------------------------------------
+def _old_trace_session(tmp_path):
+    return _trace_run(tmp_path, "T242", 3 * 24 * HOUR)
+
+
+def test_p3_1_a_transcript_that_cannot_be_read_keeps_the_whole_session_rule(tmp_path):
+    """`work_entries` returns None: no window, so the 3-day-old record counts as before T293."""
+    s = _old_trace_session(tmp_path)
+    reason, _ = s.stop()
+    assert reason and T242_PAUSE in reason  # control: with the window, the record is too old
+    saved = s.transcript.read_text(encoding="utf-8")
+    s.transcript.unlink()
+    try:
+        reason, stderr = s.stop()
+    finally:
+        s.transcript.write_text(saved, encoding="utf-8")
+    assert reason is None, (reason, stderr)
+
+
+def test_p3_1_a_window_reader_that_raises_keeps_the_whole_session_rule(tmp_path):
+    s = _old_trace_session(tmp_path)
+    lib = s.project / ".claude" / "hooks" / "lib" / "session_work.py"
+    lib.write_text(lib.read_text(encoding="utf-8") + "\n\ndef work_start(_entries, _task_id, _worktrees):\n"
+                   "    raise RuntimeError('window reader broke')\n", encoding="utf-8")
+    reason, stderr = s.stop()
+    assert reason is None, (reason, stderr)
+    assert "Debate window unknown (RuntimeError)" in stderr, stderr
+
+
 # -- the window reader ---------------------------------------------------------------------------
 def _call(name, tool_input, at, cwd="/nowhere"):
     return (at, name, tool_input, cwd)
@@ -240,6 +359,10 @@ def test_ac5_tracks_md_states_the_window_rule():
     assert "A task with no recorded change window keeps the whole-session rule" in check, check
     limits = _tracks_section("Known limits")
     assert "A Debate counts only from the task's first change in this session (T293)." in limits
+    assert ("make the first change to a task file (the guide, the review file or the failing test in "
+            "its worktree) before the Debate") in check, check
+    assert "Advocate trace records obey the same window" in check, check
+    assert "does not skip symlinks and does not filter `sessionId`" in limits, limits
     review = (ROOT / "tasks" / "TASK_REVIEW_T287.md").read_text(encoding="utf-8")
     line = next(l for l in review.splitlines() if "**P3** session window" in l)
     assert "Fixed in T293" in line and "Skipped, follow-up" not in line, line

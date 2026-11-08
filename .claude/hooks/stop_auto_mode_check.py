@@ -72,7 +72,10 @@ session's is ignored. A file planted under this session's folder with this sessi
 read: the transcripts folder is protected only by the `.claude/settings.json` deny rules (T251).
 T293: the Skill call and the Advocate call must also be dated at or after the first change of the
 task's files in this session (`session_work.work_start`); a missing or unparsable date does not count.
-A task with no recorded change window keeps the whole-session rule. (Tests run in a task's worktree
+The Advocate records of the trace (`<ID>.jsonl`, `_untagged.jsonl`) obey the same rule, so neither
+source counts a Debate older than the window. A task with no recorded change window keeps the
+whole-session rule. When the transcript held Debate calls before the window, the pause reason ends
+with a hint to rerun the Debate after the task's first change. (Tests run in a task's worktree
 are filed under that task by the trace hook itself, T287 slot 2b in `lib/task_context.py`.)
 """
 import glob
@@ -347,7 +350,8 @@ def _debate_counts(calls, window_start=None):
 
 
 def session_debates(transcript_path, window=None):
-    """`advocates(task_id, task=None)`: this session's Advocate calls for that task's Debates; the
+    """`advocates(task_id, task=None)`: `(counted, dropped)` — this session's Advocate calls for that
+    task's Debates that count, and those left out for falling before the task's window; the
     transcript is read once. T293: `window(task)` (`session_window`) is read only for a task that
     has a Debate; without `task` or `window` the whole session counts."""
     cache = {}
@@ -358,9 +362,10 @@ def session_debates(transcript_path, window=None):
         want = str(task_id).upper()
         mine = [c for c in cache["calls"] if c[0] == want]
         if not mine:
-            return 0
+            return 0, 0
         start = (lambda _id: window(task)) if window is not None and task is not None else None
-        return _debate_counts(mine, start).get(want, 0)
+        counted = _debate_counts(mine, start).get(want, 0)
+        return counted, len(mine) - counted
     return advocates
 
 
@@ -477,12 +482,29 @@ def session_window(transcript_path):
     return start
 
 
-def check_task(task, windows, owned=None, debates=None):
+def advocate_records_in_window(records, start):
+    """T293: the Advocate `Agent` calls among the trace `records` that count: all of them with no
+    window (`start` None), else only those dated at or after `start`. A record with a missing or
+    unparsable timestamp does not count when there is a window."""
+    found = [r for r in records if is_advocate_call(r)]
+    if start is None:
+        return found
+    return [r for r in found if (parse_ts(r.get("timestamp")) or datetime.min.replace(
+        tzinfo=timezone.utc)) >= start]
+
+
+DEBATE_BEFORE_WINDOW = ("a Debate was found before the task's first change in this session; rerun "
+                        "it after the first change")
+
+
+def check_task(task, windows, owned=None, debates=None, window=None):
     """The reasons this task's report fails, or [] (also [] when the task is not auto mode).
     `owned(task)` (T250 G3, T252) narrows the check, for an extended-track task marked auto mode or
     any task found in an `[auto]` window, to this session's work; None, or an answer of None, keeps
-    the check. `debates(task_id, task)` (T287, T293) is this session's Advocate calls for the task's Debates
-    that fall inside the task's change window."""
+    the check. `debates(task_id, task)` (T287, T293) is `(counted, dropped)`: this session's Advocate
+    calls for the task's Debates that fall inside the task's change window, and those before it.
+    `window(task)` (T293, `session_window`) is the start of that window, or None: the trace's Advocate
+    records obey it too."""
     task_id, body = task.task_id, task.body
     if task.minimal:
         risk_text = body
@@ -548,21 +570,25 @@ def check_task(task, windows, owned=None, debates=None):
 
     records = trace_records(task_id)
     debated = [l for l in lines if "DEBATED:" in l]
-    have = sum(1 for r in records if is_advocate_call(r))
+    start = window(task) if window is not None and any(is_advocate_call(r) for r in records) else None
+    have = len(advocate_records_in_window(records, start))
+    hint = ""
     if debates is not None:  # T287: the larger count, never the sum — a call is in both when filed right
-        have = max(have, debates(task_id, task))
+        counted, dropped = debates(task_id, task)
+        have = max(have, counted)
+        hint = f" ({DEBATE_BEFORE_WINDOW})" if dropped else ""
     if risk == "High":
         # D10: at Risk High at least one decision is always debated by 3 Advocates; cited RULE
         # lines do not replace it ("This is force for the high risk", D7).
         three = [l for l in debated if len(re.findall(r"\bAdvocate \d+:", l)) == 3]
         if not three or have < 3:
-            reasons.append(D10_REASON)
+            reasons.append(D10_REASON + hint)
     if debated:
         need = (need_per_line or 2) * len(debated)
         if have < need:
             reasons.append(f"{len(debated)} `DEBATED` line(s) need ≥{need} Advocate `Agent` calls "
                            f"(description `Advocate <n>:` and a prompt starting "
-                           f"`{ADVOCATE_PROMPT_PREFIX}`); the trace has {have}")
+                           f"`{ADVOCATE_PROMPT_PREFIX}`); the trace has {have}{hint}")
 
     if not task.minimal:
         skills = {field(r.get("summary"), "skill").strip() for r in records
@@ -645,8 +671,8 @@ def main():
     dirs = am.tasks_dirs(ROOT)
     windows = auto_windows(event.get("transcript_path"))
     owned = session_owner(event.get("transcript_path"))
-    debates = session_debates(event.get("transcript_path"),
-                              session_window(event.get("transcript_path")))
+    window = session_window(event.get("transcript_path"))
+    debates = session_debates(event.get("transcript_path"), window)
     open_rows = am.board_rows(kanban)
     done = {task_id for task_id, _ in am.board_rows(kanban, ("Done",))}
     tasks = list(open_rows)
@@ -659,7 +685,7 @@ def main():
     for task_id, row in tasks:
         try:
             task = am.resolve(task_id, row, dirs)
-            for report_path, minimal, reason, stamp in check_task(task, windows, owned, debates):
+            for report_path, minimal, reason, stamp in check_task(task, windows, owned, debates, window):
                 failures.setdefault(task_id, (report_path, minimal, [], stamp))[2].append(reason)
         except am.Unreadable as exc:
             warn(f"{exc} — auto-mode check skipped for {task_id}")

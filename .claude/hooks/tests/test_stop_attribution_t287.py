@@ -739,9 +739,10 @@ def test_ac3_an_advocate_filed_right_is_not_counted_twice(tmp_path):
     s = Session(project, tmp_path)
     s.request("run T242 [auto]")
     s.point_at("T242")
+    # T293: the review file is written first; a Debate before the task's first change does not count
+    s.call("Write", {"file_path": str(project / "tasks" / "TASK_REVIEW_T242.md"), "content": "x"})
     s.call("Skill", {"skill": "resolve-question", "args": "task=T242 risk=Medium"})
     s.call("Agent", advocate_input(1))
-    s.call("Write", {"file_path": str(project / "tasks" / "TASK_REVIEW_T242.md"), "content": "x"})
     s.call("Bash", {"command": "python3 -m pytest -q"})
     s.call("Skill", {"skill": "code-review", "args": "task=T242"})
     s.call("Skill", {"skill": "security-review"})
