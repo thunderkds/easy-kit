@@ -67,8 +67,24 @@ Not done: merge (yours); <auto verify: running (T182) | auto verify: <result> | 
 > **before any implementation commit exists**; if it does not (docs, templates, skill-instruction
 > text), BEFORE is the **verbatim prior content** of what changed — a quoted excerpt, not a command.
 
-**BEFORE**: [pasted timestamped command output showing the thing absent/failing, captured before the
-first implementation commit] OR [verbatim excerpt of the prior content, for non-executable changes]
+**BEFORE** (captured 2026-11-08T15:21Z at HEAD `bc5ccc34`, before any implementation commit; throwaway repo and `[admin]` request driven through the gate's real `main()`, then the command run for real; repro script `/tmp/claude-1000/-home-hungnguyenhuu-workspace-pets-personal-agentic-claude/9e7b73f3-3c09-4250-86c1-dac31ab338c5/scratchpad/t295/repro_driver.py`; plant: `git config merge.evil.driver <script>` plus `.git/info/attributes` `* merge=evil`, command `git merge feat/t900-x`):
+
+```
+[2026-11-08T15:21:14Z] bash gated=False GATE: ALLOWED
+[2026-11-08T15:21:14Z] ran in bash: rc=0
+[2026-11-08T15:21:14Z] marker exists=True merge driver ran as code
+[2026-11-08T15:21:15Z] zsh gated=False GATE: ALLOWED
+[2026-11-08T15:21:15Z] ran in zsh: rc=0
+[2026-11-08T15:21:15Z] marker exists=True merge driver ran as code
+[2026-11-08T15:21:15Z] bash gated=True GATE: ALLOWED
+[2026-11-08T15:21:15Z] ran in bash: rc=0
+[2026-11-08T15:21:15Z] marker exists=True merge driver ran as code
+[2026-11-08T15:21:15Z] zsh gated=True GATE: ALLOWED
+[2026-11-08T15:21:15Z] ran in zsh: rc=0
+[2026-11-08T15:21:15Z] marker exists=True merge driver ran as code
+```
+
+The gate says ALLOWED, so the merge runs and the planted driver writes its marker file.
 
 **AFTER**: [same command, post-change] OR [verbatim excerpt of the new content]
 
