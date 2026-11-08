@@ -43,6 +43,17 @@ Not done: merge (yours); <auto verify: running (T182) | auto verify: <result> | 
 
 -->
 
+## Auto decisions
+
+Mode: auto
+1. Set the byte cap to the size of `AGENTS.md` now (21402 bytes) and leave `AGENTS.md` untouched; after T284 merges, the cap is re-measured at merge time (merge order T284, then T286) — RULE: `tasks/TASK_GUIDE_T286.md` § Approach
+2. Listed 18 cut candidates and cut nothing — RULE: `tasks/TASK_GUIDE_T286.md` § Requirement (Out of scope: a cut needs the user's pick)
+3. Left the two 32,768-byte Codex-ceiling checks (`tests/test_agents_md_primary.py:216`, `tests/test_auto_mode.py:305`) unchanged — SAFER OPTION: they are a ceiling, not a ratchet ⚠ decided for you — please review
+4. Kept the cap number in the test name (`test_agents_md_is_at_most_21402_bytes`), so each future ratchet renames it — RULE: `tasks/TASK_GUIDE_T286.md` § Acceptance Criteria (row 1 names `<N>` in the test name)
+Checks: tests `python3 -m pytest tests/test_claude_md_slim.py -q` — 8 passed; full suite `python3 -m pytest .claude/hooks/tests/ tests/ -q` — 1 failed, 3445 passed (the one failure is `tests/test_spike_report_t283.py`, expected until T283 merges); reviews code-review — 0 P0, 0 P1, 0 P2, 1 P3 (cap number in the test name, kept); real run `python3 -B -m pytest tests/test_claude_md_slim.py -q` — printed `8 passed` (auto-checked, not /verify)
+Memory: memory/decisions.md — T283–T288 Karpathy spikes (four adopted, three dropped) and T284 `[admin]` entries; memory/learnings.md — parallel agents share one step budget, stale `.pyc` in mutation controls, docs-only task SKIP written as blocked
+Not done: merge (yours); auto verify: running (T182)
+
 ## Evidence
 
 | Check | Result | Notes / output snippet |
