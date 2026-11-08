@@ -43,6 +43,18 @@ Not done: merge (yours); <auto verify: running (T182) | auto verify: <result> | 
 
 -->
 
+## Auto decisions
+
+Mode: auto
+1. Derive the rows from the existing trace, add no hook, and commit no backfilled `tasks/attempts.tsv` — RULE: `tasks/TASK_GUIDE_T288.md` § Requirement (Out of scope)
+2. A row is a handback whose `Status:` starts with `blocked`, or whose status names the step limit without a negation; T219's "ready-for-review, with AC 3b blocked" is not a row — RULE: `tasks/TASK_GUIDE_T288.md` § Acceptance Criteria (row 4)
+3. The task column comes from the handback's `Task:` line, with the trace file name as fallback; the spike used the file name, so T190's block was labelled T188 — SAFER OPTION: the handback names its own task ⚠ decided for you — please review
+4. Fixed the three code-review P2 findings (splitlines separators, lone surrogate, a test that could not fail) although P2 is only recommended — RULE: `tasks/TASK_GUIDE_T288.md` § Acceptance Criteria (rows 2 and 5)
+5. A reviewer handback with no `Status:` line (T266) is not logged; recorded as a known limit — RULE: `tasks/TASK_GUIDE_T288.md` § Acceptance Criteria (row 1 limits rows to the status line)
+Checks: tests `python3 -B -m pytest tests/test_attempt_log.py -q` — 26 passed; full suite `python3 -B -m pytest .claude/hooks/tests/ tests/ -q` — 1 failed, 3467 passed (the one failure is `tests/test_spike_report_t283.py`, expected until T283 merges); reviews code-review — 0 P0, 0 P1, 3 P2 fixed, 3 P3 (2 fixed, 1 documented); real run `python3 scripts/attempt_log.py derive memory/event-trace` — printed 17 rows, exit 0 (auto-checked, not /verify)
+Memory: memory/decisions.md — T283–T288 Karpathy spikes (four adopted, three dropped) and T284 `[admin]` entries; memory/learnings.md — parallel agents share one step budget, stale `.pyc` in mutation controls, docs-only task SKIP written as blocked
+Not done: merge (yours); first `append` of tasks/attempts.tsv after the merge (the Supervisor writes that file); auto verify: running (T182)
+
 ## Evidence
 
 | Check | Result | Notes / output snippet |
