@@ -139,6 +139,7 @@ def test_fix2_each_kind_of_name_is_cut_out_on_its_own():
         "ready-for-review. Branch feat/step-limit stopped diverging from main.",        # path
         "ready-for-review. Notes in /tmp/step_limit fired no warning.",                  # path
         "ready-for-review. `step-limit.py` fired once per run now.",                     # file
+        "ready-for-review. Tests killed it; I edited step_limit.py.",                    # file
         "ready-for-review. `pre_agent_step_limit.py` fired once per run now.",           # file
         "ready-for-review. Branch t999-step-limit-fix stopped diverging from main.",     # compound
         "ready-for-review. The step-limit-per-agent counter fired once per run now.",    # compound
