@@ -159,6 +159,43 @@ def load_work(transcript_path, since=None):
     return calls
 
 
+def merge_calls(transcript_path, since):
+    """T284: `[(command, cwd, ok)]` for every `Bash` call of the session and its sub-agents dated at
+    or after `since`. `ok` is True only when the call's `tool_result` is in the transcript and is not
+    an error: a blocked, failed or unanswered call is not `ok`. [] on any doubt."""
+    try:
+        calls, results = [], {}
+        for path in _session_files(transcript_path):
+            with open(path, encoding="utf-8") as f:
+                for line in f:
+                    if '"tool_use"' not in line and '"tool_result"' not in line:
+                        continue
+                    try:
+                        entry = json.loads(line)
+                    except Exception:
+                        continue
+                    content = ((entry.get("message") or {}).get("content")
+                               if isinstance(entry, dict) else None)
+                    if not isinstance(content, list):
+                        continue
+                    ts = parse_ts(entry.get("timestamp"))
+                    for block in content:
+                        if not isinstance(block, dict):
+                            continue
+                        if block.get("type") == "tool_result":
+                            results[block.get("tool_use_id")] = not block.get("is_error")
+                        elif (block.get("type") == "tool_use" and block.get("name") == "Bash"
+                              and entry.get("type") == "assistant" and ts is not None
+                              and ts >= since and isinstance(block.get("input"), dict)
+                              and isinstance(block["input"].get("command"), str)):
+                            calls.append((block.get("id"), block["input"]["command"],
+                                          entry.get("cwd") if isinstance(entry.get("cwd"), str)
+                                          else None))
+        return [(command, cwd, results.get(use_id) is True) for use_id, command, cwd in calls]
+    except Exception:
+        return []
+
+
 def _forms(path):
     """`path` normalized and resolved (`os.path.realpath`); just normalized when it cannot be
     resolved."""

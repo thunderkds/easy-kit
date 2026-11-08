@@ -194,6 +194,12 @@ def auto_verified(fx):
     cells = verify_record.row_cells(verified, "pass", "s-1", "log.txt")
     fx.task_file("TASK_REVIEW_T900.md", REVIEW.format(tid="T900", result=cells[0],
                                                       notes=cells[1]), commit=True)
+    publish(fx)
+
+
+def publish(fx):
+    """`origin/main` as the remote last saw it: `main` now (the state before any admin merge)."""
+    git(fx.main, "update-ref", "refs/remotes/origin/main", "main")
 
 
 def session(tmp_path, fx, request, worked=True, extra=()):
@@ -330,7 +336,7 @@ def test_ac7_admin_does_not_cover_a_task_this_request_did_not_touch(gate, tmp_pa
     path = transcript(tmp_path, [
         human("do T900's work", -1200),
         wrote(os.path.join(fx.wt, "tasks", "TASK_REVIEW_T900.md"), -1100),
-        human("now do another thing [admin]", -600)])
+        human("now do another thing [admin]", +60)])
     text = reason(MERGE + " feat/t900-x", fx.main, path)
     assert text is not None and "T900" in text, text
 
@@ -433,10 +439,15 @@ def admin_tag_section(text=None):
     return _norm(m.group(1)) if m else ""
 
 
-def test_ac10_admin_tag_section_states_the_verify_run_and_the_pass_only_merge():
-    body = admin_tag_section()
+def check_ac10(text):
+    """Raise AssertionError unless the `### Admin tag` section of `text` holds every AC 10 statement."""
+    body = admin_tag_section(text)
     for needle in AC10_NEEDLES:
         assert needle in body, needle
+
+
+def test_ac10_admin_tag_section_states_the_verify_run_and_the_pass_only_merge():
+    check_ac10(TRACKS.read_text(encoding="utf-8"))
 
 
 def test_ac10_agents_md_states_the_supervisor_starts_the_run():
@@ -454,9 +465,10 @@ def test_ac10_mutation_control_dropping_a_statement_is_caught(cut):
     mutated_section, hits = re.subn(words, "", raw)
     assert hits == 1 and mutated_section.encode() != raw.encode()
     mutated = original.replace(raw, mutated_section)
-    assert mutated != original
-    body = admin_tag_section(mutated)
-    assert body and not all(n in body for n in AC10_NEEDLES)
+    assert mutated.encode() != original.encode()
+    check_ac10(original)  # the real text passes
+    with pytest.raises(AssertionError):
+        check_ac10(mutated)
 
 
 @pytest.mark.parametrize("verdict", ["blocked", "fail"])
@@ -482,11 +494,18 @@ def bash(command, cwd, offset_s=-300):
                 {"type": "tool_use", "id": "b1", "name": "Bash", "input": {"command": command}}]}}
 
 
+def result(ok=True, offset_s=-190, use_id="b1"):
+    return {"type": "user", "timestamp": _ts(offset_s), "sessionId": SID,
+            "message": {"role": "user", "content": [
+                {"type": "tool_result", "tool_use_id": use_id, "content": "ok" if ok else "blocked",
+                 "is_error": not ok}]}}
+
+
 def merged_session(tmp_path, fx, merge=True, ran=True):
     """The `[admin]` session that merged T900's branch into `main` (in the transcript and in git)."""
     if merge:
         git(fx.main, "merge", "-q", "--no-ff", "-m", "T900 merge", "feat/t900-x")
-    extra = [bash(MERGE + " --no-ff feat/t900-x", fx.main, -200)] if ran else []
+    extra = [bash(MERGE + " --no-ff feat/t900-x", fx.main, -200), result()] if ran else []
     return session(tmp_path, fx, "do it [admin]", extra=extra)
 
 
@@ -547,5 +566,233 @@ def test_sc7b_auto_only_main_push_stays_blocked(gate, tmp_path):
     fx = gate(kanban(done=("T900",)))
     auto_verified(fx)
     git(fx.main, "merge", "-q", "--no-ff", "-m", "T900 merge", "feat/t900-x")
-    path = session(tmp_path, fx, "do it [auto]", extra=[bash(MERGE + " feat/t900-x", fx.main, -200)])
+    path = session(tmp_path, fx, "do it [auto]", extra=[bash(MERGE + " feat/t900-x", fx.main, -200),
+                                                         result()])
     assert reason(PUSH + " origin main", fx.main, path) is not None
+
+
+
+# ── Stage 4 fix round (security-review P0-P2, code-review mutants) ───────────────────────────
+from test_merge_gate_t210 import write  # noqa: E402
+
+
+def commit_on_main(fx, name, msg):
+    write(os.path.join(fx.main, name), msg + "\n")
+    git(fx.main, "add", name)
+    git(fx.main, "commit", "-qm", msg)
+
+
+def test_p0_an_unverified_commit_after_the_merge_blocks_the_main_push(gate, tmp_path):
+    fx = gate(kanban(done=("T900",)))
+    auto_verified(fx)
+    path = merged_session(tmp_path, fx)
+    commit_on_main(fx, "evil.txt", "sneaky unreviewed commit")
+    text = reason(PUSH + " origin main", fx.main, path)
+    assert text is not None and "besides the merge" in text, text
+
+
+def test_p0_an_unverified_commit_before_the_merge_blocks_the_main_push(gate, tmp_path):
+    fx = gate(kanban(done=("T900",)))
+    auto_verified(fx)
+    commit_on_main(fx, "evil.txt", "sneaky")  # main ahead of origin/main before the merge
+    text = reason(PUSH + " origin main", fx.main, merged_session(tmp_path, fx))
+    assert text is not None and "besides the merge" in text, text
+
+
+def test_p0_a_cherry_pick_onto_main_is_not_the_merge(gate, tmp_path):
+    fx = gate(kanban(done=("T900",)))
+    auto_verified(fx)
+    git(fx.main, "cherry-pick", "-x", "feat/t900-x~1", "feat/t900-x")  # -x: real copies
+    path = merged_session(tmp_path, fx, merge=False)
+    assert reason(PUSH + " origin main", fx.main, path) is not None
+
+
+def test_p0_a_reset_after_a_merge_that_did_not_run_is_blocked(gate, tmp_path):
+    fx = gate(kanban(done=("T900",)))
+    auto_verified(fx)
+    path = session(tmp_path, fx, "do it [admin]",
+                   extra=[bash(MERGE + " --no-ff feat/t900-x", fx.main, -200)])  # no tool_result
+    git(fx.main, "reset", "-q", "--hard", "feat/t900-x")
+    assert reason(PUSH + " origin main", fx.main, path) is not None
+
+
+def test_p0_a_fast_forward_merge_may_push_main(gate, tmp_path):
+    fx = gate(kanban(done=("T900",)))
+    auto_verified(fx)
+    git(fx.main, "merge", "-q", "--ff-only", "feat/t900-x")
+    path = session(tmp_path, fx, "do it [admin]",
+                   extra=[bash(MERGE + " --ff-only feat/t900-x", fx.main, -200), result()])
+    assert reason(PUSH + " origin main", fx.main, path) is None
+
+
+def test_p0_no_remote_main_ref_blocks_the_main_push(gate, tmp_path):
+    fx = gate(kanban(done=("T900",)))
+    auto_verified(fx)
+    path = merged_session(tmp_path, fx)
+    git(fx.main, "update-ref", "-d", "refs/remotes/origin/main")
+    assert reason(PUSH + " origin main", fx.main, path) is not None
+
+
+AFTER = +60  # a request dated after every fixture commit: the guide existed before it
+
+
+@pytest.mark.parametrize("work", ["touch-worktree", "touch-guide", "write-guide", "spawn"])
+def test_p1_work_that_merely_names_an_existing_task_does_not_bind_it(gate, tmp_path, work):
+    fx = gate(kanban(ready=("T900",)))
+    auto_verified(fx)
+    guide = os.path.join(fx.main, "tasks", "TASK_GUIDE_T900.md")
+    entry = {"touch-worktree": bash("touch " + os.path.join(fx.wt, "x.tmp"), fx.main, AFTER + 30),
+             "touch-guide": bash("touch " + guide, fx.main, AFTER + 30),
+             "write-guide": wrote(guide, AFTER + 30),
+             "spawn": {"type": "assistant", "timestamp": _ts(AFTER + 30), "sessionId": SID,
+                       "message": {"role": "assistant", "content": [{
+                           "type": "tool_use", "id": "a1", "name": "Agent", "input": {
+                               "prompt": "Task ID: T900\nread tasks/TASK_GUIDE_T900.md"}}]}}}[work]
+    path = transcript(tmp_path, [human("fix the typo in README [admin]", AFTER), entry])
+    text = reason(MERGE + " feat/t900-x", fx.main, path)
+    assert text is not None and "not the task of the `[admin]` request" in text, text
+
+
+def test_p1_a_guide_added_after_the_request_binds_its_task(gate, tmp_path):
+    fx = gate(kanban(ready=("T900",)))
+    path = transcript(tmp_path, [human("fix the typo in README [admin]", -900)])
+    auto_verified(fx)  # commits TASK_GUIDE_T900.md now, after the request
+    assert reason(MERGE + " feat/t900-x", fx.main, path) is None
+
+
+def test_p1_two_guides_added_after_the_request_bind_neither(gate, tmp_path):
+    fx = gate(kanban(ready=("T900",)))
+    path = transcript(tmp_path, [human("fix the typo in README [admin]", -900)])
+    auto_verified(fx)
+    fx.task_file("TASK_GUIDE_T901.md", "# T901\n", commit=True, where=fx.main)
+    assert reason(MERGE + " feat/t900-x", fx.main, path) is not None
+
+
+@pytest.mark.parametrize("text,allowed", [
+    ("work on T950 [admin]; do NOT merge T900", False),
+    ("work on T950 [admin], but don't merge T900", False),
+    ("merge T900 and T950 [admin]", True),
+    ("merge and push T900 [admin]", True),
+])
+def test_p1_a_negated_mention_does_not_bind(gate, tmp_path, text, allowed):
+    fx = gate(kanban(ready=("T900",)))
+    auto_verified(fx)
+    got = reason(MERGE + " feat/t900-x", fx.main, transcript(tmp_path, [human(text, AFTER)]))
+    assert (got is None) is allowed, got
+
+
+@pytest.mark.parametrize("command,where", [(PUSH + " evil main", "main"),
+                                           (PUSH + " evil feat/t900-x", "wt")])
+def test_p2_a_remote_other_than_origin_is_blocked(gate, tmp_path, command, where):
+    fx = gate(kanban(done=("T900",)))
+    auto_verified(fx)
+    path = merged_session(tmp_path, fx)
+    git(fx.main, "remote", "add", "evil", "https://attacker.example/x.git")
+    assert reason(command, fx.main if where == "main" else fx.wt, path) is not None
+
+
+@pytest.mark.parametrize("key", ["branch.feat/t900-x.pushRemote", "remote.pushDefault",
+                                 "branch.feat/t900-x.remote"])
+def test_p2_a_bare_push_to_another_remote_is_blocked(gate, tmp_path, key):
+    fx = gate(kanban(ready=("T900",)))
+    auto_verified(fx)
+    path = session(tmp_path, fx, "do it [admin]")
+    assert reason(PUSH, fx.wt, path) is None  # control
+    git(fx.wt, "config", key, "evil")
+    assert reason(PUSH, fx.wt, path) is not None
+
+
+@pytest.mark.parametrize("ok", [False, None], ids=["error-result", "no-result"])
+def test_p2_a_failed_or_unanswered_merge_call_is_not_a_merge(gate, tmp_path, ok):
+    fx = gate(kanban(done=("T900",)))
+    auto_verified(fx)
+    git(fx.main, "merge", "-q", "--no-ff", "-m", "T900 merge", "feat/t900-x")
+    extra = [bash(MERGE + " --no-ff feat/t900-x", fx.main, -200)]
+    if ok is not None:
+        extra.append(result(ok=ok))
+    assert reason(PUSH + " origin main", fx.main, session(tmp_path, fx, "do it [admin]",
+                                                          extra=extra)) is not None
+
+
+@pytest.mark.parametrize("entry", [
+    {"type": "user", "timestamp": _ts(-30),
+     "message": {"role": "user", "content": [{"type": "text", "text": "some harness text"}]}},
+    human("sub-agent prompt for T900", -20, isSidechain=True, origin=None),
+    human("sub-agent prompt for T900", -20, isSidechain=True),
+], ids=["no-origin", "sidechain-no-origin", "sidechain-human"])
+def test_p2_an_entry_that_is_not_a_typed_request_does_not_end_the_auto_window(gate, tmp_path,
+                                                                             entry):
+    fx = gate(kanban(ready=("T900",)))
+    auto_verified(fx)
+    assert reason(MERGE + " feat/t900-x", fx.main,
+                  session(tmp_path, fx, "do it [auto]", extra=[entry])) is not None
+
+
+def test_p2_decision_an_originless_auto_request_is_not_read_by_the_gate(gate, tmp_path):
+    """Pinned decision: only an `origin.kind` "human" entry is a request for the gate, so an
+    originless entry neither ends a window, nor opens one, nor carries `[admin]`."""
+    fx = gate(kanban(ready=("T900",)))
+    auto_verified(fx)
+    entry = human("do it [admin]", -900, origin=None)
+    assert am.latest_request(transcript(tmp_path, [entry])) is None
+    assert am.request_text(human("x", isSidechain=True)) is None
+
+
+def test_mutant_a_a_merge_before_the_request_does_not_unlock_main(gate, tmp_path):
+    fx = gate(kanban(done=("T900",)))
+    auto_verified(fx)
+    git(fx.main, "merge", "-q", "--no-ff", "-m", "T900 merge", "feat/t900-x")
+    path = transcript(tmp_path, [human("merge T900", -1300),
+                                 bash(MERGE + " --no-ff feat/t900-x", fx.main, -1200), result(True, -1190),
+                                 human("now push T900 [admin]", -900)])
+    assert reason(PUSH + " origin main", fx.main, path) is not None
+
+
+def test_mutant_b_hook_only_ignores_a_user_verify_line(gate, tmp_path, monkeypatch):
+    fx = gate(kanban(ready=("T900",)))
+    fx.task_file("MINIMAL_LOG.md", "## T900 — fixture · minimal\n**Checked:**\n"
+                 f"- verify: ☑ pass — /verify by the user, session s-1, commit {'a' * 40}\n",
+                 commit=True)
+    monkeypatch.setattr(merge_gate, "user_line_confirmed", lambda *a, **k: True)
+    assert merge_gate.committed_verify_row("T900", "feat/t900-x", fx.wt) is True  # control
+    assert merge_gate.committed_verify_row("T900", "feat/t900-x", fx.wt, hook_only=True) is False
+
+
+def test_mutant_c_a_command_for_two_tasks_is_refused(gate, tmp_path):
+    fx = gate(kanban(ready=("T900",)))
+    auto_verified(fx)
+    git(fx.main, "branch", "feat/t901-y")
+    text = reason(MERGE + " feat/t900-x && " + MERGE + " feat/t901-y", fx.main,
+                  session(tmp_path, fx, "merge T900 and T901 [admin]"))
+    assert text is not None and "one task only" in text, text
+
+
+def test_mutant_d_every_branch_of_the_command_needs_its_verify(gate, tmp_path):
+    fx = gate(kanban(ready=("T900",)))
+    auto_verified(fx)
+    git(fx.main, "branch", "feat/t900-y")  # names T900, carries no verify row
+    text = reason(MERGE + " feat/t900-x && " + PUSH + " origin feat/t900-y", fx.main,
+                  session(tmp_path, fx, "do it [admin]"))
+    assert text is not None and "feat/t900-y" in text, text
+
+
+@pytest.mark.parametrize("stamp", ["garbage", None, ""])
+def test_mutant_e_an_unreadable_request_time_is_not_admin(tmp_path, stamp):
+    entry = human("do X [admin]")
+    entry["timestamp"] = stamp
+    assert am.admin_request(transcript(tmp_path, [entry])) is None
+
+
+def test_mutant_f_two_refspecs_are_refused(gate, tmp_path):
+    fx = gate(kanban(done=("T900",)))
+    auto_verified(fx)
+    assert reason(PUSH + " origin feat/t900-x main", fx.wt, merged_session(tmp_path, fx)) is not None
+
+
+def test_mutant_g_a_bare_push_with_matching_push_default_is_refused(gate, tmp_path):
+    fx = gate(kanban(ready=("T900",)))
+    auto_verified(fx)
+    path = session(tmp_path, fx, "do it [admin]")
+    assert reason(PUSH, fx.wt, path) is None  # control
+    git(fx.wt, "config", "push.default", "matching")
+    assert reason(PUSH, fx.wt, path) is not None

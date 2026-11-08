@@ -87,8 +87,8 @@ def request_text(entry):
     result, a task notification, a skill body or reminder, the compact summary, a `!` command)."""
     if not isinstance(entry, dict) or entry.get("type") != "user":
         return None
-    if entry.get("isMeta") or entry.get("isCompactSummary"):
-        return None
+    if entry.get("isMeta") or entry.get("isCompactSummary") or entry.get("isSidechain"):
+        return None  # T284: a sub-agent's prompt is not the user's request
     origin = entry.get("origin")
     if isinstance(origin, dict) and origin.get("kind") not in (None, "human"):
         return None
@@ -102,7 +102,12 @@ def request_text(entry):
 
 
 def auto_tagged(text):
-    """True when request `text` turns auto mode on: `[auto]` or `[admin]` outside code spans."""
+    """True when request `text` turns auto mode on: `[auto]` or `[admin]` outside code spans.
+
+    A request is free text, where a tag in a code span is a mention. `request_tagged` below reads a
+    Decision record instead — a file the Supervisor writes, whose `**Asked:**` line may quote the
+    request in backticks — and keeps T180's plain substring rule, so `[auto]`'s reading of a record
+    does not change."""
     plain = CODE.sub(" ", text or "")
     return TAG in plain or ADMIN_TAG in plain
 
@@ -113,8 +118,12 @@ def admin_tagged(text):
 
 
 def latest_request(transcript_path):
-    """`(entry, text)` of the session's latest user request, or None (no request, no transcript,
-    a path that is not absolute, any read error)."""
+    """`(entry, text)` of the session's latest request the user typed, or None (no request, no
+    transcript, a path that is not absolute, any read error).
+
+    For the merge gate only an entry marked `origin.kind` "human" (and not a sidechain) is a request
+    (T284 decision): an entry with no origin neither ends an `[auto]` window, nor opens one, nor
+    carries `[admin]`. The Stop check keeps T229's looser `request_text` reading."""
     try:
         if not isinstance(transcript_path, str) or not os.path.isabs(transcript_path):
             return None
@@ -128,7 +137,8 @@ def latest_request(transcript_path):
                 except Exception:
                     continue
                 text = request_text(entry)
-                if text is not None:
+                origin = entry.get("origin") if isinstance(entry, dict) else None
+                if text is not None and isinstance(origin, dict) and origin.get("kind") == "human":
                     latest = (entry, text)
         return latest
     except Exception:
@@ -154,7 +164,8 @@ def admin_request(transcript_path):
 
 
 def request_tagged(text):
-    """True when a Decision record's text carries `[auto]` or `[admin]` (T284: the same check)."""
+    """True when a Decision record's text carries `[auto]` or `[admin]` (T284: the same check as
+    T180's `TAG in body`; see `auto_tagged` for why code spans are not stripped here)."""
     return TAG in (text or "") or ADMIN_TAG in (text or "")
 
 

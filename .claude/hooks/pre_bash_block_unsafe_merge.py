@@ -1283,11 +1283,12 @@ def session_owned_in_progress(rows, command, cwd, transcript_path):
 #     pass row never counts.
 # The gate's other checks then still run. No transcript, or one that cannot be read, means no
 # request is known: the rule does not apply and the gate is exactly as before T284.
-AUTO_MODE_PATTERNS = [
-    GIT_VERB_PREFIX + r"push\b",
-    GIT_VERB_PREFIX + r"merge\b(?!-base\b)",
-    GIT_VERB_PREFIX + r"pull\b",
-]
+AUTO_MODE_PATTERNS = [p for p in BLOCKED_PATTERNS if not p.endswith(r"rebase\b")]
+ADMIN_MAIN_BRANCH = "main"  # AC 8: the one branch `[admin]` may push besides the task branch
+ADMIN_REMOTE = "origin"     # P2: the one remote `[admin]` may push to
+# P1: a task ID in the request counts only when no negation stands before it in its clause.
+NEGATION = re.compile(r"\b(?:not|never|no|without|except|skip|leave|don't|dont)\b|n't\b", re.I)
+CLAUSE_END = re.compile(r"[.;,!?\n]")
 ADMIN_PUSH_FLAGS = frozenset({"-u", "--set-upstream", "-q", "--quiet", "-v", "--verbose",
                               "--progress", "-n", "--dry-run"})
 AUTO_MODE_LIMIT = ("With `[auto]`, merge and push stay the user's. `[admin]` allows only a merge or a "
@@ -1296,9 +1297,20 @@ AUTO_MODE_LIMIT = ("With `[auto]`, merge and push stay the user's. `[admin]` all
                    "(docs/claude-md/tracks.md `### Admin tag`).")
 
 
+def _config_value(directory, key):
+    """`git config --get <key>` in `directory`: the value, "" when unset, None on any failure."""
+    done = _git(directory, "config", "--get", key)
+    if done is None:
+        return None
+    if done.returncode == 1 and not done.stdout.strip():
+        return ""
+    return done.stdout.strip() if done.returncode == 0 else None
+
+
 def _admin_push_branch(args, directory):
-    """The one branch a `git push <args>` run in `directory` sends to the same branch name, or None
-    (a force, an unknown option, a URL, more than one refspec, another destination)."""
+    """The one branch a `git push <args>` run in `directory` sends to the same branch name on
+    `origin`, or None (a force, an unknown option, another remote or a URL, more than one refspec,
+    another destination; for a bare push, `pushRemote`/`pushDefault`/the branch remote not origin)."""
     positionals = []
     for arg in args:
         if arg.startswith("-"):
@@ -1311,6 +1323,13 @@ def _admin_push_branch(args, directory):
     current = _current_branch(directory)
     if current is None or not _push_config_is_plain(directory):
         return None
+    if positionals:
+        if positionals[0] != ADMIN_REMOTE:
+            return None
+    else:
+        for key in (f"branch.{current}.pushRemote", "remote.pushDefault", f"branch.{current}.remote"):
+            if _config_value(directory, key) not in ("", ADMIN_REMOTE):
+                return None
     spec = positionals[1] if len(positionals) == 2 else "HEAD"
     if spec.startswith("+"):
         return None
@@ -1322,17 +1341,15 @@ def _admin_push_branch(args, directory):
     return src or None
 
 
-ADMIN_MAIN_BRANCH = "main"
-
-
 def _session_admin_merges(transcript_path, when, id_regex):
     """`[(task ID, branch, directory)]` for each `git merge <one task branch>` this session (or a
-    sub-agent) ran since `when` — read from the transcript, never from a command's own text."""
+    sub-agent) ran since `when` and whose result is in the transcript and not an error — read from
+    the transcript, never from a command's own text."""
     found = []
-    for name, tool_input, call_cwd in session_work.load_work(transcript_path, since=when) or []:
-        if name != "Bash" or not isinstance(tool_input.get("command"), str):
+    for command, call_cwd, ok in session_work.merge_calls(transcript_path, when):
+        if not ok:
             continue
-        for args, where in _git_actions(tool_input["command"], call_cwd) or []:
+        for args, where in _git_actions(command, call_cwd) or []:
             if args[0] != "merge" or where is None:
                 continue
             names = [n for _, n in _merge_sources(args[1:], where)]
@@ -1340,6 +1357,60 @@ def _session_admin_merges(transcript_path, when, id_regex):
             if task_id:
                 found.append((task_id, names[0], where))
     return found
+
+
+def _main_extra_commits(where, tip):
+    """P0: the commits `main` would publish besides the merge of `tip`, or None when that cannot be
+    read. Allowed shapes: nothing (a fast-forward to commits of `tip`), or exactly one merge commit
+    whose parents are `origin/main` and `tip`. Anything else is listed."""
+    remote_main = f"refs/remotes/{ADMIN_REMOTE}/{ADMIN_MAIN_BRANCH}"
+    shas = {}
+    for name, ref in (("remote", remote_main), ("tip", tip), ("main", ADMIN_MAIN_BRANCH)):
+        done = _git(where, "rev-parse", "--verify", "--quiet", f"{ref}^{{commit}}")
+        if done is None or done.returncode != 0 or not SHA_PATTERN.match(done.stdout.strip()):
+            return None
+        shas[name] = done.stdout.strip()
+    done = _git(where, "rev-list", f"{shas['remote']}..{shas['main']}", "--not", shas["tip"])
+    if done is None or done.returncode != 0:
+        return None
+    extra = done.stdout.split()
+    if len(extra) == 1:
+        parents = _git(where, "rev-list", "--parents", "-n", "1", extra[0])
+        if parents is not None and parents.returncode == 0 and \
+                parents.stdout.split()[1:] == [shas["remote"], shas["tip"]]:
+            return []
+    return extra
+
+
+def _named_tasks(text, id_regex):
+    """P1: the task IDs `text` names as tasks to do — an ID with a negation before it in its own
+    clause ("do NOT merge T900") is left out. A plain reading, not a parser (documented limit)."""
+    named = set()
+    for match in id_regex.finditer(text or ""):
+        start = max((m.end() for m in CLAUSE_END.finditer(text, 0, match.start())), default=0)
+        if not NEGATION.search(text[start:match.start()]):
+            named.add(match.group(0).upper())
+    return named
+
+
+def _guides_added_since(directory, when):
+    """P1: the task IDs whose `tasks/TASK_GUIDE_<ID>.md` was first added, on any ref, at or after
+    `when`. None when git cannot be read."""
+    done = _git(directory, "log", "--all", "--diff-filter=A", "--format=%x00%ct", "--name-only",
+                "--", "tasks/")
+    if done is None or done.returncode != 0:
+        return None
+    first = {}
+    for chunk in done.stdout.split("\x00")[1:]:
+        lines = [l.strip() for l in chunk.splitlines() if l.strip()]
+        if not lines or not lines[0].isdigit():
+            continue
+        for name in lines[1:]:
+            hit = re.fullmatch(r"tasks/TASK_GUIDE_([A-Za-z]+-?\d+)\.md", name)
+            if hit:
+                task = hit.group(1).upper()
+                first[task] = min(first.get(task, int(lines[0])), int(lines[0]))
+    return {task for task, at in first.items() if at >= when.timestamp()}
 
 
 def admin_refusal(command, cwd, transcript_path, admin):
@@ -1378,6 +1449,12 @@ def admin_refusal(command, cwd, transcript_path, admin):
                                     f"{ADMIN_MAIN_BRANCH}^{{commit}}")
                         if held is None or held.returncode != 0:
                             return f"`main` does not hold the merged branch {merged}"
+                        extra = _main_extra_commits(where, merged)
+                        if extra is None:
+                            return (f"cannot compare `main` with `{ADMIN_REMOTE}/main` and {merged}")
+                        if extra:
+                            return (f"`main` carries commits besides the merge of {merged}: "
+                                    + ", ".join(sha[:8] for sha in extra[:5]))
                         targets.add((task_id, merged, merge_where))
                     continue
             else:
@@ -1390,12 +1467,12 @@ def admin_refusal(command, cwd, transcript_path, admin):
         if len(task_ids) != 1:
             return "an `[admin]` command covers one task only"
         task_id = task_ids.pop()
-        if not auto_mode.names_task(text, task_id):
-            calls = session_work.load_work(transcript_path, since=when)
-            if not calls or not session_work.worked_on(
-                    calls, task_id, session_work.task_worktrees(ROOT, task_id)):
+        if task_id not in _named_tasks(text, id_regex):
+            added = _guides_added_since(sorted(targets)[0][2], when)
+            if added != {task_id}:
                 return (f"{task_id} is not the task of the `[admin]` request: the request does not "
-                        "name it and this session did not work on it since the request")
+                        "name it, and it is not the one task whose guide was first added after "
+                        "the request")
         for _, branch, where in sorted(targets):
             if committed_verify_row(task_id, branch, where, hook_only=True) is not True:
                 return (f"{task_id} has no passed auto verify committed on {branch} (a hook-written "
