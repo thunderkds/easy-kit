@@ -9,7 +9,8 @@ to Claude model names. Text-check drift guard, in the style of test_spawn_startu
   AC3 — craft-spawn-prompt step 5 looks the model up in the table; no hard-coded
         C0→haiku-style map.
   AC4 — step 5 states: no row / empty cell → STOP and ask; never fall back to another CLI.
-  AC5 — the skill's Output and Default Notification report `<cli> · <Cn> → <model>`; the
+  AC5 — the skill's Output and Default Notification report `<cli> · <Cn> → <model> · effort
+        <level|none>` (T298 added the effort); the
         string `[haiku/sonnet/opus]` is gone.
   AC6 — pipeline-stages.md Stage 1 item 2 asks per-CLI models per level; Stage 3 points at
         the table instead of a hard-coded map.
@@ -80,7 +81,8 @@ def test_ac4_step5_stops_and_asks_when_no_row_or_empty_cell():
 def test_ac5_output_and_notification_report_cli_and_level():
     skill = _read("skills", "craft-spawn-prompt", "SKILL.md")
     assert "[haiku/sonnet/opus]" not in skill
-    assert "<cli> · <Cn> → <model>" in skill
+    # T298: the reported form now carries the effort too (see tests/test_craft_spawn_effort.py)
+    assert "<cli> · <Cn> → <model> · effort <level|none>" in skill
 
 
 def test_ac6_pipeline_stages_points_at_table():
