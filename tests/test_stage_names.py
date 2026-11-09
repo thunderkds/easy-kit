@@ -202,12 +202,22 @@ T284_ROW19_NEW = ("Merge, push and `ship`: never in auto mode, except the merge 
                   "allows (`### Admin tag`).")
 
 
+T299_ROW6_OLD = "No row or an empty cell: row 14."
+T299_ROW6_NEW = (T299_ROW6_OLD + " Also read the `## CLI Effort Table`: an empty effort cell means no effort is "
+                 "passed, not a stop.")
+
+
 def test_ac4_each_auto_mode_row_keeps_its_rule_and_its_log_label():
     now, base = _stop_table(_read("docs/claude-md/tracks.md")), _stop_table(_at_base("docs/claude-md/tracks.md"))
     assert len(base) == 21, "the base table must have 21 rows (anti-vacuity)"
     assert len(now) == len(base)
     for a, b in zip(now, base):
         assert a[0] == b[0]
+        if a[0] == "6":  # T299: one clause names the effort table; nothing else changes
+            assert b[2].count(T299_ROW6_OLD) == 1, "row 6: the base text no longer holds T299's anchor"
+            assert a[2] == b[2].replace(T299_ROW6_OLD, T299_ROW6_NEW), f"row {a[0]}: the rule changed"
+            assert a[3] == b[3], f"row {a[0]}: the log label changed"
+            continue
         if a[0] == "19":  # T284 (AC 9): one clause names the `[admin]` exception; nothing else changes
             assert b[2].count(T284_ROW19_OLD) == 1, "row 19: the base text no longer holds T284's anchor"
             assert a[2] == b[2].replace(T284_ROW19_OLD, T284_ROW19_NEW), f"row {a[0]}: the rule changed"
