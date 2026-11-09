@@ -693,3 +693,184 @@ def test_round3_premise_the_shell_runs_the_push_and_the_scanner_keeps_it(tmp_pat
         assert ran, f"{shell} did not run the canary of {name}"
     if ran:
         assert CANARY in strip_heredoc_bodies(command), f"{name}: the scanner hid a line {shell} runs"
+
+
+# ── Round 4: a third adversarial review (A: `|&`, B: the nested form as a word, D: more consumers) ─
+# `{push}` is the canary in the premise tests and the force push in the scanner and gate tests. The
+# shells column says which of bash 5.3.9 and zsh 5.9 run it (checked by hand and by probe).
+ROUND4 = {
+    "a-pipe-ampersand-bash": ("cat <<EOF |&\n{push}\nEOF\nbash", ("bash", "zsh")),
+    "a-pipe-ampersand-sh": ("cat <<EOF |&\n{push}\nEOF\nsh", ("bash", "zsh")),
+    "a-background-then-pipe-ampersand": ("echo a & cat <<'EOF' |&\n{push}\nEOF\nbash", ("bash", "zsh")),
+    "a-coproc": ("coproc cat<<'EOF' |&\n{push}\nEOF\nbash", ()),
+    "a-and-and-then-a-shell": ("cat <<EOF &&\n{push}\nEOF\nbash", ()),
+    "a-or-or-then-a-shell": ("cat <<EOF ||\n{push}\nEOF\nbash", ()),
+    "b-assignment-then-eval": ('x="$(cat <<\'EOF\'\n{push}\nEOF\n)"\neval "$x"', ("bash", "zsh")),
+    "b-assignment-then-word": ('x="$(cat <<\'EOF\'\n{push}\nEOF\n)"\n$x', ()),
+    "b-piped-to-sh": ('echo "$(cat <<\'EOF\'\n{push}\nEOF\n)" | sh', ("bash", "zsh")),
+    "b-piped-to-bash": ('echo "$(cat <<\'EOF\'\n{push}\nEOF\n)" | bash', ("bash", "zsh")),
+    "b-flag-then-a-pipe-to-sh": ('echo -n "$(cat <<\'EOF\'\n{push}\nEOF\n)" | sh', ("bash", "zsh")),
+    "b-word-after-the-substitution-is-a-pipe": ('git commit -m "$(cat <<\'EOF\'\n{push}\nEOF\n)" | sh', ()),
+    "b-word-after-the-substitution-is-a-shell": ('git commit -m "$(cat <<\'EOF\'\n{push}\nEOF\n)" ; sh', ()),
+    "b-word-glued-to-the-closing-quote": ('git commit -m "$(cat <<\'EOF\'\n{push}\nEOF\n)"x', ()),
+    "d-glob-command-word": ("/bin/ba?h <<'EOF'\n{push}\nEOF", ("bash", "zsh")),
+    "d-glob-star-command-word": ("/bin/ba*h <<'EOF'\n{push}\nEOF", ()),
+    "d-proc-self-exe": ("/proc/self/exe <<'EOF'\n{push}\nEOF", ("bash", "zsh")),
+    "d-env-split-string": ("env -Sbash <<'EOF'\n{push}\nEOF", ("bash", "zsh")),
+    "d-rbash": ("rbash <<'EOF'\n{push}\nEOF", ("bash", "zsh")),
+    "d-busybox-ash": ("busybox ash <<'EOF'\n{push}\nEOF", ("bash", "zsh")),
+    "d-dash": ("dash <<'EOF'\n{push}\nEOF", ("bash", "zsh")),
+    "d-xargs-after-a-pipe": ("cat <<EOF | xargs git\n{push}\nEOF", ()),
+    "d-xargs-before-the-header": ("xargs git <<EOF\n{push}\nEOF", ()),
+}
+# Shapes where the scanner must keep the text although the push is built from words of the command:
+# a stand-in `git` that only records its arguments shows the shell runs `git push …`.
+ROUND4_GIT_ARGS = {
+    "b-substitution-is-the-command-word": '"$(cat <<\'EOF\'\ngit\nEOF\n)" push --force origin main',
+    "b-substitution-is-the-subcommand": 'git "$(cat <<\'EOF\'\npush\nEOF\n)" --force origin main',
+    "b-flag-then-the-substitution-is-the-subcommand": 'git --no-pager "$(cat <<\'EOF\'\npush\nEOF\n)" --force origin main',
+    "b-substitution-in-an-assignment": 'x="$(cat <<\'EOF\'\ngit push --force origin main\nEOF\n)"\neval "$x"',
+}
+# Every command word that reads its stdin as commands or a script keeps the text of its heredoc.
+CONSUMER_WORDS = ["rbash", "ash", "busybox ash", "mksh", "ksh", "pdksh", "csh", "tcsh", "fish", "dash", "zsh",
+                  "xargs", "perl", "node", "nodejs", "ruby", "php", "lua", "awk", "gawk", "ed", "ex", "tclsh",
+                  "make", "expect", "parallel", "at", "/proc/self/exe", "/proc/1/exe", "env -Sbash", "env -S bash",
+                  "/bin/ba?h", "/bin/ba*h", "/usr/bin/env perl"]
+
+
+@pytest.mark.parametrize("name", sorted(ROUND4))
+def test_round4_the_scanner_keeps_the_push(name):
+    command = ROUND4[name][0].format(push=FORCE)
+    assert FORCE in strip_heredoc_bodies(command), f"{name}: the scanner hid a push"
+
+
+@pytest.mark.parametrize("name", sorted(ROUND4))
+@pytest.mark.parametrize("mode", ["none", "auto", "admin"])
+def test_round4_the_gate_blocks_the_force_push(gate, tmp_path, name, mode):
+    command = ROUND4[name][0].format(push=FORCE)
+    if mode == "admin":
+        fx = gate(kanban(ready=("T900",)))
+        auto_verified(fx)
+        text = reason(command, fx.wt, session(tmp_path, fx, "do it [admin]"))
+    elif mode == "auto":
+        fx = gate(kanban(done=("T900",)))
+        text = reason(command, fx.main, transcript(tmp_path, [human("go [auto]", -60)]))
+    else:
+        fx = gate(kanban(in_progress=("T900",)))
+        text = reason(command, fx.main, transcript(tmp_path, [human("thanks", -60)]))
+    assert text is not None, f"{mode}, {name}: the gate ALLOWED the hidden force push"
+
+
+@pytest.mark.skipif(not SHELLS, reason="no bash or zsh")
+@pytest.mark.parametrize("shell", SHELLS)
+@pytest.mark.parametrize("name", sorted(ROUND4))
+def test_round4_premise_the_shell_runs_the_push_and_the_scanner_keeps_it(tmp_path, shell, name):
+    template, runs_in = ROUND4[name]
+    command = template.format(push=CANARY)
+    ran = canary_ran(shell, command, tmp_path)
+    if shell in runs_in:
+        assert ran, f"{shell} did not run the canary of {name}"
+    if ran:
+        assert CANARY in strip_heredoc_bodies(command), f"{name}: the scanner hid a line {shell} runs"
+
+
+@pytest.mark.parametrize("name", sorted(ROUND4_GIT_ARGS))
+def test_round4_the_scanner_keeps_a_substitution_that_becomes_a_word(name):
+    command = ROUND4_GIT_ARGS[name]
+    assert strip_heredoc_bodies(command) == command, name
+
+
+@pytest.mark.skipif(not SHELLS, reason="no bash or zsh")
+@pytest.mark.parametrize("shell", SHELLS)
+@pytest.mark.parametrize("name", sorted(ROUND4_GIT_ARGS))
+def test_round4_premise_a_stand_in_git_records_a_push_and_the_scanner_keeps_the_text(tmp_path, shell, name):
+    """`git` is a stand-in script on PATH that only appends its arguments to a file: no real git runs."""
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    record = tmp_path / "record.txt"
+    stand_in = bin_dir / "git"
+    stand_in.write_text('#!/bin/sh\necho "$@" >> "%s"\n' % record)
+    stand_in.chmod(0o755)
+    env = {**ENV, "PATH": str(bin_dir) + os.pathsep + ENV["PATH"]}
+    subprocess.run([shell, "-c", ROUND4_GIT_ARGS[name]], cwd=str(tmp_path), env=env, capture_output=True,
+                   text=True, timeout=10, stdin=subprocess.DEVNULL)
+    ran = record.exists() and "push" in record.read_text()
+    if ran:
+        assert strip_heredoc_bodies(ROUND4_GIT_ARGS[name]) == ROUND4_GIT_ARGS[name], f"{shell}: {name}"
+
+
+@pytest.mark.skipif(not SHELLS, reason="no bash or zsh")
+@pytest.mark.parametrize("name", ["b-substitution-is-the-command-word", "b-substitution-is-the-subcommand"])
+def test_round4_premise_bash_really_runs_the_word_forms(tmp_path, name):
+    """The premise itself: a test that cannot see the shell run the push would pass for any scanner."""
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    record = tmp_path / "record.txt"
+    stand_in = bin_dir / "git"
+    stand_in.write_text('#!/bin/sh\necho "$@" >> "%s"\n' % record)
+    stand_in.chmod(0o755)
+    env = {**ENV, "PATH": str(bin_dir) + os.pathsep + ENV["PATH"]}
+    subprocess.run(["bash", "-c", ROUND4_GIT_ARGS[name]], cwd=str(tmp_path), env=env, capture_output=True,
+                   text=True, timeout=10, stdin=subprocess.DEVNULL)
+    assert record.exists() and "push --force origin main" in record.read_text(), name
+
+
+@pytest.mark.parametrize("word", CONSUMER_WORDS)
+def test_round4_a_heredoc_that_feeds_this_word_keeps_its_text(word):
+    command = f"{word} <<'EOF'\n{FORCE}\nEOF"
+    assert strip_heredoc_bodies(command) == command, word
+
+
+@pytest.mark.parametrize("command", [
+    "xargs git <<EOF\npush --force\nEOF",
+    "cat <<EOF | xargs git\npush --force\nEOF",
+    "cat <<EOF | xargs -n1 git\npush --force\nEOF",
+])
+def test_round4_xargs_anywhere_on_the_header_line_keeps_the_text(command):
+    assert strip_heredoc_bodies(command) == command
+
+
+# The shapes that stay stripped: pinned by earlier tasks (and by `test_admin_tag.py`).
+PINNED_STRIPPED = {
+    "cat > notes.md <<'EOF'": "cat > notes.md <<'EOF'\n{push}\nEOF",
+    "python3 -": "python3 - <<'EOF'\n{push}\nEOF",
+    "python -": "python - <<'EOF'\n{push}\nEOF",
+    "redirect after the tag": "cat <<EOF > notes.md\n{push}\nEOF",
+    "after && ": "git status && cat > notes.md <<'EOF'\n{push}\nEOF",
+    "space before the tag": "cat << EOF\n{push}\nEOF",
+    "dash and a tab terminator": "cat <<-EOF\n{push}\n\tEOF",
+    "a quoted string before the redirect": 'echo "writing notes" > n.md <<\'EOF\'\n{push}\nEOF',
+    "stderr merge": "cat 2>&1 <<EOF\n{push}\nEOF",
+    "commit form": 'git commit -m "$(cat <<\'EOF\'\nmsg\n{push}\nEOF\n)"',
+    "gh pr create form": 'gh pr create --title t --body "$(cat <<\'EOF\'\nmsg\n{push}\nEOF\n)"',
+    "long option with an equals sign": 'git commit --message="$(cat <<\'EOF\'\nmsg\n{push}\nEOF\n)"',
+    "commit form then more options": 'git commit -m "$(cat <<\'EOF\'\nmsg\n{push}\nEOF\n)" --amend',
+    "commit form then a second message": 'git commit -m "$(cat <<\'EOF\'\nmsg\n{push}\nEOF\n)" -m "two"',
+}
+
+
+@pytest.mark.parametrize("name", sorted(PINNED_STRIPPED))
+def test_round4_the_pinned_shapes_still_strip(name):
+    command = PINNED_STRIPPED[name].format(push=FORCE)
+    assert "push" not in strip_heredoc_bodies(command), name
+
+
+# A command substitution inside a quoted span behind `echo` runs, so the quoted-span rule keeps it.
+SUBSTITUTION_IN_ECHO = {
+    "dollar-paren": 'echo "$({push})"',
+    "backtick": 'echo "`{push}`"',
+    "heredoc-inside": 'echo "$(cat <<\'EOF\'\n{push}\nEOF\n)" | sh',
+    "flag-and-heredoc-inside": 'echo -n "$(cat <<\'EOF\'\n{push}\nEOF\n)" | sh',
+}
+
+
+@pytest.mark.parametrize("name", sorted(SUBSTITUTION_IN_ECHO))
+def test_round4_a_substitution_inside_a_quoted_echo_is_not_data(name):
+    from shell_data import strip_quoted_spans
+    command = SUBSTITUTION_IN_ECHO[name].format(push=FORCE)
+    assert FORCE in strip_quoted_spans(strip_heredoc_bodies(command)), name
+
+
+def test_round4_a_quoted_echo_without_a_substitution_is_still_data():
+    from shell_data import strip_quoted_spans
+    assert FORCE not in strip_quoted_spans('echo "run ' + FORCE + ' later"')

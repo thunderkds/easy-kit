@@ -33,12 +33,18 @@ HEADS = ["cat", "echo x", "true", "cat <<EOF", "cat <<-EOF", "cat <<'EOF'", 'cat
          'cat <<E"O"F', "cat <<E\\OF", "cat <<E'O'F", 'cat <<EOF"x"', 'cat <<"EOF"x', "cat <<1", "cat <<A",
          "cat <<B", "cat <<EOF)", "cat <<EOF;", "cat <<EOF &&", "cat <<<EOF", "cat <<", "echo <<EOF",
          "bash <<'EOF'", "cat <<EOF | bash", "cat <<'EOF' |", "sh <<-EOF", "source /dev/stdin <<'EOF'", "cat <<\rA",
-         "cat <<\x0bA", "cat <<\xa0A", "cat <<-\u2003A", "cat > f <<'EOF'", "cat 2>&1 <<EOF", "cat &> f <<EOF"]
+         "cat <<\x0bA", "cat <<\xa0A", "cat <<-\u2003A", "cat > f <<'EOF'", "cat 2>&1 <<EOF", "cat &> f <<EOF",
+         # round 4: `|&`, a trailing `||`, consumer words, glob command words, the nested form as a word
+         "cat <<EOF |&", "cat <<'EOF' |&", "cat <<EOF ||", "echo a & cat <<'EOF' |&", "coproc cat<<'EOF' |&",
+         "rbash <<'EOF'", "busybox ash <<'EOF'", "/bin/ba?h <<'EOF'", "/bin/ba*h <<'EOF'", "/proc/self/exe <<'EOF'",
+         "env -Sbash <<'EOF'", "xargs sh <<EOF", "perl <<'EOF'", "cat <<EOF | xargs sh", "dash <<'EOF'",
+         "x=\"$(cat <<'EOF'", "\"$(cat <<'EOF'", "git commit -m \"$(cat <<'EOF'", "echo \"$(cat <<'EOF'",
+         "echo -n \"$(cat <<'EOF'", "git --no-pager \"$(cat <<'EOF'", "gh pr create --body \"$(cat <<'EOF'"]
 OPENERS = ["$(", "`", "${x:-", "${x:-'", "((", "$((", "$[", "[", "[[", "<(", ">(", "x=(", "x+=(", "(", '"', "'",
            "$'", "#", "\\", '"$(', '"${x:-', "$(( $(", "$( (", "case x in x) ", "{ ", "${x- #'", "\\\n", "x=( (", "${x:-(",
            "$(case 1 in 1) ;; esac\n", "<\\\n", "bash ", "eval ", "$\\\n{x- #'", ": <(case x in x) :;; esac; "]
 CLOSERS = [")", "`", "}", "))", "]", "]]", '"', "'", ") ;", ")\"", "}\"", ")]", "; }", ";;", "esac", "fi", "done", " ;; esac"]
-BODY = ["x", "A", "B", "EOF", "EOF)", "EOFx", "EOF x)", "EOF2case x in x) ", "E", " EOF", "\tEOF", "EOF ", "1",
+BODY = ["git", "push", ")\"", "x", "A", "B", "EOF", "EOF)", "EOFx", "EOF x)", "EOF2case x in x) ", "E", " EOF", "\tEOF", "EOF ", "1",
         ")", "`", "$(", "a ) b", "cat <<B", "cat <<A", "<<EOF", "#", "'", '"', "EOF`", "EOF}", "EOF]", "\rA", "\x0bA", "E\\", "OF", "A) ; ", "'}", "}"]
 JOINERS = ["\n", "\n", "\n", " ", " ; ", " && ", " | "]
 
@@ -52,7 +58,8 @@ def canary(k):
 
 MARKERS = ["<<EOF", "<<A", "<<B", "<<E", "<<EOF)", "<<'EOF'", '<<"EOF"', "<<-EOF", "<< EOF", "<<1", "<<",
            'E"O"F', "<<E\\OF", "<<E'O'F", '<<EOF"x"', '<<"EOF"x', "<<<EOF"]
-TAIL = ["EOF", "A", "B", "E", ")", "EOF)", "`", "}", "]", "EOFx", "EOF x)"]
+TAIL = ["EOF", "A", "B", "E", ")", "EOF)", "`", "}", "]", "EOFx", "EOF x)",
+        "bash", "sh", ")\"", ")\" | sh", ")\" | bash", ")\" push", 'eval "$x"', "$x", ")\";", ")\" ; sh"]
 
 
 OPEN = ["$(", "`", "<(", ">(", "x=(", "x+=(", "(", "${x:-$(", "$[", "[", '"$(', "((", "$(( $(", "echo $( ("]
@@ -78,7 +85,8 @@ def known_templates():
     out = []
     for table in (known.ALL_HIDDEN, known.REAL, known.OVERBLOCK, known.DOUBT, known.SUB_HIDDEN):
         out += list(table.values())
-    for table in (known.BYPASS, known.ROUND3):
+    out += list(known.SUBSTITUTION_IN_ECHO.values())
+    for table in (known.BYPASS, known.ROUND3, known.ROUND4):
         out += [template for template, _ in table.values()]
     return out
 
