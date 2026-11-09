@@ -73,6 +73,7 @@ try:
     import auto_mode  # noqa: E402
     from auto_mode import record_block  # noqa: E402
     import session_work  # noqa: E402
+    from task_context import join_line_continuations  # noqa: E402
 except Exception as exc:  # pragma: no cover - exercised via subprocess test
     print(json.dumps({
         "decision": "block",
@@ -105,7 +106,10 @@ TRACE_DIR = os.path.join(ROOT, "memory", "event-trace")
 # option as unresolved, so narrowing can never read a command classification did not. An argument
 # may be quoted (`-C "dir with space"`). Each option consumes its argument with no alternative
 # parse — the flag clause never starts with an arg-taking name — so matching stays linear.
-GIT_OPTIONS_WITH_ARG = ("-C", "-c", "--git-dir", "--work-tree", "--namespace", "--config-env")
+# T296 (S1): every global option git reads a separate value for (git.c `handle_options`): `--attr-source`
+# and `--super-prefix` too; `--exec-path[=<p>]` and `--list-cmds=<g>` take only an attached value.
+GIT_OPTIONS_WITH_ARG = ("-C", "-c", "--git-dir", "--work-tree", "--namespace", "--config-env",
+                        "--attr-source", "--super-prefix")
 _GIT_ARG = r"""(?:"[^"\n]*"|'[^'\n]*'|[^\s;&|"'])+"""
 _GIT_SHORT_WITH_ARG = "".join(o[1] for o in GIT_OPTIONS_WITH_ARG if not o.startswith("--"))
 _GIT_LONG_WITH_ARG = "|".join(re.escape(o[2:]) for o in GIT_OPTIONS_WITH_ARG if o.startswith("--"))
@@ -1133,7 +1137,7 @@ OCTOPUS_DOUBT_MESSAGE = ("octopus merge: cannot confirm {branch} — each branch
 def _merge_option_takes_next(arg):
     """T296: True when the option word `arg` takes the NEXT word as its value (git's parse-options)."""
     if arg.startswith("--"):
-        return "=" not in arg and len(arg) > 2 and any(o.startswith(arg) for o in MERGE_LONG_WITH_ARG)
+        return len(arg) > 2 and any(o.startswith(arg) for o in MERGE_LONG_WITH_ARG)
     for index, char in enumerate(arg[1:], 1):
         if char in MERGE_SHORT_WITH_ARG:
             return index == len(arg) - 1  # the rest of the run is the value, else the next word is
@@ -1345,7 +1349,7 @@ NEGATION = re.compile(r"\b(?:not|never|no|without|except|skip|leave|don't|dont|h
 LS_REMOTE_TIMEOUT_S = 10
 # Round 3 (N1): the only git subcommands that may share an `[admin]` command with its one merge/push.
 ADMIN_READ_ONLY_GIT = frozenset({"status", "log", "diff", "show", "rev-parse"})
-GIT_OPTION_ARGS = ("-C", "-c", "--git-dir", "--work-tree", "--namespace", "--config-env")
+GIT_OPTION_ARGS = GIT_OPTIONS_WITH_ARG
 # Round 3 (N3): hooks a merge or push can run; any executable one (not `.sample`) refuses `[admin]`.
 ADMIN_HOOKS = ("pre-push", "pre-merge-commit", "post-merge", "pre-commit", "commit-msg",
                "prepare-commit-msg", "post-commit", "post-checkout", "reference-transaction")
@@ -1356,15 +1360,44 @@ ADMIN_DENY_CONFIG = re.compile(
     r"|push\.(recursesubmodules|pushoption|followtags)$|transfer\.hiderefs$)")
 # Round 3 (N5): shell forms that hide which word is `git` or its verb.
 OBFUSCATION = re.compile(r"\$\{?IFS\b|\$\(|`|\beval\b")
-# T296 (P2-1): the words that pass their command on (the wrapper chain), the shell keywords that
-# start a command, the shells that run a `-c` string, and the git verbs that publish. A git word or
-# a git verb that is not a plain literal word (`$`, backtick, brace or glob in it) is a block on doubt.
+# T296 (P2-1, Stage 4 fix round): the words that pass their command on (the wrapper chain), the shell
+# keywords that start a command, the shells that run a `-c` string, and the git verbs that publish.
+# Rule: EVERY word whose basename is `git` or `git-<verb>` is a git word; a git word whose verb cannot
+# be read (an option git does not know, a verb that is not a plain word, no verb after a wrapper such
+# as `xargs`) is a doubt; and a doubt is a block in auto mode, never an allow.
 SHELL_WRAPPERS = frozenset({"command", "env", "sudo", "doas", "nohup", "time", "exec", "timeout", "nice",
                             "ionice", "setsid", "stdbuf", "xargs"})
 SHELL_KEYWORDS = frozenset({"do", "then", "else", "elif", "if", "while", "until", "!", "{", "coproc"})
 SHELLS = frozenset({"bash", "sh", "zsh", "dash", "ksh"})
 DATA_HEADS = frozenset({"echo", "printf", "grep", "egrep", "fgrep", "rg", "ag"})  # print or match only
-PUBLISH_VERBS = frozenset({"push", "merge", "pull", "send-pack", "http-push"})
+# The verbs that publish or run a program that does. `push`, `merge`, `pull` are the gate's own;
+# `merge-*` (but `merge-base`) is read as `merge`. Each other one, and why it is here:
+#   send-pack, http-push   plumbing that pushes refs to a remote (the T296 finding);
+#   receive-pack           updates refs of a repository and runs its hooks;
+#   remote-ext             runs an arbitrary command as the transport;
+#   subtree                `git subtree push` pushes a split branch (really pushed in the review);
+#   svn, p4                `git svn dcommit` and `git p4 submit` publish to another server;
+#   cvsexportcommit        commits to a CVS checkout.
+# Not here, on purpose: `fetch` (reads), `submodule` and `rebase --exec` (run a program but are a
+# documented limit), `fast-import`, `archimport` (write to the local repository only).
+PUBLISH_VERBS = frozenset({"push", "merge", "pull", "send-pack", "http-push", "receive-pack",
+                           "remote-ext", "subtree", "svn", "p4", "cvsexportcommit"})
+# The global options that take no value (git.c `handle_options`, `--version`/`--help`); an option that
+# is neither here nor in `GIT_OPTIONS_WITH_ARG` is unknown, and an unknown option before the verb is a
+# doubt in a command position (git itself refuses it, but a newer git may take a value with it).
+GIT_NOVALUE_GLOBALS = frozenset({
+    "--no-pager", "-P", "-p", "--paginate", "--bare", "--no-replace-objects", "--literal-pathspecs",
+    "--glob-pathspecs", "--noglob-pathspecs", "--icase-pathspecs", "--no-optional-locks",
+    "--no-lazy-fetch", "--no-advice", "--version", "--help", "-h", "-v", "--html-path", "--man-path",
+    "--info-path", "--exec-path"})
+GIT_ATTACHED_GLOBALS = ("--exec-path=", "--list-cmds=")
+# An assignment that makes git read another config or program path: with a git word in the same
+# command it can define an alias (`GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=alias.x ... git x`), a doubt.
+GIT_ENV_RISK = re.compile(r"^(?:GIT_(?:CONFIG_COUNT|CONFIG_PARAMETERS|CONFIG_KEY_\d+|CONFIG_VALUE_\d+"
+                          r"|EXEC_PATH|CONFIG_GLOBAL|CONFIG_SYSTEM))=")
+ASSIGNMENT_NAME = re.compile(r"^([A-Za-z_][A-Za-z0-9_]*)\+?=")
+VARIABLE_REFERENCE = re.compile(r"\$\{?([A-Za-z_][A-Za-z0-9_]*)")
+BRACE_EXPANSION = re.compile(r"(?<!\$)\{[^{}]*(?:,|\.\.)[^{}]*\}")
 NONLITERAL = re.compile(r"[$`{}*?\[]")
 PLAIN_VERB = re.compile(r"[A-Za-z][A-Za-z0-9-]*")
 TEST_BRACKETS = frozenset({"[", "[["})
@@ -1432,9 +1465,18 @@ def _admin_push_branch(args, directory):
 
 
 def _origin_url(directory):
-    """The URL of `origin` in `directory`, or None."""
+    """The URL of `origin` in `directory`, or None. A local path (absolute, or relative to the
+    repository) is resolved first, so a symlink or `../origin.git` to the same bare repository is the
+    same remote."""
     done = _git(directory, "remote", "get-url", ADMIN_REMOTE)
-    return done.stdout.strip() if done is not None and done.returncode == 0 else None
+    if done is None or done.returncode != 0:
+        return None
+    url = done.stdout.strip()
+    if url and "://" not in url and not re.match(r"^[\w.-]+@[\w.-]+:", url):
+        path = url if os.path.isabs(url) else os.path.join(directory, url)
+        if os.path.exists(path):
+            return os.path.realpath(path)
+    return url
 
 
 def _own_origin_refusal(where, cwd):
@@ -1522,81 +1564,191 @@ def _basename(word):
     return word.lstrip("=").rsplit("/", 1)[-1]
 
 
-def _hidden_git_words(words):
-    """T296: `words[0]` is git. True when its verb is not a plain literal word, or it publishes."""
-    verb = _git_verb(words)
+def _is_git_word(word):
+    """True for `git`, a path to it, and a dashed command `git-push` (or a path to one)."""
+    base = _basename(word)
+    return base == "git" or base.startswith("git-")
+
+
+def _publishes(verb):
+    return verb in PUBLISH_VERBS or (verb.startswith("merge-") and verb != "merge-base")
+
+
+def _read_git_word(words, index, strict):
+    """`(verb or None, doubt)` for the git word `words[index]` of one simple command (redirects already
+    removed). A dashed command `git-push` has its verb in its name. For `git`, the verb is the first
+    word past git's global options; an option with a value (`GIT_OPTIONS_WITH_ARG`) takes the next word.
+    `strict` is true for a word in a command position (first word, or after a wrapper): there an unknown
+    option, a verb that is not a plain word and no verb at all (after a wrapper such as `xargs`, which may
+    take it from stdin) are a doubt. Elsewhere (`man git`, `strace -f git push`) only a verb that
+    publishes or holds an expansion character is."""
+    word = words[index]
+    base = _basename(word)
+    if base.startswith("git-"):
+        verb = base[4:]
+        return verb, bool(NONLITERAL.search(base)) or not verb
+    if NONLITERAL.search(base):
+        return None, True
+    j = index + 1
+    while j < len(words) and words[j].startswith("-"):
+        option = words[j]
+        if option in GIT_OPTIONS_WITH_ARG or option == "--":
+            j += 2 if option != "--" else 1
+        elif option.startswith(tuple(o + "=" for o in GIT_OPTIONS_WITH_ARG if o.startswith("--"))) \
+                or option in GIT_NOVALUE_GLOBALS or option.startswith(GIT_ATTACHED_GLOBALS):
+            j += 1
+        elif strict:
+            return None, True
+        else:
+            j += 1
+    verb = words[j] if j < len(words) else None
     if verb is None:
-        return False
-    return not PLAIN_VERB.fullmatch(verb) or verb in PUBLISH_VERBS
+        return None, False
+    if strict:
+        return verb, not PLAIN_VERB.fullmatch(verb)
+    return verb, bool(NONLITERAL.search(verb))
 
 
-def _hidden_in_command(words, depth):
-    """T296: True when the simple command `words` (shlex-unquoted) is, or may be, a git publish run
-    in a form the patterns do not read: git (or a wrapper chain to git) with a nonliteral verb, a
-    publishing verb the patterns lack (`send-pack`), a command word the shell expands that is
-    followed by a publishing verb or another expansion, or a `bash -c` string that is one. One pass,
-    no recursion except into a `-c` string (a wrapper's options and values are not known here, so
-    every word after a wrapper is a candidate command word)."""
+class _Scan:
+    """What one pass over a command found: `doubt` (a form the gate cannot read), `verbs` (the verb of
+    each git word whose verb could be read) and `git_words` (how many git words there were)."""
+
+    def __init__(self):
+        self.doubt = False
+        self.verbs = []
+        self.git_words = 0
+        self.env_risk = False
+
+
+def _assigned_names(simple_commands):
+    """The names this command sets: `NAME=value` in any word, `for NAME in`, `read NAME`."""
+    names = set()
+    for words in simple_commands:
+        for word in words:
+            found = ASSIGNMENT_NAME.match(word)
+            if found:
+                names.add(found.group(1))
+        if len(words) > 1 and words[0] == "for":
+            names.add(words[1])
+        if words and words[0] == "read":
+            names.update(w for w in words[1:] if not w.startswith("-"))
+    return names
+
+
+def _scan_simple(words, depth, tainted, scan):
+    """Read one simple command (`words`: shlex-unquoted, redirects removed) into `scan`. Every word is
+    examined: nothing returns at the first word that looks like git."""
     if depth > HIDDEN_DEPTH_LIMIT:
-        return True
+        scan.doubt = True
+        return
+    if any(GIT_ENV_RISK.match(w) for w in words):
+        scan.env_risk = True
     start = 0
-    while start < len(words) and (ENV_ASSIGNMENT_PREFIX.match(words[start] + " ")
-                                  or words[start] in SHELL_KEYWORDS):
+    while start < len(words) and (ASSIGNMENT_NAME.match(words[start]) or words[start] in SHELL_KEYWORDS):
         start += 1
     words = words[start:]
     if not words or _basename(words[0]) in DATA_HEADS:
-        return False
+        return
     wrapped = _basename(words[0]) in SHELL_WRAPPERS
     for k, word in enumerate(words):
-        if wrapped and word in ("-S", "--split-string") and k + 1 < len(words):
-            return hidden_git_verb(words[k + 1], depth + 1)  # `env -S 'git "push" x'`
-        if k and (word.startswith("-") or ENV_ASSIGNMENT_PREFIX.match(word + " ")):
+        if wrapped and k:
+            split = None
+            if word in ("-S", "--split-string") and k + 1 < len(words):
+                split = words[k + 1]
+            elif word.startswith("--split-string="):
+                split = word[len("--split-string="):]
+            elif re.match(r"^-[A-Za-z]*S.", word):
+                split = word.split("S", 1)[1]
+            if split:  # `env -S 'git "push" x'`, `env -S'…'`, `env --split-string='…'`
+                _merge_scan(scan, split, depth + 1)
+        if k and (word.startswith("-") or ASSIGNMENT_NAME.match(word)):
             continue  # a wrapper's option, or a `VAR=value` it sets: not a command word
         base = _basename(word)
-        if base == "git" and (wrapped or k == 0 or word == "git"):
-            return _hidden_git_words(words[k:])
-        if not (wrapped or k == 0):
-            continue  # a plain word after a plain command is an argument
-        if base in SHELLS:
+        command_position = wrapped or k == 0
+        if _is_git_word(word):
+            scan.git_words += 1
+            verb, doubt = _read_git_word(words, k, command_position)
+            if verb is None and _basename(words[0]) == "xargs" and k > 0:
+                doubt = True  # `xargs git`: the verb may come on stdin
+            scan.doubt = scan.doubt or doubt
+            if verb is not None:
+                scan.verbs.append(verb)
+            continue
+        if not command_position:
+            continue
+        if base == "eval":
+            scan.doubt = True  # the string it runs is built at run time
+        elif base in SHELLS:
             for j in range(k + 1, len(words) - 1):
                 if re.fullmatch(r"-[A-Za-z]*c[A-Za-z]*", words[j]):
-                    return hidden_git_verb(words[j + 1], depth + 1)
-            return False
-        if NONLITERAL.search(base) and base not in TEST_BRACKETS:
-            if any(w in PUBLISH_VERBS or NONLITERAL.search(w) for w in words[k + 1:]):
-                return True
-    return False
+                    _merge_scan(scan, words[j + 1], depth + 1)
+                    break
+        elif NONLITERAL.search(base) and base not in TEST_BRACKETS:
+            names = set(VARIABLE_REFERENCE.findall(base))
+            if (BRACE_EXPANSION.search(base) or names & tainted
+                    or any(_publishes(w) or w == "-c" for w in words[k + 1:])):
+                scan.doubt = True
 
 
-def hidden_git_verb(command, depth=0):
-    """Round 3 (N5), T296: True when `command` may run git push/merge/pull (or `send-pack`) in a form
-    the patterns do not read. Used only in auto mode (a block on doubt). Two layers:
-    `${IFS}`, `$(…)`, a backtick or `eval` in a segment that names git; then, per simple command
-    after shlex removed the quotes and backslashes, `_hidden_in_command`: git (also `/usr/bin/git`,
-    `=git`) reached through a wrapper chain (`env`, `timeout 20`, `nice`, …) with a verb that is not
-    a plain literal word (`git $v`, `git ${v}sh`, `git {p..p}ush`, `git $'push'`) or that publishes;
-    a word `git` after any other command (`strace -f git "push"`) read the same way; a nonliteral
-    command word (`$g push`); a `bash -c '…'` string, read the same way."""
-    text = strip_heredoc_bodies(command)
+def _merge_scan(scan, command, depth):
+    inner = _scan_command(command, depth)
+    scan.doubt = scan.doubt or inner.doubt
+    scan.verbs += inner.verbs
+    scan.git_words += inner.git_words
+    scan.env_risk = scan.env_risk or inner.env_risk
+
+
+def _scan_command(command, depth=0):
+    """Read `command` into a `_Scan`. Two layers: `${IFS}`, `$(…)`, a backtick or `eval` in a segment that
+    names git; then each simple command, after shlex removed quotes and backslashes (a lone backslash +
+    newline is joined first, as the shell does): redirects are skipped, every git word is read."""
+    scan = _Scan()
+    text = join_line_continuations(strip_heredoc_bodies(command))
     for segment in re.split(r"[;&|\n]+", QUOTED_SPAN_PATTERN.sub(" ", text)):
         if re.search(r"git", segment, re.I) and OBFUSCATION.search(segment):
-            return True
+            scan.doubt = True
+            return scan
     lexer = shlex.shlex(text.replace("\n", " ; "), posix=True, punctuation_chars=True)
     lexer.whitespace_split = True
     lexer.commenters = ""
     try:
         tokens = list(lexer)
     except ValueError:
-        return "git" in text.lower()
-    words = []
+        scan.doubt = "git" in text.lower()
+        return scan
+    simple, words, skip = [], [], False
     for token in tokens + [";"]:
-        if token in PUSH_SEPARATORS or set(token) <= SHELL_PUNCTUATION:
-            if _hidden_in_command(words, depth):
-                return True
+        redirect = bool(set(token) <= set("<>&") and set(token) & set("<>"))
+        if skip and not (redirect or set(token) <= SHELL_PUNCTUATION):
+            skip = False  # the target of a redirect
+            continue
+        skip = False
+        if redirect:
+            if words and words[-1].isdigit():
+                words.pop()  # `2>/dev/null`: the fd number
+            skip = True
+        elif set(token) <= SHELL_PUNCTUATION:  # `;` `&&` `||` `|` `&` `(` `)`: ends a simple command
+            simple.append(words)
             words = []
         else:
             words.append(token)
-    return False
+    tainted = _assigned_names(simple)
+    for words in simple:
+        _scan_simple(words, depth, tainted, scan)
+    if scan.env_risk and scan.git_words:
+        scan.doubt = True
+    return scan
+
+
+def hidden_git_verb(command, depth=0):
+    """Round 3 (N5), T296: True when `command` may run git push/merge/pull (or another verb that
+    publishes, `PUBLISH_VERBS`) in a form the patterns do not read, or holds a doubt (`_scan_command`).
+    Used only in auto mode (a block on doubt). Covers a `$`, brace, glob or quote in the git word, the
+    verb or a wrapper chain before it; a redirect between git and its verb; `--attr-source <tree>` and
+    the other options with a value; dashed `git-push`; `git` found later in a command, or after an unknown
+    head; an alias set by `GIT_CONFIG_COUNT` and its kin; `xargs git`; `eval`; `bash -c '…'`; `env -S`."""
+    scan = _scan_command(command, depth)
+    return scan.doubt or any(_publishes(v) for v in scan.verbs)
 
 
 def _remote_main(where):
@@ -1712,15 +1864,31 @@ def admin_refusal(command, cwd, transcript_path, admin):
                 verb = tokens[i] if i < len(tokens) else None
                 if verb in SAFE_GIT_SUBCOMMANDS and not _read_only_git_args_ok(verb, tokens[i + 1:]):
                     # T296 (P3-4): say why, instead of "cannot tell which branch"
-                    return (f"`git {verb}` carries an option or a glob outside the read-only allowlist "
-                            "(`--output=` writes a file, `--ext-diff` runs a program): `[admin]` "
-                            "refuses it")
+                    if verb in ADMIN_READ_ONLY_GIT:
+                        return (f"`git {verb}` carries an option or a glob outside the read-only "
+                                "allowlist (`--output=` writes a file, `--ext-diff` runs a program): "
+                                "`[admin]` refuses it")
+                    return (f"`git {verb}` carries an option outside its short allowlist, and `[admin]` "
+                            "allows no git write besides its one merge or push")
                 writes += _git_verb(tokens) not in ADMIN_READ_ONLY_GIT
         # Round 3 (N1): a chained `git add`/`commit`/`reset`/… runs after this check and could change
         # what the push publishes, so the command holds exactly one git write: its merge or push.
         if writes != 1:
             return ("an `[admin]` command holds exactly one git merge or push, and no other git write "
                     "(run the others in their own command)")
+        # Stage 4 fix round: this loop read only a `git` that starts a segment. The scan reads every git
+        # word (a redirect before the verb, a dashed `git-push`, `git` after another command), so the two
+        # must agree: a doubt, a dashed command or a git write the loop did not count is refused.
+        scan = _scan_command(command)
+        if scan.doubt:
+            return ("`[admin]` refuses a command in which a git word, its verb or a wrapper before it is "
+                    "not a plain literal word")
+        if any(_basename(w).startswith("git-") for tokens, _, _ in _command_segments(command) or []
+               for w in tokens):
+            return "`[admin]` refuses a dashed git command (`git-push`): write `git push`"
+        if sum(1 for v in scan.verbs if v not in ADMIN_READ_ONLY_GIT) != writes:
+            return ("`[admin]` cannot tell which git writes this command holds (a git word that is not "
+                    "the first word of a plain segment)")
         actions = _git_actions(command, cwd)
         if not actions:
             return "cannot tell which branch this command merges or pushes"
@@ -1900,23 +2068,34 @@ def main():
     # negative means "not verified" and refuses the merge; here it would mean
     # "not a push" and wave one through.
     scannable = strip_quoted_spans(strip_heredoc_bodies(command))
-    if (not any(re.search(p, scannable) for p in BLOCKED_PATTERNS)
-            and not defines_git_alias(scannable)):
-        # T284 round 3 (N5): in auto mode a git verb hidden by quotes or expansion is a block on
-        # doubt. Outside auto mode nothing changes.
-        if hidden_git_verb(command):
+    auto_pattern = (any(re.search(p, scannable) for p in AUTO_MODE_PATTERNS)
+                    or defines_git_alias(scannable))
+    if not auto_pattern:
+        # T284 round 3 (N5), T296: in auto mode a git word or verb the patterns cannot read is a block on
+        # doubt. It runs whenever the auto-mode patterns do not match (a `rebase` earlier in the command
+        # matches a blocked pattern but is no auto-mode pattern, and must not hide the rest). An error in
+        # the check is a doubt too: an uncaught exception exits 1, which does not block. Outside auto
+        # mode nothing changes.
+        try:
+            hidden = hidden_git_verb(command)
+        except Exception:
+            hidden = True
+        if hidden:
             latest = auto_mode.latest_request(transcript_path)
             if latest is not None and auto_mode.auto_tagged(latest[1]):
                 print(json.dumps({"decision": "block", "reason": (
                     "[hook:pre_bash] Auto-mode gate — cannot push/merge:\n  • cannot tell: the "
                     "command may run git push, merge or pull in a hidden form (a `$`, brace, glob, "
-                    "quote or backtick in the git word or its verb or before it in a wrapper chain "
-                    "such as `env` or `timeout`, `${IFS}`, `$(…)`, `eval`, or a verb that publishes "
-                    "such as `send-pack`)\n" + AUTO_MODE_LIMIT)}))
-        sys.exit(0)
+                    "quote, backslash, redirect or backtick between or in the git word and its verb, "
+                    "or before it in a wrapper chain such as `env` or `timeout`; a dashed `git-push`; "
+                    "`${IFS}`, `$(…)`, `eval`; an alias set in the environment; or a verb that "
+                    "publishes such as `send-pack`)\n" + AUTO_MODE_LIMIT)}))
+                sys.exit(0)
+        if not any(re.search(p, scannable) for p in BLOCKED_PATTERNS):
+            sys.exit(0)
 
     # T284: in auto mode a merge, push or pull is the user's, unless `[admin]` allows this one.
-    if any(re.search(p, scannable) for p in AUTO_MODE_PATTERNS) or defines_git_alias(scannable):
+    if auto_pattern:
         auto_block = auto_mode_blocker(command, event.get("cwd"), transcript_path)
         if auto_block:
             print(json.dumps({"decision": "block", "reason": (
