@@ -43,6 +43,16 @@ Not done: merge (yours); <auto verify: running (T182) | auto verify: <result> | 
 
 -->
 
+## Auto decisions
+
+Mode: auto
+1. Put the rules in one reference file linked from the `security-reviewer` persona and Stage 4 step 2, not in a new skill; the built-in `security-review` stays — RULE: `tasks/TASK_GUIDE_T301.md` § Requirement (the user approved this proposal: "yes, let add it, [auto]")
+2. Labelled the task C2 / Risk Medium and ran it on the extended track — RULE: `docs/claude-md/tracks.md` § Track rule
+3. Spawned `common-infrastructure` on `sonnet` for a docs-and-tests task — RULE: `skills/craft-spawn-prompt/SKILL.md` § 5. Recommend spawn model (the `claude` C2 cell is `sonnet or opus`: pick per Risk)
+4. Cut the coverage ledger, the six phases, the schema, the validators and the eight other attack-class files — RULE: `tasks/TASK_GUIDE_T301.md` § Approach (Cut list)
+Paused: the disk holding `/tmp/claude-1000` is full (ENOSPC), so the Bash tool cannot start. The implementer built the change (3 commits on `feat/t301-security-reviewer-rules`) but its last clean full-suite run did not finish. Stage 4 `code-review` and `security-review`, the full-suite re-run, the auto verify run and the final memory pass have not run. Deleting files to make room needs the user's go-ahead, so the Supervisor deleted nothing. Read-only reading of the change (no tools but Read) found two P2 and one P3, none fixed yet: (P2) `skills/code-review/SKILL.md` Phase 2 step 3 keeps any failing security lead as `needs_validation`, so a speculative idea now surfaces; `security-reviewer.md` should say a lead that cannot name its missing fact is dropped, not parked; (P2) `tests/test_security_reviewer_rules.py::test_mut_cap_guard_goes_red_on_an_oversize_body` asserts arithmetic only and calls no guard (LR-0003 vacuous control); (P3) the rule file does not say a `needs_validation` lead never blocks a merge by itself. `SKILL.md` is 8184 of 8192 bytes, so the fix for the first goes in the reference file.
+Memory: nothing new yet (interim; the diff-driven pass runs again before the final stop)
+
 ## Evidence
 
 | Check | Result | Notes / output snippet |
