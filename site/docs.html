@@ -1911,6 +1911,15 @@ curl -fsSL https://raw.githubusercontent.com/$GITHUB_USERNAME/easy-kit/main/setu
   <code>ux-evaluate</code> (Stage 3): the frontend agent screenshots its UI at 375px and 1280px,
   judges nine UX checks and the guide's UX rows, and fixes each fail. <code>code-review</code> runs it again.
 </p>
+<details class="more">
+<summary>Security finding rules</summary>
+<p>
+  <code>code-review</code> (Stage 4): its security reviewer follows one short rule file,
+  <code>skills/code-review/references/security-reviewer.md</code>. A finding must name who attacks,
+  the boundary they cross and the harm. A lead that cannot be proven yet stays as
+  <code>needs_validation</code> with the one fact still missing, and never blocks a merge by itself.
+</p>
+</details>
 <div class="flow-visual">
   <h3><code>self-review</code></h3>
   <ol class="flow flow-row is-long" aria-label="The self-review loop, in order">
