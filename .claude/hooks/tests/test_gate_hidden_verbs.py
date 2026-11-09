@@ -198,7 +198,10 @@ def test_row3_message_is_not_the_branch_with_a_real_repo_and_default_to_upstream
     command = MERGE + " --message " + B
     assert merge_gate.branch_target(command, fx.main) is None  # no branch is read
     text = reason(command, fx.main, session(tmp_path, fx, "do it [admin]"))
-    assert text is not None and "names exactly one task branch" in text, text
+    # After the T295 merge the repo allowlist refuses `merge.defaultToUpstream` before the branch is
+    # read; either refusal is a block, and `branch_target(...) is None` above is the T296 check.
+    assert text is not None and ("names exactly one task branch" in text
+                                 or "merge.defaulttoupstream" in text), text
     # the premise, run for real after the gate checks: git merges `up` and uses the value as message
     git(fx.main, "merge", "--no-ff", "--message", B)
     assert os.path.exists(os.path.join(fx.main, "upstream.txt"))
@@ -280,11 +283,12 @@ def test_row7_an_option_outside_the_read_only_allowlist_names_its_reason(gate, t
 def test_row7_rev_parse_in_an_admin_chain_is_refused_and_the_doc_says_so(gate, tmp_path):
     fx, path = _verified(gate, tmp_path)
     text = reason("git rev-parse HEAD && " + PUSH + " origin " + B, fx.wt, path)
-    assert text is not None and "rev-parse" in text, text
+    # After the T295 merge any other git command is refused, `rev-parse` included.
+    assert text is not None and "exactly one git merge or push" in text, text
     item2 = re.search(r"2\. The command merges one task branch.*?\n3\. ", TRACKS.read_text(), re.S).group(0)
     flat = re.sub(r"\s+", " ", item2)
     assert "`rev-parse` and `cd <dir> &&` may stay" not in flat
-    assert "`git status`, `log`, `diff` and `show`" in flat and "`rev-parse` is refused" in flat
+    assert "`status`, `show`, `diff`, `log` or any other git command is refused" in flat
 
 
 def test_row7_the_known_limits_bullet_drops_what_is_fixed():

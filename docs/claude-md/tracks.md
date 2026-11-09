@@ -552,29 +552,38 @@ command, from this session's transcript. It allows a `git merge` or `git push` o
    `origin`). The push URL of `origin` must equal its fetch URL, and no `url.<x>.insteadOf`,
    `url.<x>.pushInsteadOf`, `remote.<name>.pushurl`, `remote.<name>.receivepack`, `push.followTags` or
    `core.hooksPath` may be set. Any `git -c <key>=<value>` (or `--config-env`) anywhere before the verb,
-   also after `-C <dir>`, is refused. The command holds exactly one git write, its merge or its push:
-   a chained `git add`, `commit`, `reset`, `tag`, `checkout` or any other git write is refused, while
-   `git status`, `log`, `diff` and `show`, and `cd <dir> &&`, may stay (`rev-parse` is refused: the gate
-   resolves it as an action that is neither a merge nor a push). Those four take only the options of a short
-   allowlist: `git log --output=`, `git diff --output=` and `git show --ext-diff` are refused because they
-   write a file or run a program. A `git merge` option that takes a value (`--message`/`-m`, `--file`/`-F`,
-   `--strategy`/`-s`, `--strategy-option`/`-X`, `--cleanup`, `--into-name`, also in git's abbreviated and
-   run-together forms such as `--mess` and `-qm`) never gives the branch name. The git word and the verb
-   must be plain literal words, and the only verbs in the command are `merge`, `push` and those four (the
-   rule for hidden forms is in the limit below that starts `In auto mode`). Every word of the command whose
-   name is `git`, or `git-<verb>` such as `git-push`, is a git word: the `[admin]` check reads all of them, so
-   a second one that hides behind a redirect (`git >/dev/null push -f origin main`) or a dashed name is
-   refused, and any dashed git command is refused. A branch push goes only to the repository's own
-   remote: after `cd <clone>`, the clone's `origin` must be the same repository or have the same URL
-   (a local path is resolved first, so a symlink or `../origin.git` to the same repository matches) as the
-   origin of the directory the command started in or of the project. The repository must have
-   no executable hook (not `.sample`) for `pre-push`, `pre-merge-commit`, `post-merge`, `pre-commit`,
-   `commit-msg`, `prepare-commit-msg`, `post-commit`, `post-checkout` or `reference-transaction`, and no
-   repo or worktree config that can run a command or send git elsewhere (`include.*`, `includeIf.*`,
-   `url.*`, `receive.*`, `core.sshCommand`, `core.gitProxy`, `core.fsmonitor` set to a command,
-   `remote.*.proxy`, `remote.*.uploadpack`, `remote.*.vcs`, `push.recurseSubmodules`, `push.pushOption`,
-   `transfer.hideRefs`, a `credential.*` or `alias.*` value starting with `!`). User-global and system
-   config are trusted and not read.
+   also after `-C <dir>`, is refused. The command holds exactly one git command, its merge or its push:
+   a chained `git add`, `commit`, `reset`, `tag`, `checkout`, `status`, `show`, `diff`, `log` or any other
+   git command is refused (`status`, `show`, `diff` and `log` can run a textconv, a clean filter or an
+   external diff), while `cd <dir> &&` may stay. 
+   A `git merge` option that takes a value (`--message`/`-m`, `--file`/`-F`, `--strategy`/`-s`,
+   `--strategy-option`/`-X`, `--cleanup`, `--into-name`, also in git's abbreviated and run-together forms
+   such as `--mess` and `-qm`) never gives the branch name. The git word and the verb must be plain
+   literal words (the rule for hidden forms is in the limit below that starts `In auto mode`). Every word
+   of the command whose name is `git`, or `git-<verb>` such as `git-push`, is a git word: the `[admin]`
+   check reads all of them, so a second one that hides behind a redirect (`git >/dev/null push -f origin
+   main`) or a dashed name is refused, and any dashed git command is refused. A branch push goes only to
+   the repository's own remote: after `cd <clone>`, the clone's `origin` must be the same repository or
+   have the same URL (a local path is resolved first, so a symlink or `../origin.git` to the same
+   repository matches) as the origin of the directory the command started in or of the project.
+   The gate reads the repo config and the worktree config as
+   an allowlist (T295): every key must be on this short list of keys that cannot run code or reach another
+   host, or the gate refuses and names the key: `core.repositoryformatversion`, `core.filemode`,
+   `core.bare`, `core.logallrefupdates`, `core.ignorecase`, `core.precomposeunicode`, `core.autocrlf`,
+   `core.safecrlf`, `core.symlinks`, `remote.<name>.url` (no helper `::` form, no leading `-`, one
+   URL per remote: git pushes to each one),
+   `remote.<name>.fetch`, `branch.<b>.remote`, `branch.<b>.merge`, `branch.<b>.vscode-merge-base`,
+   `pull.rebase` (`true` or `false`), `push.default` (`simple` or `current`), `user.name`, `user.email`
+   and `extensions.worktreeConfig`. Any other key refuses, for example `merge.<d>.driver`,
+   `filter.<f>.smudge`, `diff.<d>.textconv`, `diff.external`, `gpg.program`, `core.editor`, `core.pager`,
+   `credential.helper`, `http.proxy`, `include.*`, `url.*`, `alias.*` and `core.fsmonitor`. The hooks
+   directory must hold no executable file, whatever its name; a `.sample` file is not a hook. No
+   `.gitattributes` of the checkout and no `.git/info/attributes` may have a line with `merge=`, `filter=`
+   or `diff=`, read as git reads it (after a quoted pattern too); a FIFO or other file that is not a
+   regular file refuses. A file in `.git/remotes/` or `.git/branches/` refuses. For a push to a local
+   path or `file://` `origin`, the gate reads that target too (it never runs it): an executable hook
+   there (its `core.hooksPath` included) or `receive.denyCurrentBranch=updateInstead` refuses.
+   User-global and system config are trusted and not read.
    It may also push `main` (`git push origin main`; the rule names `main` only), but only after this
    session's own `[admin]` merge of the task branch: the merge call is in the transcript after the
    request, its result is not an error, it ran with `main` checked out, and it ran in the same
@@ -623,11 +632,7 @@ Known limits:
   want merged.
 - For the gate, only an entry marked as typed by a human is a request: an entry with no origin, or a
   sub-agent's prompt, neither ends an `[auto]` request nor carries `[admin]`.
-- **The deny lists in item 2 are not complete (gate hunt, 2026-11-08, open).** Repo config the lists miss (`merge.<d>.driver`, `filter.<f>.smudge`, `filter.<f>.clean`, `diff.<d>.textconv`,
-  `diff.external`, `gpg.program`, `core.editor`, `credential.helper` set to a path, `http.proxy`) and the
-  hooks `post-index-change` and `pre-auto-gc` can run code during an allowed merge or push; a merge driver
-  can also make `main` differ from the checked tree. Treat
-  `[admin]` as a guard against accidents, not against a hostile repo or a hostile agent.
+- `[admin]` is a guard against accidents, not against a hostile repo or a hostile agent.
 - The gate treats a heredoc body as data only when it can prove the body is data (T294, an allowlist).
   Everything before the `<<` and on its header line must be plain: words, `; & | < >`, and balanced
   quoted strings with no `$`, backtick or backslash in them. The text before the header holds no `$`,
@@ -668,6 +673,24 @@ Known limits:
   close a `$(…)` early on a `)` inside the body of a nested heredoc (suspected, not confirmed). The seeded
   fuzz `.claude/hooks/tests/test_heredoc_fuzz.py` compares the scan with bash and zsh: a line it shows a
   shell running and the scan hiding is a bug.
+- The repo rule of item 2 is an allowlist, and it reads the repository at the time of the command.
+  A key, hook or attributes line added after that check (a hook another process writes) is out of its
+  reach. The gate does not scan the `.gitattributes` of the incoming branch: a merge that brings one in
+  is read only by the next `[admin]` command. A `.gitattributes` with `filter=lfs` refuses `[admin]`,
+  because the gate cannot tell a safe filter from an unsafe one.
+- A local-path or `file://` `origin` runs programs on this machine when you push to it. The gate refuses
+  an executable hook in that target and `updateInstead`. It does not stop the other work that target
+  does after the push, such as its own `git gc --auto`, and it does not read a network `origin`. A remote
+  with a second `url` entry is refused, because git pushes to every URL; the count includes a `url` in
+  user-global or system config. A `url` that starts with `-` or `::`, or has the `@-` or `://-` form, is
+  refused too.
+- The refusals are wide on purpose and may stop an ordinary repo: a `.gitattributes` line with any
+  `filter=`, `diff=` or `merge=` driver (including the built-in `diff=markdown` and `merge=union`) and
+  one in an ignored or vendored directory; any executable file in `.git/hooks` (such as `pre-commit`);
+  a local config key off the allowlist (such as `submodule.active`, `init.defaultBranch`,
+  `branch.<b>.pushRemote`); a `file://localhost/…` URL; a path that holds `%`. The refusal text says the
+  key "can run a command or send git elsewhere" even when it cannot. Remove the line or key, or push
+  yourself.
 - The run record the gate trusts is a file in the trace anchors' directory
   (`.claude/hooks/lib/verify_record.py`), the same trust root as for `/verify`.
 - Repo config the gate does not read, such as a `core.hooksPath` hook run by `git commit`, and a model

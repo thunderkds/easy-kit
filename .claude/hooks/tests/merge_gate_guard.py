@@ -79,8 +79,11 @@ GATE_REL = ".claude/hooks/pre_bash_block_unsafe_merge.py"
 #          the repository's own remote; `invokes_test_runner` reads backslashes as the shell does
 #          (`tasks/TASK_GUIDE_T296.md`, AC 1-3, 5-7). User request, 2026-11-08; the Supervisor signs
 #          this line off at Stage 4.
+#   T295 — the `[admin]` repo rule is an allowlist: config keys, executable hook files, attributes
+#          lines with `merge=`/`filter=`/`diff=`, and no chained git command (`tasks/TASK_GUIDE_T295.md`,
+#          AC 1-6). User request, 2026-11-08; the Supervisor signs this line off (spawn prompt of T295).
 AUTHORISED_TASKS = ("T182", "T188", "T190", "T197", "T196", "T210", "T211", "T232", "T250", "T284",
-                    "T289", "T291", "T296")
+                    "T289", "T291", "T296", "T295")
 
 
 def _git(root, *args):
