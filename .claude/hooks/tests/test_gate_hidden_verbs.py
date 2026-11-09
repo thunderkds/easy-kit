@@ -471,6 +471,7 @@ HIDDEN_R2 = {
     # a variable the same command sets, used as the command word
     "taint-two-vars": f"g=git; v=push; $g $v origin {B}",
     "taint-wrapped": f"g=git; env $g status",
+    "iii-unknown-option": f"git --future-option x push origin {B}",
     "taint-shell-c": "x='git push origin b'; sh -c \"$x\"",
     "taint-env-S": 'g=git; env -S "$g push"',
 }
@@ -734,3 +735,39 @@ def test_r2_an_inline_alias_with_extra_spaces_is_blocked_in_auto_mode(gate, tmp_
     path = admin_session(tmp_path, fx, request="merge and push T900 " + tag)
     text = reason(f"git  -c alias.x=push x origin {B}", fx.wt, path)
     assert text is not None and "cannot push/merge" in text, text
+
+
+@pytest.mark.parametrize("command,needle", [
+    (f"{PUSH} origin {B} && git-status", "dashed"),            # a dashed git word the segment loop never reads
+    (f"{PUSH} origin {B} && env {PUSH} -f origin main", "git write"),  # a git write after a wrapper
+])
+def test_r2_admin_cross_checks_the_scan_against_the_segment_loop(gate, tmp_path, command, needle):
+    fx, path = _verified(gate, tmp_path)
+    assert reason(PUSH + " origin " + B, fx.wt, path) is None  # the first half alone is allowed
+    text = reason(command, fx.wt, path)
+    assert text is not None and needle in text, (command, text)
+
+
+def test_r2_admin_refuses_a_command_the_scan_doubts(gate, tmp_path, monkeypatch):
+    """The scan's doubt reaches `[admin]` as its own refusal, even where the other checks pass."""
+    fx, path = _verified(gate, tmp_path)
+    assert reason(PUSH + " origin " + B, fx.wt, path) is None
+    real = merge_gate._scan_command
+
+    def doubting(command, depth=0, outer=frozenset()):
+        scan = real(command, depth, outer)
+        scan.doubt = True
+        return scan
+    monkeypatch.setattr(merge_gate, "_scan_command", doubting)
+    text = reason(PUSH + " origin " + B, fx.wt, path)
+    assert text is not None and "plain literal word" in text, text
+
+
+def test_r2_the_own_remote_rule_accepts_a_worktree_of_the_project_with_no_origin(tmp_path, monkeypatch):
+    """Same common dir as ROOT is enough: no URL to compare (the repository has no `origin`)."""
+    repo, wt = tmp_path / "repo", tmp_path / "wt"
+    git(str(tmp_path), "init", "-q", "-b", "main", str(repo))
+    git(str(repo), "commit", "-q", "--allow-empty", "-m", "base")
+    git(str(repo), "worktree", "add", "-q", "-b", "feat/t900-x", str(wt))
+    monkeypatch.setattr(merge_gate, "ROOT", str(repo))
+    assert merge_gate._own_origin_refusal(str(wt), str(tmp_path)) is None
