@@ -55,14 +55,20 @@ Precedence — first match wins:
          bare name under ``CDPATH``;
        * every command starts with a word of ``ALLOWED_HEADS`` (``pytest``,
          ``python3 -m pytest|unittest`` or a relative script, ``git`` without
-         ``-C``, ``ls``, ``echo``, ``cat``, ``head``, ``tail``, ``grep``, ``wc``,
-         ``true``, ``timeout <n>``). zsh's ``chdir`` is ``cd``, so the words
-         are an allowlist, not a denylist; ``cd``/``chdir``/``builtin``/
+         ``-C`` and only a reading verb, ``add`` or ``commit`` (T296: a verb that
+         can rename or switch the branch is out, because the hook reads the branch
+         after the command ran), ``ls``, ``echo``, ``cat``, ``head``, ``tail``,
+         ``grep``, ``wc``, ``true``, ``timeout <n>``). zsh's ``chdir`` is ``cd``, so
+         the words are an allowlist, not a denylist; ``cd``/``chdir``/``builtin``/
          ``eval``/... anywhere is a second layer;
        * no ``<<``, ``$``, backtick, ``#``, ``@file``, inline-code flag
          (``-c``, ``-e``), argument ``-`` or ``[-+]N``, control or non-ASCII
          space character, and no argument whose real path (absolute, or
-         relative through a symlink) is outside the worktree.
+         relative through a symlink) is outside the worktree;
+       * T296: no ``{`` or ``}`` and no unquoted ``*``, ``?`` or ``[`` (brace
+         expansion and globs name files the tokens do not: ``> {.,..}/f``,
+         ``pytest mt*``); a backslash is read as the shell reads it (a backslash
+         and a newline join the two lines; ``\\*`` is a plain star).
      The event's ``cwd`` only resolves a relative target; a call with no
      ``cd`` is never filed by it. A failure of the slot (no ``git``, a timeout)
      also says nothing. Limits (``docs/claude-md/tracks.md`` ``### Known
@@ -409,6 +415,40 @@ ALLOWED_HEADS = frozenset({"pytest", "py.test", "python", "python3", "git", "ls"
 PYTHON_FLAGS = frozenset({"-B", "-u", "-O", "-s", "-E", "-I"})
 GIT_REDIRECTORS = ("-C", "--git-dir", "--work-tree")
 COUNT_EXEMPT = frozenset({"head", "tail", "git"})  # `tail -3`, `git log -1` are not a `chdir -1`
+# T296 (P3-2): the hook runs AFTER the command, and files a call by the branch the worktree is on
+# then. A git verb that can rename or switch that branch (`branch -m`, `checkout -b`, `switch -c`,
+# `symbolic-ref`, `rebase <a> <b>`, ...) would file the call by a name the command chose. So the git
+# verbs are an allowlist too: reading verbs, `add` and `commit`, and `branch` only to list.
+GIT_VERBS = frozenset({"status", "log", "diff", "show", "rev-parse", "ls-files", "grep", "blame",
+                       "describe", "shortlog", "merge-base", "cat-file", "add", "commit"})
+GIT_BRANCH_LISTING = frozenset({"--show-current", "--list", "-l", "-a", "--all", "-r", "--remotes",
+                                "-v", "-vv", "--verbose"})
+
+
+# T296 (SL7): the git global options that take NO value. Any other `-` word before the verb is a
+# doubt: an option that takes a value (`--namespace log`) would hide the real verb behind it, and
+# `-c` can define an alias, so none of them is read.
+GIT_NO_VALUE_OPTIONS = frozenset({"--no-pager", "-P", "-p", "--paginate", "--no-optional-locks",
+                                  "--no-replace-objects", "--literal-pathspecs", "--glob-pathspecs",
+                                  "--noglob-pathspecs", "--icase-pathspecs", "--no-lazy-fetch",
+                                  "--no-advice"})
+
+
+def _git_verb_allowed(args):
+    """T296 (P3-2, SL7): True when the git verb of `args` cannot move the worktree's branch: a verb of
+    `GIT_VERBS`, `branch` with listing options only, or no verb. Only the no-value global options of
+    `GIT_NO_VALUE_OPTIONS` may stand before the verb; any other `-` word is refused."""
+    index = 0
+    while index < len(args) and args[index].startswith("-"):
+        if args[index] not in GIT_NO_VALUE_OPTIONS:
+            return False
+        index += 1
+    if index >= len(args):
+        return True
+    verb, rest = args[index], args[index + 1:]
+    if verb == "branch":
+        return all(a in GIT_BRANCH_LISTING for a in rest)
+    return verb in GIT_VERBS
 
 
 def _allowed_command(words):
@@ -435,9 +475,56 @@ def _allowed_command(words):
             return False  # a relative script path only
     if head == "git" and any(a.startswith(GIT_REDIRECTORS) for a in args):
         return False
+    if head == "git" and not _git_verb_allowed(args):
+        return False
     if head not in COUNT_EXEMPT and any(a == "-" or re.fullmatch(r"[-+]\d+", a) for a in args):
         return False
     return True
+
+
+def join_line_continuations(command):
+    """T296 (SL6): `command` with each line continuation removed, the way the shell reads it: left to
+    right, a backslash escapes the next character, so `\\\\` + newline is an escaped backslash and a
+    line break, and only a lone backslash + newline joins two lines. A single-quoted span has no
+    escapes. A trailing backslash is kept."""
+    out, index, quote = [], 0, None
+    while index < len(command):
+        char = command[index]
+        if char == "\\" and quote != "'":
+            if command[index + 1:index + 2] == "\n":
+                index += 2
+                continue
+            out.append(command[index:index + 2])
+            index += 2
+            continue
+        if quote is None and char in "'\"":
+            quote = char
+        elif quote == char:
+            quote = None
+        out.append(char)
+        index += 1
+    return "".join(out)
+
+
+def _unquoted_glob(command):
+    """T296 (P2-3): True when `command` holds `*`, `?` or `[` outside quotes and not escaped by a
+    backslash, read the way the shell reads quotes: a single-quoted span has no escapes, and in a
+    double-quoted span or outside quotes a backslash escapes the next character."""
+    quote, index = None, 0
+    while index < len(command):
+        char = command[index]
+        if quote == "'":
+            quote = None if char == "'" else quote
+        elif char == "\\":
+            index += 1
+        elif quote == '"':
+            quote = None if char == '"' else quote
+        elif char in "'\"":
+            quote = char
+        elif char in "*?[":
+            return True
+        index += 1
+    return False
 
 
 def _escapes(token, worktree):
@@ -468,17 +555,21 @@ def _leading_cd_dir(command, cwd):
     * no heredoc `<<` anywhere (a body is not a command; a quoted marker hides one), no `$`, no
       backticks, no comment, no leading `VAR=` before a word, and none of `builtin command eval exec
       source pushd popd` or a shell keyword (`if while for time ! { function ...`) as a word.
+    * T296: no `{` or `}` anywhere and no unquoted, unescaped `*`, `?` or `[` (`_unquoted_glob`); a
+      backslash + newline is deleted, as the shell does, before the command is read.
     * no argument that names `..`, `~` or an absolute path outside the worktree (`--rootdir <main>`),
       no inline-code flag (`-c`, `-e`, `-lc`, `--eval`) and no argument that holds a quote or paren
       next to a `/` (`os.chdir('/home')`).
     """
     if not isinstance(cwd, str) or not os.path.isabs(cwd):
         cwd = None
-    command = command.replace("\\\n", " ")
+    command = join_line_continuations(command)  # T296: the shell deletes a lone backslash + newline
     if not command.startswith("cd ") or "\n" in command or "\r" in command:
         return None
     if "<<" in command or "$" in command or "`" in command:
         return None
+    if "{" in command or "}" in command or _unquoted_glob(command):
+        return None  # brace expansion and globs name files the tokens do not (`{.,..}/f`, `mt*`)
     if any(unicodedata.category(c)[0] in "CZ" and c != " " and c != "\t" for c in command):
         return None  # a control char or a non-ASCII space: not what the shell reads as a word break
     # keep in step with session_work.SEPARATORS / its shlex setup (same punctuation_chars lexer)
