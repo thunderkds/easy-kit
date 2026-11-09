@@ -43,6 +43,20 @@ Not done: merge (yours); <auto verify: running (T182) | auto verify: <result> | 
 
 -->
 
+## Auto decisions
+
+Mode: auto
+1. Effort goes in its own `## CLI Effort Table` after the model table, not as a new column of the model table — SAFER OPTION: a new column changes the header that `tests/test_cli_model_table.py` AC1 pins and makes an empty cell mean two different things; a second table leaves the model table byte-identical. The plan doc says "column". ⚠ decided for you — please review
+2. No model cell changes (haiku → strong model waits for T300, not started) — RULE: `tasks/TASK_GUIDE_T297.md` § Requirement "Out of scope" (the plan doc says "Keep the proposed table only if cost is lower and no pass is lost", so the change follows the measurement)
+3. Default `claude` row is `low, low, medium, high`; other rows are empty — SAFER OPTION: the claude values are the plan doc's proposal, and the kit never guesses another CLI's values (T136). ⚠ decided for you — please review
+4. An empty effort cell passes no effort and is not a STOP (an empty model cell still is) — SAFER OPTION: a missing effort must not block a spawn. ⚠ decided for you — please review
+5. The three guides T297-T299 were committed on local `main` (not pushed) as one `plan:` commit — RULE: precedent `git show bc5ccc34` ("plan: T294 … guides, board"), `tasks/` guides must exist before a spawn (`AGENTS.md` Hard-Stop Gate 1)
+6. Stage 4: code review no P0/P1/P2; P3s handled in a fix round (mutation controls for two Stage 1 guards, stale output-form lines in the template and `PROJECT_SPEC.md`); the review prompt had no memory slice, because a reviewer reads the diff and the guide — RULE: `docs/claude-md/pipeline-stages.md` Stage 4 item 1
+Paused: disk full — `/tmp/claude-1000` volume returned ENOSPC, so no Bash command starts (the T299 agent and this session both hit it). The T297 fix-round check, the full test run and the auto verify run have not run. Free space (or restart with `CLAUDE_CODE_TMPDIR` on another volume), then run `python3 .claude/hooks/stop_auto_verify.py --start T297`.
+Checks: tests `python3 -m pytest tests/test_cli_effort_table.py tests/test_cli_model_table.py -q -p no:cacheprovider` — 19 passed on the final commit `abc719ad` (fix round: two more mutation controls, a re-wrap with no word change, the intro-note output form); `python3 -m pytest tests -q -p no:cacheprovider -k "cli_effort or cli_model or auto_mode or stage"` — 193 passed at `d337a116`; full suite `python3 -m pytest .claude/hooks/tests tests -q -p no:cacheprovider` — 4390 passed before the fix round, NOT re-run on `abc719ad` (a rerun died with ENOSPC and a pytest process from it may still be running: stop it before the next run); reviews code-review — no P0/P1/P2 (read-only reviewer, `Verdict: no P0/P1/P2`), the P3s fixed in `abc719ad` except the tracks.md row 6 note, which T299 carries; real run — not run (disk full)
+Memory: nothing new (the cause of the disk-full stop is not checked yet)
+Not done: merge (yours); auto verify: not started (disk full)
+
 ## Evidence
 
 | Check | Result | Notes / output snippet |
