@@ -320,6 +320,9 @@ DOUBT = {
     "arithmetic-command": "(( x = 1<<n ))\n{push}\nn",
     "process-substitution": "diff <(cat <<EOF\n{push}\nEOF\n) f",
     "quote-opens-inside-substitution": 'echo $(echo "<<EOF"\n{push}\nEOF',
+    # the one nested form needs the terminator to be followed at once by a newline and `)"`
+    "commit-form-with-a-command-after-the-terminator": 'git commit -m "$(cat <<\'EOF\'\nT294\n{push}\nEOF\n; echo hi\n)"',
+    "commit-form-without-the-closing-quote": 'git commit -m "$(cat <<\'EOF\'\nT294\n{push}\nEOF\n)',
 }
 
 
