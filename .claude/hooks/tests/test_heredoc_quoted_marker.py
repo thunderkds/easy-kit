@@ -64,6 +64,17 @@ REAL = {
     "hash-inside-word": "echo a#b <<EOF\n{push}\nEOF",
     "subshell": "(cat <<EOF\n{push}\nEOF\n)",
     "after-ansi-c-escaped-quote": "echo $'\\'' > f <<EOF\n{push}\nEOF",
+    "in-substitution": "echo $(cat <<EOF\n{push}\nEOF\n)",
+    "in-substitution-quoted-tag": "x=$(cat <<'EOF'\n{push}\nEOF\n); echo done",
+    "in-backtick": "echo `cat <<EOF\n{push}\nEOF\n`",
+    "in-substitution-in-double-quotes": 'echo "$(cat <<EOF\n{push}\nEOF\n)"',
+    "commit-form": 'git commit -m "$(cat <<\'EOF\'\nT294: fix\n\n{push}\nEOF\n)"',
+    "in-substitution-in-arithmetic": "echo $(( $(cat <<EOF\n{push}\nEOF\n) ))",
+    "in-substitution-in-brace-default": "echo ${{x:-$(cat <<EOF\n{push}\nEOF\n)}}",
+    "subshell-in-substitution": "echo $( (cat <<EOF\n{push}\nEOF\n) )",
+    "quoted-tag-keeps-a-substitution-as-data": "cat <<'EOF'\n$(echo hi; {push})\nEOF",
+    "nested-substitution": "echo $(echo $(cat <<EOF\n{push}\nEOF\n))",
+    "substitution-after-quote-restart": 'echo "a $(cat <<EOF\n{push}\nEOF\n) b"',
 }
 
 
@@ -235,8 +246,15 @@ def test_ac3_non_strings_and_heredoc_free_text_pass_through():
 DOUBT = {
     "unbalanced-double-quote": 'echo "oops <<EOF\n{push}\nEOF',
     "unbalanced-single-quote": "echo 'oops <<EOF\n{push}\nEOF",
-    "open-command-substitution": "echo $(cat <<EOF\n{push}\nEOF\n)",
-    "open-backtick": "echo `cat <<EOF\n{push}\nEOF\n`",
+    "heredoc-closed-on-its-header-line": "echo $(cat <<EOF)\n{push}\nEOF",
+    "body-closes-the-context-early": "echo $(cat <<EOF\na ) b\n  EOF\n<<EOF\na ) b\nEOF)\n{push}\nEOF",
+    "backtick-body-in-brace-default": "echo ${{x:-$(cat <<-EOF\n`\n{push}\n`\nEOF\n)}}\nEOF\n{push}",
+    "header-line-opens-a-paren": "cat <<'EOF'(\n\n&&\\\n{push}\nEOF\n",
+    "body-runs-past-the-context": "echo $(cat <<EOF\n)\n{push}\nEOF",
+    "unquoted-tag-runs-a-substitution": "cat <<EOF\n$(echo hi; {push})\nEOF",
+    "unquoted-tag-runs-a-backtick": "cat <<EOF\n`{push}`\nEOF",
+    "unquoted-tag-runs-a-substitution-in-a-substitution": "echo $(cat <<EOF\n$({push})\nEOF\n)",
+    "backtick-in-the-body-ends-the-backtick": "echo `cat <<'EOF'\n`{push}`\nEOF\n`",
     "arithmetic-shift": "echo $((1<<n))\n{push}\nn",
     "arithmetic-command": "(( x = 1<<n ))\n{push}\nn",
     "process-substitution": "diff <(cat <<EOF\n{push}\nEOF\n) f",
@@ -278,6 +296,83 @@ def test_ac4_a_quote_that_spans_the_header_line_closes_and_the_body_follows_it()
     """Checked against bash and zsh: the body of `cat <<EOF "a<newline>b"` starts after `b"`."""
     command = 'cat <<EOF "a\nb"\nbody\nEOF\ntrue'
     assert "body" not in strip_heredoc_bodies(command)
+
+
+# ── The kit's commit form: a heredoc inside `$(…)` is a real heredoc ─────────────────────────────
+COMMIT_BODY = "T294: note\n\n" + FORCE
+COMMIT_FORM = 'git commit -m "$(cat <<\'EOF\'\n' + COMMIT_BODY + '\nEOF\n)"'
+COMMIT_PLAIN = 'git commit -m "' + COMMIT_BODY + '"'  # the same body outside any heredoc
+# A quoted `<<` inside `$(…)` or a backtick: the shell does not read a heredoc, the lines after it run.
+SUB_HIDDEN = {
+    "dq-in-substitution": 'echo $(echo "<<EOF")\n{push}\nEOF',
+    "sq-in-substitution": "echo $(echo '<<EOF')\n{push}\nEOF",
+    "dq-in-backtick": 'echo `echo "<<EOF"`\n{push}\nEOF',
+    "comment-in-substitution": "echo $(true # <<EOF\n)\n{push}\nEOF",
+    "backslash-in-substitution": "echo $(echo \\<<EOF)\n{push}\nEOF",
+    "quote-in-double-quoted-substitution": 'echo "$(echo \'<<EOF\')"\n{push}\nEOF',
+    "arithmetic-in-substitution": "echo $(( 1<<n ))\n{push}\nn",
+    "here-string-in-substitution": "echo $(cat <<<EOF)\n{push}\nEOF",
+}
+
+
+def test_commit_form_body_is_stripped_and_a_push_after_it_is_still_seen():
+    stripped = strip_heredoc_bodies(COMMIT_FORM)
+    assert "push" not in stripped and stripped.startswith('git commit -m "$(cat <<\'EOF\'')
+    after = strip_heredoc_bodies(COMMIT_FORM + "\n" + FORCE)
+    assert after.endswith(FORCE)
+
+
+def test_commit_form_with_a_push_in_its_body_is_allowed_in_no_tag_mode(gate, tmp_path):
+    fx = gate(kanban(in_progress=("T900",)))
+    path = transcript(tmp_path, [human("thanks", -60)])
+    assert reason(COMMIT_FORM, fx.main, path) is None
+
+
+def test_commit_form_with_a_push_in_its_body_is_allowed_in_auto_mode(gate, tmp_path):
+    fx = gate(kanban(done=("T900",)))
+    assert reason(COMMIT_FORM, fx.main, transcript(tmp_path, [human("go [auto]", -60)])) is None
+
+
+def test_commit_form_with_a_push_in_its_body_is_allowed_in_admin_mode(gate, tmp_path):
+    fx = gate(kanban(ready=("T900",)))
+    auto_verified(fx)
+    assert reason(COMMIT_FORM, fx.wt, session(tmp_path, fx, "do it [admin]")) is None
+
+
+def test_commit_form_control_the_same_body_outside_a_heredoc_is_blocked(gate, tmp_path):
+    fx = gate(kanban(in_progress=("T900",)))
+    path = transcript(tmp_path, [human("thanks", -60)])
+    assert reason(COMMIT_PLAIN, fx.main, path) is not None
+
+
+def test_commit_form_followed_by_a_real_push_is_blocked(gate, tmp_path):
+    fx = gate(kanban(in_progress=("T900",)))
+    path = transcript(tmp_path, [human("thanks", -60)])
+    assert reason(COMMIT_FORM + " && " + FORCE, fx.main, path) is not None
+
+
+@pytest.mark.parametrize("name", sorted(SUB_HIDDEN))
+def test_a_quoted_marker_inside_a_substitution_keeps_the_text(name):
+    command = shape(SUB_HIDDEN[name], FORCE)
+    assert strip_heredoc_bodies(command) == command, name
+
+
+@pytest.mark.parametrize("name", ["dq-in-substitution", "sq-in-substitution", "dq-in-backtick",
+                                  "quote-in-double-quoted-substitution"])
+@pytest.mark.parametrize("mode", ["none", "auto", "admin"])
+def test_a_quoted_marker_inside_a_substitution_is_blocked_by_the_gate(gate, tmp_path, name, mode):
+    command = shape(SUB_HIDDEN[name], FORCE)
+    if mode == "admin":
+        fx = gate(kanban(ready=("T900",)))
+        auto_verified(fx)
+        text = reason(command, fx.wt, session(tmp_path, fx, "do it [admin]"))
+    elif mode == "auto":
+        fx = gate(kanban(done=("T900",)))
+        text = reason(command, fx.main, transcript(tmp_path, [human("go [auto]", -60)]))
+    else:
+        fx = gate(kanban(in_progress=("T900",)))
+        text = reason(command, fx.main, transcript(tmp_path, [human("thanks", -60)]))
+    assert text is not None, f"{mode}, {name}: the gate ALLOWED the hidden force push"
 
 
 # ── Edge cases from the checklist ────────────────────────────────────────────────────────────────
@@ -350,8 +445,33 @@ def test_premise_the_shell_runs_the_push_after_a_hidden_marker(tmp_path, shell, 
 
 @pytest.mark.skipif(not SHELLS, reason="no bash or zsh")
 @pytest.mark.parametrize("shell", SHELLS)
-@pytest.mark.parametrize("name", ["plain", "single-quoted-tag", "dash-tab-end", "after-ansi-c-escaped-quote"])
+@pytest.mark.parametrize("name", ["plain", "single-quoted-tag", "dash-tab-end", "after-ansi-c-escaped-quote",
+                                  "in-substitution", "in-backtick", "commit-form",
+                                  "in-substitution-in-double-quotes", "nested-substitution"])
 def test_premise_the_shell_does_not_run_the_body_of_a_real_heredoc(tmp_path, shell, name):
     command = shape(REAL[name])
     assert not pushed_by(shell, command, tmp_path), f"{shell} ran the body of {name}"
     assert PUSH not in strip_heredoc_bodies(command)
+
+
+@pytest.mark.skipif(not SHELLS, reason="no bash or zsh")
+@pytest.mark.parametrize("shell", SHELLS)
+@pytest.mark.parametrize("name", ["dq-in-substitution", "sq-in-substitution", "dq-in-backtick",
+                                  "comment-in-substitution", "backslash-in-substitution"])
+def test_premise_the_shell_runs_the_push_after_a_quoted_marker_in_a_substitution(tmp_path, shell, name):
+    command = shape(SUB_HIDDEN[name])
+    assert pushed_by(shell, command, tmp_path), f"{shell} did not run the push of {name}"
+    assert PUSH in strip_heredoc_bodies(command)
+
+
+@pytest.mark.skipif(not SHELLS, reason="no bash or zsh")
+@pytest.mark.parametrize("shell", SHELLS)
+@pytest.mark.parametrize("name", ["unquoted-tag-runs-a-substitution", "unquoted-tag-runs-a-backtick",
+                                  "unquoted-tag-runs-a-substitution-in-a-substitution"])
+def test_premise_the_shell_runs_what_an_unquoted_heredoc_body_holds(
+        tmp_path, shell, name):
+    """`cat <<EOF` expands `$(…)` and backticks in its body, so the push inside RUNS: that body is
+    command text, not data. The scanner must keep it (found by the fuzz; true before T294 too)."""
+    command = shape(DOUBT[name])
+    assert pushed_by(shell, command, tmp_path), f"{shell} did not run the push of {name}"
+    assert PUSH in strip_heredoc_bodies(command), f"{name}: the scanner hid a push {shell} runs"

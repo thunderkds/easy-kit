@@ -31,9 +31,14 @@ handled the same way, with the same two rules copied deliberately:
   scanned — that is what keeps ``cat > f <<'E' … E`` followed by ``; git push``
   a blocked push rather than a way to smuggle one past the gate.
 * A `<<WORD` inside quotes, after a `#` comment, after a backslash, inside
-  `$(…)` or a backtick, or as part of a `<<<` here-string is **not a header**
-  (T294). Reading it as one hid the lines after it: ``echo "<<EOF"`` then
-  ``git push --force origin main`` then ``EOF`` lost its push to the strip.
+  `${…}`, `((…))` or `<(…)`, or as part of a `<<<` here-string is **not a
+  header** (T294). Reading it as one hid the lines after it: ``echo "<<EOF"``
+  then ``git push --force origin main`` then ``EOF`` lost its push to the strip.
+  Directly inside `$(…)`, a backtick or a subshell it is a header (the kit's
+  commit form ``git commit -m "$(cat <<'EOF' … EOF)"``), but only when the
+  terminator line is followed by that context's closer. A body after an
+  *unquoted* tag that holds ``$(`` or a backtick is not data either: the shell
+  runs it. Any case the scan cannot place ends all stripping in that command.
 * An **unterminated** heredoc is left entirely alone. A shell would consume the
   rest of the input as body, so stripping it would arguably be accurate — but
   being wrong in that direction hides a real invocation, while being wrong in
@@ -117,6 +122,10 @@ HEREDOC_HEADER_PATTERN = re.compile(
 )
 
 
+# What an unquoted heredoc tag lets the shell run from inside the body.
+EXPANSION_IN_BODY = re.compile(r"\$\(|`")
+
+
 def _terminator_pattern(tag, allow_leading_tabs):
     """The line that ends a heredoc: the tag alone on its own line.
 
@@ -129,6 +138,22 @@ def _terminator_pattern(tag, allow_leading_tabs):
     return re.compile(rf"^{lead}{re.escape(tag)}[ \t]*$", re.MULTILINE)
 
 
+def _closes_context(command, stack, newline, terminator):
+    """True when a heredoc opened inside `$(…)` or a backtick (T294) ends the way the shell reads it.
+
+    The shell closes a command substitution at its own closer, so a body that runs past that closer
+    is not what the terminator line ends. The body counts only when the terminator line is directly
+    followed by the closer of the innermost context, and, when any backtick is open, when the body
+    holds no backtick (the shell ends a backtick substitution at the first one). Anything else keeps
+    the text.
+    """
+    closer = "`" if stack[-1] == "`" else ")"
+    end = terminator.end()
+    if not (command.startswith("\n", end) and command[end + 1:].lstrip(" \t")[:1] == closer):
+        return False
+    return not ("`" in stack and "`" in command[newline + 1:terminator.start()])
+
+
 def strip_heredoc_bodies(command):
     """Replace every terminated heredoc body in `command` with a single space.
 
@@ -136,12 +161,15 @@ def strip_heredoc_bodies(command):
     in it. Never raises: callers run before every Bash call in the repo.
 
     A `<<WORD` counts as a heredoc header only where the shell would read one
-    (T294): at the top level of the command, outside quotes, outside a `#`
-    comment, not escaped by a backslash, and not inside `$(…)`, a backtick,
-    `${…}`, `((…))` or `<(…)`. A scan from left to right tracks that state, and
-    everything it cannot place resolves toward **keeping the text** — an
-    unbalanced quote ends the scan, a header line that leaves a substitution or
-    quote open is not read as a heredoc, a `<<<` here-string never is one. Before
+    (T294): outside quotes, outside a `#` comment, not escaped by a backslash,
+    and in a place where a command starts — the top level, or directly inside
+    `$(…)` or a backtick, where the quote state restarts (the kit's own commit
+    form, ``git commit -m "$(cat <<'EOF' … EOF)"``, depends on this). Inside
+    `${…}`, `((…))`, `<(…)`, a nested plain `(` or double quotes it is not a
+    header. A scan from left to right tracks that state, and everything it
+    cannot place resolves toward **keeping the text** — an unbalanced quote ends
+    the scan, a header whose line leaves a different set of contexts open than
+    it started with is not read as a heredoc, a `<<<` here-string never is one. Before
     T294 the header was found by a plain regex search, so
     ``echo "<<EOF"`` / ``git push --force origin main`` / ``EOF`` lost its middle
     line to the strip, and the gate saw no push (gate hunt P1-1).
@@ -151,7 +179,9 @@ def strip_heredoc_bodies(command):
 
     pieces = []
     pos = 0          # end of the text already copied into `pieces`
-    stack = []       # closers of the open contexts: `"`, `)`, `}` or a backtick
+    stack = []       # the open contexts: `"`, `` ` ``, `}`, `$)` (a `$(…)`: a command starts
+                     # here) or `)` (any other paren: arithmetic, `<(`, a nested `(`: doubt)
+    saved = None     # `stack` as it was at the pending header
     pending = None   # a real header whose body starts at the next top-level newline
     i, size = 0, len(command)
     while i < size:
@@ -176,7 +206,7 @@ def strip_heredoc_bodies(command):
             i += 1
             continue
         if char == "$" and after in ("(", "{"):
-            stack.append(")" if after == "(" else "}")  # a quote inside starts afresh
+            stack.append("$)" if after == "(" else "}")  # a quote inside starts afresh
             i += 2
             continue
         if top == '"':
@@ -201,30 +231,29 @@ def strip_heredoc_bodies(command):
             i = size if end == -1 else end  # a comment runs to the end of the line
             continue
         if char == "(":
-            if after == "(":  # `((` is arithmetic: a `<<` inside is a shift
-                stack.extend([")", ")"])
-                i += 2
-                continue
-            if stack or (i and command[i - 1] in "<>"):  # inside, or `<(` / `>(`
-                stack.append(")")
+            if after == "(" or command[i - 1:i] in ("<", ">", "("):
+                stack.append(")")  # `((` is arithmetic, `<(` / `>(` a process substitution: doubt
+            else:
+                stack.append("$)")  # a subshell: a command starts here
             i += 1
             continue
         if char in ")}":
-            if top == char:
+            if top == char or (char == ")" and top == "$)"):
                 stack.pop()
             i += 1
             continue
-        if char == "<" and not stack and command.startswith("<<", i):
+        if char == "<" and command.startswith("<<", i) and top in (None, "$)", "`"):
             header = HEREDOC_HEADER_PATTERN.match(command, i)  # `<<<` never matches
             if header and pending is None:
                 pending = header
+                saved = list(stack)
                 i = header.end()
             else:
                 i += 2  # not a header, or a second one on the line (never read)
             continue
         if char == "\n" and pending is not None:
-            if stack:
-                pending = None  # the newline is inside a quote or substitution: cannot tell
+            if stack != saved:
+                break  # the line left other contexts open than it started with: cannot tell
             else:
                 # The body starts after the header's line, so the rest of that line
                 # (redirections, `&& cmd`) stays command text.
@@ -233,6 +262,14 @@ def strip_heredoc_bodies(command):
                 ).search(command, i + 1)
                 if not terminator:
                     break  # unterminated: strip nothing, keep scanning the raw text
+                if stack and not _closes_context(command, stack, i, terminator):
+                    break  # inside `$(…)` or a backtick the body must end the context: cannot tell
+                if not pending.group("quote") and EXPANSION_IN_BODY.search(command, i, terminator.start()):
+                    # An unquoted tag expands its body: `$(cmd)` and backticks RUN. The body is
+                    # command text, so keep it, and carry on after the terminator.
+                    pending = None
+                    i = terminator.end()
+                    continue
                 pieces.append(command[pos:i + 1])
                 pieces.append(" ")
                 pos = i = terminator.end()
