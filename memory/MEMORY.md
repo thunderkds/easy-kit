@@ -347,3 +347,4 @@
 - [Pack / Core framework / Pack agent](glossary.md) — canonical terms for the optional pack system
 - [T095: merge gate reads worktree evidence; heredoc bodies are data] — main checkout first, then worktrees; `lib/shell_data.py` strips heredocs. → decisions.md, learnings.md
 - [T099: quoted spans are sometimes code] — naive quoted-span stripping would ALLOW `bash -c "git push"`. Needs wrapper-awareness. → tasks/TASK_GUIDE_T099.md
+- [Two gate tasks conflict in meaning (T295+T296)](learnings.md) — merge the tighter one first; re-run both
