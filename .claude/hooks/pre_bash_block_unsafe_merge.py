@@ -1660,7 +1660,7 @@ def _scan_simple(words, depth, tainted, scan):
             elif re.match(r"^-[A-Za-z]*S.", word):
                 split = word.split("S", 1)[1]
             if split:  # `env -S 'git "push" x'`, `env -S'…'`, `env --split-string='…'`
-                _merge_scan(scan, split, depth + 1)
+                _merge_scan(scan, split, depth + 1, tainted)
         if k and (word.startswith("-") or ASSIGNMENT_NAME.match(word)):
             continue  # a wrapper's option, or a `VAR=value` it sets: not a command word
         base = _basename(word)
@@ -1681,7 +1681,7 @@ def _scan_simple(words, depth, tainted, scan):
         elif base in SHELLS:
             for j in range(k + 1, len(words) - 1):
                 if re.fullmatch(r"-[A-Za-z]*c[A-Za-z]*", words[j]):
-                    _merge_scan(scan, words[j + 1], depth + 1)
+                    _merge_scan(scan, words[j + 1], depth + 1, tainted)
                     break
         elif NONLITERAL.search(base) and base not in TEST_BRACKETS:
             names = set(VARIABLE_REFERENCE.findall(base))
@@ -1690,15 +1690,15 @@ def _scan_simple(words, depth, tainted, scan):
                 scan.doubt = True
 
 
-def _merge_scan(scan, command, depth):
-    inner = _scan_command(command, depth)
+def _merge_scan(scan, command, depth, tainted=frozenset()):
+    inner = _scan_command(command, depth, tainted)
     scan.doubt = scan.doubt or inner.doubt
     scan.verbs += inner.verbs
     scan.git_words += inner.git_words
     scan.env_risk = scan.env_risk or inner.env_risk
 
 
-def _scan_command(command, depth=0):
+def _scan_command(command, depth=0, outer_tainted=frozenset()):
     """Read `command` into a `_Scan`. Two layers: `${IFS}`, `$(…)`, a backtick or `eval` in a segment that
     names git; then each simple command, after shlex removed quotes and backslashes (a lone backslash +
     newline is joined first, as the shell does): redirects are skipped, every git word is read."""
@@ -1732,7 +1732,7 @@ def _scan_command(command, depth=0):
             words = []
         else:
             words.append(token)
-    tainted = _assigned_names(simple)
+    tainted = _assigned_names(simple) | set(outer_tainted)
     for words in simple:
         _scan_simple(words, depth, tainted, scan)
     if scan.env_risk and scan.git_words:

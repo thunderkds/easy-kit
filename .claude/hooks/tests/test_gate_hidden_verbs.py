@@ -471,6 +471,8 @@ HIDDEN_R2 = {
     # a variable the same command sets, used as the command word
     "taint-two-vars": f"g=git; v=push; $g $v origin {B}",
     "taint-wrapped": f"g=git; env $g status",
+    "taint-shell-c": "x='git push origin b'; sh -c \"$x\"",
+    "taint-env-S": 'g=git; env -S "$g push"',
 }
 
 
@@ -518,7 +520,7 @@ BENIGN_R2 = [
     "git log --oneline >/dev/null 2>&1", "git diff > /dev/null", "ls | xargs git status",
     "apt-get install git -y", "man git", "which git", "ln -s /usr/bin/git ~/bin/git",
     "git-lfs ls-files", "git-crypt status", "echo git-push", 'grep "git-push" notes.md',
-    "git add a && git commit -m x", "git stash", "git tag v1",
+    "bash -c 'echo $HOME'", "sh -c \"$x\"", "git add a && git commit -m x", "git stash", "git tag v1",
     "if [ -f x ]; then echo hi; fi", "for i in 1 2; do echo $i; done", "{ echo a; echo b; }",
     '"$VENV/bin/pytest" -q', "${VENV}/bin/pytest -q", "FOO=1 pytest -q", "pytest -k 'a*' >/dev/null",
 ]
@@ -723,3 +725,12 @@ def test_r2_limit_a_variable_set_outside_the_command_is_not_followed():
     stay allowed and the two look the same. The same command that sets the names is flagged."""
     assert not merge_gate.hidden_git_verb(f"$g $v origin {B}")
     assert merge_gate.hidden_git_verb(f"g=git; v=push; $g $v origin {B}")
+
+
+@pytest.mark.parametrize("tag", ["[admin]", "[auto]"])
+def test_r2_an_inline_alias_with_extra_spaces_is_blocked_in_auto_mode(gate, tmp_path, tag):
+    fx = gate(kanban(done=("T900",)))
+    auto_verified(fx)
+    path = admin_session(tmp_path, fx, request="merge and push T900 " + tag)
+    text = reason(f"git  -c alias.x=push x origin {B}", fx.wt, path)
+    assert text is not None and "cannot push/merge" in text, text
