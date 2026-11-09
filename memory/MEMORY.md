@@ -25,6 +25,7 @@
      run; read them there. The enforced gate is the whole-file character budget above. -->
 
 ### Decisions
+- [T301: security-finding rules in `skills/code-review/references/security-reviewer.md`](decisions.md) — verdicts `confirmed`/`needs_validation`/`rejected`; `code-review/SKILL.md` is at the 8 KB Codex cap, move text out before adding
 - [T232–T236, T239, T240: plugin, init, Stage 0–5, repo `easy-kit`](decisions.md) — never reuse old repo name
 - [Anonymous GitHub check: block SSH](learnings.md) — T236
 - [T231: story `index.html`, reference `docs.html`](decisions.md) — 300-word cap; new skill goes on both pages
@@ -152,6 +153,7 @@
 - [T215: Done rows are one-line; full text in docs/archive/KANBAN_DONE_DETAIL.md](decisions.md) — logs moved to docs/brainstorming, docs/prd; write new Done rows short
 
 ### Patterns & Gotchas
+- [A text gate over shell input: allowlist plain shapes; author fuzz proves little](learnings.md) — T294/T296: 12 then 11 bypass classes; stop at documented limits
 - [Never switch the main checkout mid auto-verify run](learnings.md) — verdict write crashes; use a worktree; state file needs ID + timestamp lines
 - [Merge gate after T210/T211](learnings.md) — verify row committed on the branch; any `git <global opts> push|merge|pull|rebase` and `-c alias.` gated; open: `echo … | sh`
 - [Parallel sessions overwrite the shared active-task file](learnings.md) — rerun a task's tests under its own state file; smooth scroll breaks CDP clicks
@@ -276,6 +278,7 @@
 - [A board-pulled guide is gate input](learnings.md) — T154: forged Evidence vacated; sensitive-path ask → T157
 - [Injected input hid a dead /dev/tty](learnings.md) — T155: test on a real pty
 - [Parallel tasks merge together; 401 ≠ permanent](learnings.md) — T156/T157: gate serialises merges
+- [Full suite fills `/tmp` and stops Bash; `test_auto_verify*` is flaky](learnings.md) — T301: one run at a time, `TMPDIR` and `--basetemp` on the home volume; re-run on the parent commit before blaming a task
 
 ### Learning Records
 - [Audit every public claim in one pass](learnings.md) — T231: verify failed 3 times, one sentence each
