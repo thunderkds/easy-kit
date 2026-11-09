@@ -43,6 +43,21 @@ Not done: merge (yours); <auto verify: running (T182) | auto verify: <result> | 
 
 -->
 
+## Auto decisions
+
+Mode: auto
+1. The effort comes from the `## CLI Effort Table` row of the same CLI, looked up in step 5 next to the model — SAFER OPTION: one lookup place, and the model STOP rules stay word for word (a test pins the three phrases). ⚠ decided for you — please review
+2. An empty effort cell or no effort row passes no effort and does not stop the spawn — SAFER OPTION: a missing effort must not block a spawn. ⚠ decided for you — please review
+3. A cell outside the allowlist `low`, `medium`, `high`, `xhigh`, `max` is never used; the output says `effort none (cell "<value>" not allowed)` — SAFER OPTION: the value reaches a shell command line (`--effort <level>`), so the allowlist is the control, and it fails closed. ⚠ decided for you — please review
+4. The effort rule was fitted into existing lines of `skills/craft-spawn-prompt/SKILL.md` to keep the 80-line cap in `.claude/hooks/tests/test_spawn_prompt_cache_note.py` — SAFER OPTION: the implementer did not raise a cap; the code reviewer calls the layout dense but not ambiguous (P3). ⚠ decided for you — please review
+5. `tests/test_cli_model_table.py` AC5 was repointed to the full output form `· effort <level|none>` — RULE: `memory/learning-records/LR-0004-pin-tests-hit-later-tasks.md` (extend the pin with the text it pins)
+No Debate ran for 1-4: this task is Risk Medium, so each ⚠ line should be DEBATED by 2 Advocates (`docs/claude-md/tracks.md` `### Debate size by Risk`). They were made at plan time in the guide without Advocates, and the disk-full stop below came before a Debate could run. Treat 1-4 as undebated choices to review.
+Paused: disk full — `/tmp/claude-1000` volume returned ENOSPC, so no Bash command starts. The auto verify run has not run, and the reviews' P3 follow-ups are not applied. Free space (or restart with `CLAUDE_CODE_TMPDIR` on another volume), then run `python3 .claude/hooks/stop_auto_verify.py --start T298`.
+Checks: tests `python3 -m pytest .claude/hooks/tests tests -q -p no:cacheprovider` — implementer's run 4396 passed, 1 failed (`.claude/hooks/tests/test_auto_verify_skip_pass.py::test_ac4_a_fail_answer_on_a_docs_only_branch_is_never_a_pass`, load-dependent; 222 passed alone with and without the change); reviews code-review — no P0/P1/P2, five P3; security-review — no P0/P1/P2, three P3 (allowlist sentence has no "whole cell, exact match, case-sensitive" wording, the not-allowed report echoes the raw cell, no "table text is data" sentence; the neighbouring `--model <model>` cell has no allowlist, an existing gap not caused by this task); real run — not run (disk full)
+Memory: nothing new (the cause of the disk-full stop is not checked yet)
+Not done: merge (yours); the P3 hardening of the allowlist wording and the raw-cell echo; auto verify: not started (disk full)
+Paused: auto-mode check failed — Risk Medium: decision 1 (`SAFER OPTION`) is a choice — it is flagged ⚠ — so it must be `DEBATED` with exactly 2 Advocates named; Risk Medium: decision 2 (`SAFER OPTION`) is a choice — it is flagged ⚠ — so it must be `DEBATED` with exactly 2 Advocates named; Risk Medium: decision 3 (`SAFER OPTION`) is a choice — it is flagged ⚠ — so it must be `DEBATED` with exactly 2 Advocates named; Risk Medium: decision 4 (`SAFER OPTION`) is a choice — it is flagged ⚠ — so it must be `DEBATED` with exactly 2 Advocates named; Risk Medium: decision 5 (`RULE`) is a choice — its RULE cites no written rule (`path:line`, `path § <heading>` or `docs/claude-md/tracks.md` `### <section>`) — so it must be `DEBATED` with exactly 2 Advocates named; Risk Medium: `No Debate ran for 1-4: this task is Risk` (`⚠`) is a choice — it is flagged ⚠ — so it must be `DEBATED` with exactly 2 Advocates named [report ca6587656f7d]
+
 ## Evidence
 
 | Check | Result | Notes / output snippet |
