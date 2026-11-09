@@ -316,7 +316,9 @@ worktree under that task, before the session's active-task file. It does so only
 `cd <dir> && cmd [&& cmd]...`, where `<dir>` is an existing, searchable directory inside a worktree whose
 branch names the task (`fix/t120-x`). Every command after the `cd`, and every command after a `|`, must start
 with one word of a fixed list: `pytest`, `py.test`, `python`/`python3` (only as `-m pytest`, `-m unittest` or a
-relative script path), `git` (without `-C`, `--git-dir`, `--work-tree`, and only with a reading verb such as
+relative script path), `git` (without `-C`, `--git-dir`, `--work-tree`, with no global option except one that takes no value
+(`--no-pager`, `-P`, `--paginate`, `--no-optional-locks` and the like; `-c` and every option that takes a value
+are refused), and only with a reading verb such as
 `status`, `log`, `diff`, `show`, `rev-parse`, `ls-files` or `grep`, or `add`, `commit`, or `branch` to list), `ls`,
 `echo`, `cat`, `head`, `tail`, `grep`, `wc`, `true`, and `timeout <n>` before one of these. Any other form is not filed by its directory, and
 the session's active-task file decides, as before. That covers any other first word (`env`, `make`, `xargs`,
@@ -559,8 +561,12 @@ command, from this session's transcript. It allows a `git merge` or `git push` o
    `--strategy`/`-s`, `--strategy-option`/`-X`, `--cleanup`, `--into-name`, also in git's abbreviated and
    run-together forms such as `--mess` and `-qm`) never gives the branch name. The git word and the verb
    must be plain literal words, and the only verbs in the command are `merge`, `push` and those four (the
-   rule for hidden forms is in the limit below that starts `In auto mode`). A branch push goes only to the repository's own
-   remote: after `cd <clone>`, the clone's `origin` must be the same repository or have the same URL as the
+   rule for hidden forms is in the limit below that starts `In auto mode`). Every word of the command whose
+   name is `git`, or `git-<verb>` such as `git-push`, is a git word: the `[admin]` check reads all of them, so
+   a second one that hides behind a redirect (`git >/dev/null push -f origin main`) or a dashed name is
+   refused, and any dashed git command is refused. A branch push goes only to the repository's own
+   remote: after `cd <clone>`, the clone's `origin` must be the same repository or have the same URL
+   (a local path is resolved first, so a symlink or `../origin.git` to the same repository matches) as the
    origin of the directory the command started in or of the project. The repository must have
    no executable hook (not `.sample`) for `pre-push`, `pre-merge-commit`, `post-merge`, `pre-commit`,
    `commit-msg`, `prepare-commit-msg`, `post-commit`, `post-checkout` or `reference-transaction`, and no
@@ -633,15 +639,39 @@ Known limits:
 - The remote `origin` itself is trusted: the gate checks that its push URL equals its fetch URL, not
   that the URL is the one you meant. `git remote set-url origin <other>` changes both, so it passes.
 - In auto mode (`[auto]` or `[admin]`), a command with a git word or a git verb that is not a plain
-  literal word is blocked, because the gate cannot tell what it runs (T296). That covers a `$`, backtick,
-  brace or glob in the git word or its verb (`v=push; git $v`, `git ${v}sh`, `git {p..p}ush`,
-  `git $'push'`, `$g push`, `$'git' push`), the same in a wrapper chain before it (`env`, `timeout`,
-  `nice`, `sudo`, `nohup`, `xargs`, `command`), a `bash -c '…'` string read the same way, a quote or
-  backslash that hides the verb (`git "push"`, `g''it push`, `git p\ush`), `${IFS}`, `$(…)`, a backtick or
-  `eval` in a segment that names git, and a verb that publishes without being `push` (`git send-pack`,
-  `git http-push`). Outside auto mode these forms behave as before. A git alias set in config
-  (`git pp`), a script (`bash push.sh`), a git command that runs another (`git submodule foreach`,
-  `git rebase --exec`) and `python3 -c` still go unseen.
+  literal word is blocked, because the gate cannot tell what it runs (T296). Every word whose name is `git`
+  or `git-<verb>` is a git word, wherever it stands in the command, and a git word whose verb cannot be read
+  is a doubt, and a doubt is a block. That covers a `$`, backtick, brace or glob in the git word or its verb
+  (`v=push; git $v`, `git ${v}sh`, `git {p..p}ush`, `git $'push'`, `$g push`, `{git,push} origin b`); the
+  same in a wrapper chain before it (`env`, `timeout`, `nice`, `sudo`, `nohup`, `xargs`, `command`), also
+  with `env -S'…'`; a redirect between git and its verb (`git >/dev/null push`); a global option with a
+  value, which hides the verb (`git --attr-source HEAD push`: read as a push); `git` after an unknown
+  command (`flock /tmp/l /usr/bin/git "push"`); `xargs git` (the verb may come on stdin); a dashed command
+  (`/usr/lib/git-core/git-push`, `git-send-pack`); an alias set in the environment (`GIT_CONFIG_COUNT`,
+  `GIT_CONFIG_PARAMETERS`, `GIT_CONFIG_KEY_*`, `GIT_CONFIG_VALUE_*`, `GIT_EXEC_PATH`, `GIT_CONFIG_GLOBAL`,
+  `GIT_CONFIG_SYSTEM` in a command that names git); `eval`; a `bash -c '…'` string read the same way; a
+  line continuation in the git word; a quote or backslash that hides the verb (`git "push"`, `g''it push`,
+  `git p\ush`); `${IFS}`, `$(…)`, a backtick in a segment that names git; and a verb that publishes
+  without being `push` (`git send-pack`, `http-push`, `receive-pack`, `remote-ext`, `subtree`, `svn`, `p4`,
+  `cvsexportcommit`). The check runs whenever the command holds no plain merge, push or pull, so a `git
+  rebase` earlier in the command does not skip it. An error in the check is a block. Outside auto mode
+  these forms behave as before (except that `--attr-source` and `--super-prefix` are now read as options
+  with a value). What it does not see:
+  - A git alias set in config (`git pp`), a script (`bash push.sh`), a git command that runs another
+    (`git submodule foreach`, `git rebase --exec`), `python3 -c`, `su -c`, `script -c` and `busybox sh -c`.
+  - A shell that reads its program from a heredoc, here-string or pipe: `bash <<'E'` + newline +
+    `git push origin b` + newline + `E`, `echo 'git push origin b' | sh`, `bash <<< '…'`. The heredoc case
+    overlaps T294.
+  - A command that builds a git command from data: `$(echo 'git push origin b')` and a backtick form.
+  - Word splitting of a variable (bash only): `g=git\ push; $g origin b`.
+  - A variable set outside the command: `$g $v origin b`, with `g` and `v` set earlier in the profile.
+    The tool shell keeps no variables between calls, and a variable the same command sets (`g=git; $g …`)
+    is read. The rule that would catch it also blocks `$PY -m pytest "$f"`.
+  - `GIT_CONFIG_*` set in the profile or by the harness.
+  - The own-remote rule trusts the directory the command starts in: the shell's working directory is
+    carried from an earlier call, so a call that starts in a clone with another `origin` is judged against
+    that clone. A clone's `origin` URL is compared after its local path is resolved, and not otherwise (an
+    `ssh` URL and the `https` URL of the same host are different).
 - The gate is a static check of the command text and of the repo config at the time of the command. It
   is not an airtight security boundary: user-global config, a script that calls git, and a hook or
   config added between the check and the push are out of its reach.
@@ -685,7 +715,7 @@ Read these before you rely on `[auto]`. T180 left them open, on purpose. T186 re
   Examples: a test run in the main checkout while the session's active-task file names another task; a
   `code-review` or `security-review` Skill call made then; a Debate whose `resolve-question` call names no
   task; a test run after a `cd` that uses `;`, or from a session that was already in the worktree.
-  Point the session at the task (minimal-track step 1) before you work on it. Four more limits:
+  Point the session at the task (minimal-track step 1) before you work on it. Nine more limits:
   - The filing proves where the command started, not what it ran. Inline code (`python3 -c`, `bash -c`,
     `node -e`, `perl -e`, `ruby -e`) is refused, but a script file in the worktree that does its own `cd`,
     or a symlink inside the worktree that points to main, is not seen. An agent that wants to mislead the
