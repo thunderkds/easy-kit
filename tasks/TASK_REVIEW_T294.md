@@ -29,30 +29,29 @@ or adds `Paused: done not moved — <reason>`. It moves the row only when this b
 numbered decision, `Checks:`, `Memory:`, the `Not done:` auto verify slot with its result, and `Not done:`
 naming the merge — no `<...>` left (`docs/claude-md/tracks.md` `### Auto close-out`).
 
+-->
+
 ## Auto decisions
 
 Mode: auto
-1. <what was decided> — RULE: <the rule>
-2. <what was decided> — FACT: <path>:<line> "<quoted text>"
-3. <what was decided> — DEBATED: <option> (Advocate 1: <its proposal>; Advocate 2: <its proposal>) ⚠ decided for you — please review
-4. <what was decided> — SAFER OPTION: <why> ⚠ decided for you — please review
-Paused: <only when a stop that stays paused the task: which one, and why>
-Checks: tests `<command>` — <result>; reviews <skill — result>; real run `<command>` — printed `<what it printed>` (auto-checked, not /verify)
-Memory: <each entry the memory pass wrote, as `file — entry` | nothing new>
-Not done: merge (yours); <auto verify: running (T182) | auto verify: <result> | /verify (yours)>
-
--->
+1. Accepted the implementer's wider scanner (it tracks `$(…)`, backtick and subshell context and keeps unquoted bodies that hold `$(`), although the guide's cut list says "no parser for `$(...)`" — DEBATED: accept as is, then amend the guide and run both reviews (Advocate 1: accept, amend the guide wording, run code-review and security-review; Advocate 2: accept with three conditions: both reviews, guide amended, docstring checked; Advocate 3 (smallest safe thing): accept, record the departure in this file, flag `EXPANSION_IN_BODY` as beyond the brief) ⚠ decided for you — please review
+2. The security review found a gate bypass the rewrite adds, so the task is not ready and goes back for one fix round — RULE: `.claude/skills/code-review/SKILL.md` § Severity Scale "P0 | Correctness bug, data loss, security hole | Yes — hard block". Supervisor check on 2026-11-09: `cat <(cat <<A` / `)` / `cat <<B` / `A` / `)` / a push line / `B` — `strip_heredoc_bodies` on `bc5ccc34` keeps the push line (visible to the gate); on this branch it strips it
+3. Guide deviation recorded here, not in the guide's frozen sections: AC 4 (guide line 61) and the cut list (guide line 103) say `$(...)` keeps the text. Accepted scope: a `<<` directly inside `$(…)`, a backtick or a subshell is read as a header only when the terminator line is followed by that context's closer — RULE: `docs/claude-md/tracks.md` `### Admin tag` Known limits (the rule is written there by this task)
+Checks: tests (implementer) `python3 -m pytest .claude/hooks/tests tests -q -p no:cacheprovider` — 4599 passed before the fix round; reviews security-review — 1 P0 confirmed (bypass via a heredoc inside `<(…)`), code-review — pending; real run — pending the fix round (auto-checked, not /verify)
+Memory: nothing new yet — the pass runs after the fix round
+Not done: merge (yours); auto verify: not started, a fix round is open
+Paused: auto-mode check failed — Risk High: decision 1 (`DEBATED`) is a choice — it names 2 Advocates, not exactly 3 — so it must be `DEBATED` with exactly 3 Advocates named; Risk High, but no decision was DEBATED with 3 Advocates [report 9f397879cf19]
 
 ## Evidence
 
 | Check | Result | Notes / output snippet |
 |-------|--------|------------------------|
-| **New test(s) cover Acceptance Criteria (file paths pasted)** | ☑ pass | `.claude/hooks/tests/test_heredoc_quoted_marker.py` (217 tests): AC 1 gate tests x3 modes (no tag, `[auto]`, `[admin]`) for the four hidden shapes plus five more, with a marker-less control per mode; AC 2 real-heredoc forms (unit and gate); AC 3 corpus of 29 commands against a frozen copy of the old function; AC 4 doubt cases; premise tests that run bash and zsh in throwaway repos. `python3 -m pytest .claude/hooks/tests/test_heredoc_quoted_marker.py -q` -> `217 passed in 2.99s` at `bbc5665e` |
-| Verification command run | ☑ pass | at `bbc5665e`, 2026-11-09T02:12Z, tree clean: `python3 -m pytest .claude/hooks/tests -q -k "heredoc or shell_data or merge"` -> `756 passed, 1883 deselected in 17.51s`; `python3 -m pytest .claude/hooks/tests tests -q -p no:cacheprovider` -> `4599 passed, 25 subtests passed in 313.46s (0:05:13)` |
-| Negative cases hold | ☑ pass | Red against the prior content: the new file on `bc5ccc34` gave `58 failed, 70 passed` (see BEFORE). 13 mutation controls (M1-M13) on the first scanner, and 5 more (resume, 2026-11-09, at `bbc5665e`, each `1 file changed, 1 insertion(+), 1 deletion(-)`, restored by `git checkout`) on the `$(…)` / backtick handling: M14 `_closes_context` never consulted -> 3 red; M15 unquoted-body expansion check off -> 10 red; M16 header-line context check off -> 1 red; M17 subshell frame read as doubt -> 4 red; M18 backtick-in-body check off -> 1 red. The first 13 are on `shell_data.py`, each with `git diff --stat` = 1 file changed (M13: 14 insertions), each restored by `git checkout`, run as `python3 -B -m pytest <file>`: M1 double-quote tracking off -> 15 red; M2 single-quote skip off -> 7 red; M3 comment skip off -> 8 red; M4 backslash skip off -> 8 red; M5 context stack ignored at `<<` -> 7 red; M6 ANSI-C quote branch off -> 4 red; M7 `((` frame off -> 1 red; M8 pending kept across a newline in a substitution -> 1 red; M9 `$(` and `${` frames off -> 7 red; M10 backtick frame off -> 1 red; M11 `<(` frame off -> 1 red; M12 closers never pop -> 2 red; M13 scanner strips every `<<` (the old regex search put back) -> 58 red, including all 24 AC 1 gate tests. Differential fuzz against real shells (scratchpad `t294/fuzz.py`, 6000 random commands x bash and zsh per seed): old function hid a line the shell ran in 72 of 6000 runs (seed 1); new function 0 in 6 x 6000 (seeds 1-6) |
+| **New test(s) cover Acceptance Criteria (file paths pasted)** | ☑ pass | `.claude/hooks/tests/test_heredoc_quoted_marker.py` (326 tests) and `.claude/hooks/tests/test_heredoc_fuzz.py` (4 tests): AC 1 gate tests x3 modes (no tag, `[auto]`, `[admin]`) for the four hidden shapes plus more, with a marker-less control per mode; AC 2 real-heredoc forms (unit and gate); AC 3 corpus of 29 commands (a sample of the earlier suites' commands) against a frozen copy of the old function; AC 4 doubt cases; fix round: 18 `BYPASS` shapes (unit, gate x3 modes, real bash and zsh with an `echo` canary in a throwaway dir); seeded differential fuzz. At `d936374c`: `python3 -m pytest .claude/hooks/tests/test_heredoc_quoted_marker.py -q` -> `326 passed in 5.34s`; `python3 -m pytest .claude/hooks/tests/test_heredoc_fuzz.py -q` -> `4 passed in 6.17s` |
+| Verification command run | ☑ pass | at `d936374c`, 2026-11-09T02:54Z, tree clean apart from this file: `python3 -m pytest .claude/hooks/tests -q -k "heredoc or shell_data or merge"` -> `869 passed, 1883 deselected in 29.25s`; `python3 -m pytest .claude/hooks/tests tests -q -p no:cacheprovider` -> `4712 passed, 25 subtests passed in 342.59s (0:05:42)` |
+| Negative cases hold | ☑ pass | Red against the prior content: the new file on `bc5ccc34` gave `58 failed, 70 passed` (see BEFORE). 13 mutation controls (M1-M13) on the first scanner, and 5 more (resume, 2026-11-09, at `bbc5665e`, each `1 file changed, 1 insertion(+), 1 deletion(-)`, restored by `git checkout`) on the `$(…)` / backtick handling: M14 `_closes_context` never consulted -> 3 red; M15 unquoted-body expansion check off -> 10 red; M16 header-line context check off -> 1 red; M17 subshell frame read as doubt -> 4 red; M18 backtick-in-body check off -> 1 red. The first 13 are on `shell_data.py`, each with `git diff --stat` = 1 file changed (M13: 14 insertions), each restored by `git checkout`, run as `python3 -B -m pytest <file>`: M1 double-quote tracking off -> 15 red; M2 single-quote skip off -> 7 red; M3 comment skip off -> 8 red; M4 backslash skip off -> 8 red; M5 context stack ignored at `<<` -> 7 red; M6 ANSI-C quote branch off -> 4 red; M7 `((` frame off -> 1 red; M8 pending kept across a newline in a substitution -> 1 red; M9 `$(` and `${` frames off -> 7 red; M10 backtick frame off -> 1 red; M11 `<(` frame off -> 1 red; M12 closers never pop -> 2 red; M13 scanner strips every `<<` (the old regex search put back) -> 58 red, including all 24 AC 1 gate tests. Differential fuzz against real shells (scratchpad `t294/fuzz.py`, 6000 random commands x bash and zsh per seed): old function hid a line the shell ran in 72 of 6000 runs (seed 1); new function 0 in 6 x 6000 (seeds 1-6)  Fix round (Stage 4, 2026-11-09): the 18 `BYPASS` shapes (R0 heredoc in `<(…)` and `>(…)`; partly quoted, suffixed and non-word tags; context closes on a tag-prefixed body line; `$[…]` and subscript arithmetic; array literal `x=(` and `x+=(`) were each run in real bash 5.3.9 and zsh 5.9 and each was hidden by the scanner at `bbc5665e`: `python3 -m pytest .claude/hooks/tests/test_heredoc_quoted_marker.py -q -k fix_round_the_scanner_keeps` on the `bbc5665e` scanner -> `18 failed, 308 deselected`; all 18 pass at `d936374c`. Mutation controls on the fix (each one change in `shell_data.py`, restored by `git checkout`, run over both new test files): Ma plain-word tag check off -> 30 red; Mb unmatched `<<` skipped instead of `break` -> 18 red; Mc body-line-starts-with-tag check off -> 21 red; Me `[` frame off -> 12 red; Mf `=(` array frame off -> 11 red; M3 comment skipping off -> 10 red (including the new `after-a-comment-with-a-quote` test, which replaced a test that could not go red). M1 (the `"` branch `if char == '"':` -> `if False:`, 2026-11-09T02:47:55Z): `FAILED ...[unbalanced-double-quote]`, `FAILED ...test_ac4_the_gate_blocks_the_force_push_after_an_unbalanced_quote`, `FAILED ...test_ac4_a_header_line_that_leaves_a_quote_open_keeps_the_text`, `FAILED ...test_edge_a_quoted_marker_does_not_swallow_a_later_real_heredoc` -> `4 failed, 322 passed in 7.37s`. M13 (the pre-T294 `shell_data.py` from `bc5ccc34` put back, 2026-11-09T02:48:03Z, `1 file changed, 19 insertions(+), 168 deletions(-)`): `FAILED ...test_ac1_no_tag_mode_blocks_the_force_push_after_a_hidden_marker[after-backslash]`, `FAILED ...[after-comment]` ... -> `189 failed, 137 passed in 7.64s`. Fuzz (`FUZZ_RUNS` and `FUZZ_SEED` set the size and the seed; the suite runs 3000 per shell at seed 20261109): with the first generator (header line plus random lines) the `bc5ccc34` scanner hid a line the shell ran in 12 of 3000 commands in bash and 1 of 3000 in zsh; with the final generator (adds a small two-tag vocabulary for nested contexts) the `bbc5665e` scanner hid one in 9 of 8000 in bash (seed 78). The final scanner at `d936374c` with the final generator: 0 hidden lines in bash and zsh over seeds 301-303 (8000 each) after the last code change; earlier in the round also 0 over seeds 101-102 (8000 each) and 201-206 (10000 each), and 0 over seeds 11-13 (20000 each) with the first generator. the control test `test_fuzz_control_the_oracle_finds_a_line_a_broken_scanner_hides` shows the oracle goes red on a scanner that strips after every `<<EOF`. Tried and dropped: a `break` on a `'` inside `${…}` (zsh) — no shape that a shell runs and the scanner hides was found, and no test could go red, so the change was removed. |
 | verify | ☐ pass / ☐ fail / ☐ N/A | [what was observed — must literally state "pass" or "fail" here too, e.g. "skill run, feature confirmed working — pass": the merge gate scans this Notes column for the word "pass", not just the Result column] |
 | Review scope bounded to the change's blast radius (affected set, not whole repo) | ☑ pass | Reviewed: `strip_heredoc_bodies` and its 7 call sites (listed below), the heredoc tests of 9 suites run in the full suite, `docs/claude-md/tracks.md`. Not reviewed: the merge gate's own logic (`pre_bash_block_unsafe_merge.py` is unchanged, so `merge_gate_guard.AUTHORISED_TASKS` is unchanged), `strip_quoted_spans`, `task_context.py` (own allowlist, does not call the function). `code-review` and `security-review` skills not run by this agent: left to the Supervisor's Stage 4 |
-| Full smoke suite still green (no regression) | ☑ pass | `python3 -m pytest .claude/hooks/tests tests -q -p no:cacheprovider` on a clean tree at `bbc5665e` -> `4599 passed, 25 subtests passed in 313.46s (0:05:13)` |
+| Full smoke suite still green (no regression) | ☑ pass | `python3 -m pytest .claude/hooks/tests tests -q -p no:cacheprovider` at `d936374c` -> `4712 passed, 25 subtests passed in 342.59s (0:05:42)` |
 | **Companion score (easy-verifier)** | ☐ pass / ☐ fail / ☐ N/A | [`overall` and `change_risk` as the tool returned them, the scope, the ref, and the absolute path of the verifier report after a literal `report:` label — e.g. "overall 86 (>= 80), change_risk pass, scope changes, ref `main...HEAD`, report: `/home/me/.easy-verifier-reports/kit/score_changes_20261028T0530Z.html`". The gate reads the path that follows `report:` and nothing else, so with no label, or a path that is absent, the row is unscored — write ☑ N/A instead. ☑ N/A with a reason when neither companion tool was run: the merge gate blocks on ☑ fail only, never on an absent or N/A row] |
 | **UI: Visual regression (diff or verdict pasted)** | ☑ N/A | No UI component |
 | **UI: Design-system compliance (tokens/colors/typography verified)** | ☑ N/A | No UI component |
@@ -114,6 +113,20 @@ real-heredoc exit=0 (no output)
 commit-form exit=0 (no output)
 ```
 
+Fix-round capture at `d936374c`, 2026-11-09T02:48Z: the same real hook as a subprocess (driver `scratchpad/drive.py`, stdin JSON, the push line built in halves) on
+the shapes of the Stage 4 findings. Every shape that hid a push before is now blocked, a real heredoc and the commit form stay allowed:
+
+```
+dq-marker                exit=0 {"decision": "block", "reason": "[hook:pre_bash] Pipeline gate failed ...
+real-heredoc             exit=0 (no output)
+r0-process-subst         exit=0 {"decision": "block", "reason": "[hook:pre_bash] Pipeline gate failed ...
+tag-E-O-F                exit=0 {"decision": "block", "reason": "[hook:pre_bash] Pipeline gate failed ...
+ctx-closes-on-tag-line   exit=0 {"decision": "block", "reason": "[hook:pre_bash] Pipeline gate failed ...
+dollar-bracket           exit=0 {"decision": "block", "reason": "[hook:pre_bash] Pipeline gate failed ...
+array-literal            exit=0 {"decision": "block", "reason": "[hook:pre_bash] Pipeline gate failed ...
+commit-form              exit=0 (no output)
+```
+
 Earlier capture, same idea, at `6756099a`:
 `echo "<<EOF"` / `git push --force origin main` / `EOF` -> `BLOCK: [hook:pre_bash] Pipeline gate failed — cannot push/merge:`;
 `cat <<EOF` / `git push --force origin main` / `EOF` -> allowed (no output).
@@ -126,8 +139,10 @@ force push written after such a marker is blocked in every mode; a real heredoc 
 
 ## Callers of `strip_heredoc_bodies` (AC 5)
 
-The function now returns the input unchanged, or with fewer spans removed, for every command where it differed before; it never removes
-more. So every caller sees equal or more text. None gets looser; the direction per caller:
+The function never removes text that the shell would run as a command (checked by the seeded fuzz against bash and zsh). It can strip a later real heredoc that the old code left visible
+(for example `echo "<<A"` / `cat <<B` / body / `B`: the old code read `<<A` as the header and found no `A` terminator, so nothing was
+stripped; the new code strips the body of `B`, which is data). In every other case the caller sees equal or more text. No caller gets
+looser for text the shell runs. The direction per caller:
 
 | Caller | Use | Effect |
 |---|---|---|
@@ -139,4 +154,6 @@ more. So every caller sees equal or more text. None gets looser; the direction p
 | `.claude/hooks/lib/session_work.py` `_segments` and `_bash_works` (lines 264, 312) | Whether this session worked on a task (In Progress block, T250/T293) | Safer for the block: more segments can only add "worked". Small side effect on `work_start` (T293 Debate window): a call that hides a task path behind a quoted marker now counts, so the window can start earlier |
 | `scripts/token_meter.py` `bash_writes_file` (line 177), outside `.claude/hooks` | Meter heuristic for "this call wrote a file" | Same direction (more text seen, more "writes"); a metering heuristic, not a gate |
 | `.claude/hooks/tests/test_quoted_spans_t099.py`, `test_merge_gate_t095.py` | Test callers | Unchanged results (in the full run) |
+
+The fix round changed no caller. It makes the scanner stop all further stripping at a `<<` it will not read, so it can only keep more text than the first round did; the caller list above holds.
 
