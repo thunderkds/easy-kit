@@ -54,8 +54,8 @@ Mode: auto
 6. Stage 4: code review no P0/P1/P2; P3s handled in a fix round (mutation controls for two Stage 1 guards, stale output-form lines in the template and `PROJECT_SPEC.md`); the review prompt had no memory slice, because a reviewer reads the diff and the guide — RULE: `docs/claude-md/pipeline-stages.md` Stage 4 item 1
 Checks: tests `python3 -m pytest tests/test_cli_effort_table.py tests/test_cli_model_table.py -q -p no:cacheprovider` — 19 passed on `abc719ad`; full suite `python3 -m pytest .claude/hooks/tests tests -q -p no:cacheprovider` on `45b677e9` — 4388 passed, 4 failed, all in `tests/test_auto_verify.py`; the 4 pass when run alone (24 passed), and another session's full suite ran at the same time, so I read them as load flakes; reviews code-review — no P0/P1/P2 (read-only reviewer, `Verdict: no P0/P1/P2`), the P3s fixed in `abc719ad` except the tracks.md row 6 note, which T299 carries; real run — none, the auto verify run checks it
 Memory: nothing new (candidate not written: several full suites running at once filled the `/tmp` inodes and Bash failed with ENOSPC; the cause is not verified end to end)
-Not done: merge (yours); auto verify: ☑ pass (session d72e5f74-d5ff-4a92-9e52-2731a3235181, commit 5cd7cb836105225e76d0cf98d2cdd677f5c1bc9d, log .claude/verify-runs/T297-5cd7cb836105.log)
-Paused: done not moved — Gate 5: the tests row is not `☑ pass` with pasted output; Gate 6: the `UI: Visual regression` row is blank; Gate 6: the `UI: Design-system compliance` row is blank; Gate 6: the `UI: Responsiveness` row is blank
+Not done: merge (yours; merge T297 first, T298 and T299 read its table); auto verify: ☑ pass (session d72e5f74-d5ff-4a92-9e52-2731a3235181, commit 5cd7cb836105225e76d0cf98d2cdd677f5c1bc9d, log .claude/verify-runs/T297-5cd7cb836105.log)
+Paused: done not moved — the Evidence rows (tests, UI) and the Checks line were filled after the auto verify run; the close-out runs once per run and cannot be run again for the same code, so the row stays in Ready for Review for you to merge
 
 ## Evidence
 
