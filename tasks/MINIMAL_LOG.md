@@ -18,6 +18,7 @@
 - Suite: `python3 -m pytest .claude/hooks/tests tests -q -p no:cacheprovider` — `6 failed, 4406 passed`: 5 are the `MEMORY.md` budget tests (`MEMORY.md` was 550 chars over 42,000 on `main` after the T301 memory pass; fixed on `main` in `d93d1ded`, the two budget test files print `18 passed`), 1 is the flaky `tests/test_auto_verify.py::test_t208_ac2_the_saved_t207_output_writes_a_pass_row` (also fails on the T301 parent commit).
 - Real run: `python3 -m http.server 8791` in `site/`, then `curl http://127.0.0.1:8791/docs.html` — `HTTP 200`, and the page holds `<summary>Security finding rules</summary>` with the paragraph.
 - Simplify: skipped: under 20 lines outside tests and docs.
+- verify: ☑ pass — auto-run by hook, session 0a1e03b8-cce1-441c-a30e-1e15c461c162, commit 8190ee95ecb44fc0ee675c6afd128d58f1ea9fa0, log .claude/verify-runs/T302-8190ee95ecb4.log
 **Files:** `site/docs.html`, `tests/test_t302_docs_security_rules.py`, `tasks/MINIMAL_LOG.md`
 **Not done:** merge (the user decides); the T302 branch was not merged with `main`, so its own suite run still shows the budget failures that `d93d1ded` fixed on `main`.
 
