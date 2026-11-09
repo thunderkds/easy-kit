@@ -157,7 +157,7 @@ v2.0.0 moves canon from `.claude/agents/` and `.claude/skills/` to plain root an
 
 ## Deploying the landing site
 
-**Deployed URL**: [`https://personal-agentic-claude.vercel.app/`](https://personal-agentic-claude.vercel.app/)
+**Deployed URL**: [`https://easy-kits.vercel.app/`](https://easy-kits.vercel.app/)
 (verified live 2026-09-06 — HTTP 200, served HTML byte-identical to this repo's `site/index.html`).
 
 **A push to `main` on GitHub deploys production automatically** (Vercel Git integration).

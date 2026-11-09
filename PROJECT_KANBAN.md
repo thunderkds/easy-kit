@@ -98,6 +98,7 @@
 
 ### Ready for Review
 
+- [ ] **T283** — Kit docs site link `personal-agentic-claude.vercel.app` → `easy-kits.vercel.app` in live files (T240 D4 step 4) and `VERCEL_HOST` exemption dropped from `tests/test_repo_name.py` | Supervisor | C0 | Risk: Low | P1 | minimal track, record `tasks/MINIMAL_LOG.md` | Registered 2026-11-05, user: "I updated the link for the heart to easy-kits.vercel.app" | Branch `claude/project-thread-t4s1yn`
 
 ### Done
 - [x] **T291** — Merge gate counts a test run with interpreter flags (`python3 -B -m pytest`) | common-infrastructure | C1 | Risk: High | P1 | Guide: `tasks/TASK_GUIDE_T291.md` | User 2026-11-08: "push and start all as parallel"; T289/T290 merges were blocked by it | Started 2026-11-08: branch `feat/t291-gate-runner-flags`, worktree `../wt-t291` | Done 2026-11-08: auto verify pass (hook-written row); merged on the user's "let merge"; independent Stage 4 review no P0-P2, 3 P3 test gaps closed; `AUTHORISED_TASKS` + T291 signed off
