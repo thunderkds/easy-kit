@@ -29,19 +29,17 @@ or adds `Paused: done not moved — <reason>`. It moves the row only when this b
 numbered decision, `Checks:`, `Memory:`, the `Not done:` auto verify slot with its result, and `Not done:`
 naming the merge — no `<...>` left (`docs/claude-md/tracks.md` `### Auto close-out`).
 
+-->
+
 ## Auto decisions
 
 Mode: auto
-1. <what was decided> — RULE: <the rule>
-2. <what was decided> — FACT: <path>:<line> "<quoted text>"
-3. <what was decided> — DEBATED: <option> (Advocate 1: <its proposal>; Advocate 2: <its proposal>) ⚠ decided for you — please review
-4. <what was decided> — SAFER OPTION: <why> ⚠ decided for you — please review
-Paused: <only when a stop that stays paused the task: which one, and why>
-Checks: tests `<command>` — <result>; reviews <skill — result>; real run `<command>` — printed `<what it printed>` (auto-checked, not /verify)
-Memory: <each entry the memory pass wrote, as `file — entry` | nothing new>
-Not done: merge (yours); <auto verify: running (T182) | auto verify: <result> | /verify (yours)>
-
--->
+1. The allowlist stays wider than the guide's start list: `remote.<name>.url` and `.fetch` for any remote name, `core.symlinks`, `branch.<b>.vscode-merge-base`, `pull.rebase` (true or false), `push.default` (simple or current), `extensions.worktreeConfig`; and the `ADMIN_HOOKS` name list is replaced by a refusal that names the executable hook file found — DEBATED: keep the widenings and add the small checks the Advocates named: a boolean value check for `core.symlinks` and `extensions.worktreeConfig`, a test that fails when the origin-only push rule (`.claude/hooks/pre_bash_block_unsafe_merge.py:1393` `if positionals[0] != ADMIN_REMOTE:`) goes, and a real check of a push with several `remote.origin.url` entries (Advocate 1: keep all, because the guide allows an added key with a reason and a test (`tasks/TASK_GUIDE_T295.md:59`) and a narrower list refuses real two-remote repos; Advocate 2: keep all and add a boolean value check on `core.symlinks` and `extensions.worktreeConfig`; Advocate 3: keep all as the smallest safe thing, add a test on a repo shaped like this one, escape the hook file name in refusal text, and check several `remote.origin.url` entries) ⚠ decided for you — please review
+2. The code review and the security review must report before the task is marked ready — RULE: `docs/claude-md/pipeline-stages.md` § Stage 4 ("Skill({ skill: "code-review" }) always; security-review for Medium/High risk")
+Paused: the Stage 4 fix round is paused. A safety classifier stopped the implementer twice, and it could not say what it objected to (2026-11-09; stop that stays: `docs/claude-md/tracks.md` `### Stops that stay`, "a safety-hook block"). Not retried or reworded to get past it. The branch is at `a272e6b5` plus one uncommitted test change (`.claude/hooks/tests/test_admin_repo_allowlist.py`, the unreadable-config test, not yet run). Two independent reviews found open items: the quoted-pattern and NBSP evasion of the attributes rule, several `remote.origin.url` entries, a local-path push target whose hooks run, the `.gitattributes` FIFO hang, and test gaps. `--attr-source` is T296's fix.
+Checks: tests (implementer) `python3 -m pytest .claude/hooks/tests tests -q -p no:cacheprovider` — 4700 passed before the fix round; red run at the old gate 199 failed, mutation controls M1–M7 red; real run in bash and zsh with a planted merge driver, with and without the gate (auto-checked, not /verify); reviews code-review — block (1 P0, 2 P1, 5 P2), security-review — 3 items open
+Memory: nothing new yet — the pass runs when the fix round is done
+Not done: the fix round (attributes rule, multi-URL, local-path hooks, FIFO hang, test gaps); merge (yours); auto verify: not started; do not merge T295 without T296 (`--attr-source`)
 
 ## Evidence
 
