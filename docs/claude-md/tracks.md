@@ -59,11 +59,12 @@ scaffold code or a spec file never makes a project "not new".
 - The Supervisor may move a task **up** (minimal → extended) mid-task when it finds a row of the rule that
   is true. It says so in one line: `Track: extended — moved up: <reason>`. It never moves a task **down** on
   its own.
-- When a task moves up, or when `verify` fails, the Supervisor first raises the effort of the next spawn by
-  one step on the ladder `low`, `medium`, `high`, `xhigh`, `max`, counted from the cell of the task's
-  Complexity in `## CLI Effort Table`. This comes before it changes the model, splits the task or moves any
-  other lever. At `max` the rule changes nothing, and the other levers apply. The Supervisor never lowers
-  effort on its own.
+- When a task moves up, or when `verify` returns `fail` (not `blocked`), the Supervisor first raises the
+  effort of the next spawn by one step on the ladder `low`, `medium`, `high`, `xhigh`, `max`. The count
+  starts from the effort of the task's last spawn, or for the first raise from the cell of its Complexity in
+  `## CLI Effort Table`, so two failures raise two steps. This comes before it changes the model, splits the
+  task or moves any other lever. At `max`, or with an empty or missing cell, the rule changes nothing and
+  the other levers apply; the Supervisor never lowers effort on its own.
 - A task grows when it needs more than one file beyond its first estimate, a design choice, or a second
   session. Move it up, then write the task guide from what was learned. The extended track continues from
   Stage 2 with that guide.
@@ -220,7 +221,7 @@ is logged `RULE`, `FACT` or `SAFER OPTION`, not `DEBATED`. At Risk Medium or Hig
 | 3 | `grill-with-docs`: an ADR-eligible decision ("ask the user whether to escalate") | Write the DDR; do not escalate to an ADR (the smaller change). | `SAFER OPTION` ⚠ |
 | 4 | Stage 0 step Direction `brainstorming`: the user approves one direction | Take the recommended direction and list the alternatives in the report. | `RULE` ⚠ (taste) |
 | 5 | Stage 1 step Environment item 1: one-time setup (`fewer-permission-prompts`, `update-config`, `companion-setup`) | Skip the first two: they change the user's permission settings and hooks. Name them under `Not done:`. `companion-setup` asks nothing and installs nothing: one line under `Not done:`. | `RULE` |
-| 6 | Stage 1 step Environment item 2 and `AGENTS.md` `## Multi-CLI Configuration`: the user lists the CLIs and their models | Read the `## CLI Model Table` in `PROJECT_SPEC.md`. No row or an empty cell: row 14. | `FACT` |
+| 6 | Stage 1 step Environment item 2 and `AGENTS.md` `## Multi-CLI Configuration`: the user lists the CLIs and their models | Read the `## CLI Model Table` in `PROJECT_SPEC.md`. No row or an empty cell: row 14. Also read the `## CLI Effort Table`: an empty effort cell means no effort is passed, not a stop. | `FACT` |
 | 7 | Stage 1 step Environment item 3: a missing agent guide ("ask the user to save it") | The Supervisor writes it from `templates/` on the task branch. | `RULE` |
 | 8 | Stage 1 step Environment item 4: "run `git status` … and paste the output" | The Supervisor runs it itself. | `RULE` |
 | 9 | Stage 1 step Environment item 6: the user must save or confirm `PROJECT_SPEC.md` | The Supervisor checks the file, or writes it from `templates/PROJECT_SPEC_template.md`. | `RULE` |

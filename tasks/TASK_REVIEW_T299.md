@@ -43,6 +43,19 @@ Not done: merge (yours); <auto verify: running (T182) | auto verify: <result> | 
 
 -->
 
+## Auto decisions
+
+Mode: auto
+1. With an empty or missing effort cell the raise-effort rule changes nothing and the other levers apply (like at `max`) — SAFER OPTION: counting from `low` could lower the effort the CLI uses by default, which breaks "never lowers". The reviewer found this gap (P2). ⚠ decided for you — please review
+2. Repeated raises add up: the count starts from the effort of the task's last spawn (the table cell for the first raise), up to `max` — SAFER OPTION: a fixed base would make the second failure change nothing; the plan doc's "start low, dial up" adds up. The reviewer found this gap (P2). ⚠ decided for you — please review
+3. Only a `fail` verdict counts, not `blocked` — RULE: `docs/claude-md/tracks.md` `### Auto verify (Stop hook)` lists the verdicts pass, fail and blocked; a blocked run is not a code failure (reviewer P3)
+4. Row 6 of the `### Every user stop and its auto rule` table now says an empty effort cell is not a stop (one clause, test repointed in `tests/test_stage_names.py` in the style of T284's row-19 exception) — RULE: AGENTS.md LR-0005 stale-text rule (`memory/learning-records/LR-0005-stale-text-after-change.md`), T297 reviewer P3 on `tracks.md:218`
+5. No code or hook raises effort; the rule is doctrine text — RULE: `tasks/TASK_GUIDE_T299.md` § Requirement "Out of scope"
+Paused: disk full — `/tmp/claude-1000` volume returned ENOSPC, so no Bash command starts. The fix-round edits to `docs/claude-md/tracks.md`, `tests/test_tracks.py` and `tests/test_stage_names.py` are in the worktree and NOT committed; the full test run did not finish. Free space (or restart with `CLAUDE_CODE_TMPDIR` on another volume), then run the full suite, commit, and run `python3 .claude/hooks/stop_auto_verify.py --start T299`.
+Checks: tests `python3 -m pytest tests/test_tracks.py tests/test_stage_names.py tests/test_auto_mode.py -q -p no:cacheprovider` — 214 passed after the fix round (implementer's run); first-round full suite 4392 passed, 1 known load flake (`tests/test_auto_verify.py::test_ac3_an_earlier_auto_line_for_other_code_is_replaced_not_duplicated`, passes alone); reviews code-review — round 1 no P0/P1, two P2 (fixed in the round above, narrow re-review not run); real run — not run (disk full)
+Memory: nothing new (the cause of the disk-full stop is not checked yet)
+Not done: merge (yours); commit of the fix round; auto verify: not started (disk full)
+
 ## Evidence
 
 | Check | Result | Notes / output snippet |
@@ -86,16 +99,19 @@ Not done: merge (yours); <auto verify: running (T182) | auto verify: <result> | 
   user".
 ```
 
-**AFTER** (new bullet in `## Switching track` of `docs/claude-md/tracks.md`, directly after the "moves a task **up**" bullet; the other bullets are unchanged):
+**AFTER** (fix round, Stage 4 P2 findings: new bullet in `## Switching track` of `docs/claude-md/tracks.md`, directly after the "moves a task **up**" bullet, plus one clause in row 6 of `### Every user stop and its auto rule`; the other bullets and rows are unchanged):
 
 ```
-- When a task moves up, or when `verify` fails, the Supervisor first raises the effort of the next spawn by
-  one step on the ladder `low`, `medium`, `high`, `xhigh`, `max`, counted from the cell of the task's
-  Complexity in `## CLI Effort Table`. This comes before it changes the model, splits the task or moves any
-  other lever. At `max` the rule changes nothing, and the other levers apply. The Supervisor never lowers
-  effort on its own.
+- When a task moves up, or when `verify` returns `fail` (not `blocked`), the Supervisor first raises the
+  effort of the next spawn by one step on the ladder `low`, `medium`, `high`, `xhigh`, `max`. The count
+  starts from the effort of the task's last spawn, or for the first raise from the cell of its Complexity in
+  `## CLI Effort Table`, so two failures raise two steps. This comes before it changes the model, splits the
+  task or moves any other lever. At `max`, or with an empty or missing cell, the rule changes nothing and
+  the other levers apply; the Supervisor never lowers effort on its own.
 ```
 
-**DELTA**: The Supervisor now has a written rule to raise effort one step before it changes the model or splits the task, whenever a task moves up or `verify` fails.
+Row 6 rule cell, new tail: `... No row or an empty cell: row 14. Also read the `## CLI Effort Table`: an empty effort cell means no effort is passed, not a stop.`
 
-**WITNESS**: Implemented by the common-infrastructure sub-agent on 2026-11-09 (tests red before, green after; mutation controls red then restored green). To be confirmed by the reviewer from `memory/event-trace/T299.jsonl`.
+**DELTA**: The Supervisor now has a written rule to raise effort one step (from the last spawn's effort, stopping at `max` or at an empty cell) before it changes the model or splits the task, whenever a task moves up or `verify` returns `fail`; an empty effort cell is not a stop.
+
+**WITNESS**: Implemented by the common-infrastructure sub-agent on 2026-11-09 (first round, then a fix round: tests red before, green after; every mutation control red then restored green). To be confirmed by the reviewer from `memory/event-trace/T299.jsonl`.

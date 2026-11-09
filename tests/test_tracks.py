@@ -627,54 +627,60 @@ def _effort_rule(text: str) -> str:
     return bullets[0].strip()
 
 
-def _check_short(rule: str) -> None:
-    sentences = [s for s in re.split(r"(?<=\.)\s+", rule) if s]
+def _need(rule: str, pattern: str, what: str) -> None:
+    assert re.search(pattern, rule), f"the effort rule lacks {what}"
+
+
+def _check_short(rule):
+    sentences = [x for x in re.split(r"(?<=\.)\s+", rule) if x]
     assert len(sentences) <= 4, f"the effort rule has {len(sentences)} sentences, cap is 4"
 
 
-def _check_triggers(rule: str) -> None:
-    assert re.search(r"moves? up", rule), "trigger 'a task moves up' is missing"
-    assert re.search(r"`verify` fails", rule), "trigger 'verify fails' is missing"
+def _check_moves_up(rule):
+    _need(rule, r"When a task moves up,", "the trigger 'a task moves up'")
 
 
-def _check_ladder_and_before(rule: str) -> None:
+def _check_verify_fail_not_blocked(rule):
+    _need(rule, r"`verify` returns `fail` \(not `blocked`\)", "the trigger 'verify returns fail (not blocked)'")
+
+
+def _check_ladder(rule):
     ladder = ", ".join(f"`{x}`" for x in LADDER)
     assert ladder in rule, f"the ladder {ladder} is missing or out of order"
-    assert re.search(r"one step", rule), "'one step' is missing"
-    assert re.search(r"\bbefore\b[^.]*\bmodel\b", rule), "'before ... model' (the other levers) is missing"
+    _need(rule, r"one step", "'one step'")
 
 
-def _check_never_lowers_and_max(rule: str) -> None:
-    assert re.search(r"never lowers? effort on its own", rule), "'never lowers effort on its own' is missing"
-    assert re.search(r"At `max`[^.]*other levers apply", rule), "the `max` case is missing"
+def _check_before(rule):
+    _need(rule, r"This comes before it changes the model", "'This comes before it changes the model'")
 
 
-def _check_table_pointer(rule: str) -> None:
+def _check_table_pointer(rule):
     assert "`## CLI Effort Table`" in rule, "the pointer to `## CLI Effort Table` is missing"
 
 
-CHECKS = (_check_short, _check_triggers, _check_ladder_and_before,
-          _check_never_lowers_and_max, _check_table_pointer)
+def _check_last_spawn(rule):
+    _need(rule, r"effort of the task's last spawn", "the count from the task's last spawn")
 
 
-def test_t299_effort_rule_is_at_most_4_sentences_in_switching_track():
-    _check_short(_effort_rule(_read(TRACKS_MD)))
+def _check_max(rule):
+    _need(rule, r"At `max`[^.]*other levers apply", "the `max` case")
 
 
-def test_t299_effort_rule_names_both_triggers():
-    _check_triggers(_effort_rule(_read(TRACKS_MD)))
+def _check_empty_cell(rule):
+    _need(rule, r"empty or missing cell[^.]*changes nothing", "the empty-or-missing-cell case")
 
 
-def test_t299_effort_rule_names_the_ladder_and_says_before_other_levers():
-    _check_ladder_and_before(_effort_rule(_read(TRACKS_MD)))
+def _check_never_lowers(rule):
+    _need(rule, r"never lowers effort on its own", "'never lowers effort on its own'")
 
 
-def test_t299_effort_rule_never_lowers_and_max_hands_over():
-    _check_never_lowers_and_max(_effort_rule(_read(TRACKS_MD)))
+CHECKS = (_check_short, _check_moves_up, _check_verify_fail_not_blocked, _check_ladder, _check_before,
+          _check_table_pointer, _check_last_spawn, _check_max, _check_empty_cell, _check_never_lowers)
 
 
-def test_t299_effort_rule_points_at_the_effort_table():
-    _check_table_pointer(_effort_rule(_read(TRACKS_MD)))
+@pytest.mark.parametrize("check", CHECKS, ids=lambda c: c.__name__)
+def test_t299_effort_rule_passes_each_check(check):
+    check(_effort_rule(_read(TRACKS_MD)))
 
 
 def test_t299_existing_switch_sentences_stay_word_for_word():
@@ -689,17 +695,57 @@ def test_t299_existing_switch_sentences_stay_word_for_word():
         assert sentence in body, f"existing rule text changed: {sentence[:50]!r}"
 
 
-@pytest.mark.parametrize("old,new,check", [
-    ("or when `verify` fails", "", _check_triggers),
-    ("`low`, `medium`, `high`, `xhigh`, `max`", "", _check_ladder_and_before),
-    ("The Supervisor never lowers effort on its own.", "", _check_never_lowers_and_max),
-    ("`## CLI Effort Table`", "the table", _check_table_pointer),
-    ("The Supervisor never lowers effort on its own.", " One. Two. Three. Four.", _check_short),
-], ids=["no-verify-trigger", "no-ladder", "no-never-lowers", "no-table-pointer", "too-long"])
-def test_t299_mutation_controls_turn_each_check_red(old, new, check):
-    """Each guard must be able to fail: the same rule with the guarded bytes changed makes it red."""
+MUTATIONS = [  # (id, bytes to change, replacement, the one check that must turn red)
+    ("no-moves-up", "When a task moves up,", "When a task moves,", _check_moves_up),
+    ("no-verify-fail", " (not `blocked`)", "", _check_verify_fail_not_blocked),
+    ("no-ladder", " on the ladder `low`, `medium`, `high`, `xhigh`, `max`", "", _check_ladder),
+    ("no-before", "This comes before it changes the model", "This comes with the model", _check_before),
+    ("no-table-pointer", "`## CLI Effort Table`", "the table", _check_table_pointer),
+    ("no-last-spawn", "effort of the task's last spawn", "effort of the task", _check_last_spawn),
+    ("no-max", "At `max`", "At the top", _check_max),
+    ("no-empty-cell", "empty or missing cell", "cell", _check_empty_cell),
+    ("no-never-lowers", "; the Supervisor never lowers effort on its own", "", _check_never_lowers),
+    ("too-long", "so two failures raise two steps.", "so two failures raise two steps. One. Two. Three.",
+     _check_short),
+]
+
+
+@pytest.mark.parametrize("old,new,check", [m[1:] for m in MUTATIONS], ids=[m[0] for m in MUTATIONS])
+def test_t299_mutation_controls_turn_exactly_their_check_red(old, new, check):
+    """Each guard must be able to fail: the rule with the guarded bytes changed turns its own check red
+    and no other check."""
     rule = _effort_rule(_read(TRACKS_MD))
-    assert old in rule, f"mutation target {old!r} not in the rule"
-    check(rule)  # green on the real rule, so the red below comes from the change alone
+    assert rule.count(old) == 1, f"mutation target {old!r} must occur once in the rule"
+    mutated = rule.replace(old, new)
+    assert mutated != rule
+    for other in CHECKS:
+        if other is check:
+            with pytest.raises(AssertionError):
+                other(mutated)
+        else:
+            other(mutated)
+
+
+# Stop-table row 6 (the user lists the CLIs): the empty effort cell is not a stop (T297 table, T299 text).
+def _row6_rule(text: str) -> str:
+    rows = [l for l in text.splitlines() if l.startswith("| 6 | Stage 1 step Environment item 2")]
+    assert len(rows) == 1, f"expected one stop-table row 6, found {len(rows)}"
+    return _norm(rows[0])
+
+
+def _check_row6(rule: str) -> None:
+    assert "`## CLI Model Table`" in rule and "row 14" in rule, "row 6 lost its model-table rule"
+    assert re.search(r"`## CLI Effort Table`[^.|]*empty effort cell[^.|]*no effort is passed[^.|]*not a stop",
+                     rule), "row 6 does not say an empty effort cell passes no effort and is not a stop"
+
+
+def test_t299_stop_row_6_reads_the_effort_table_and_an_empty_cell_is_not_a_stop():
+    _check_row6(_row6_rule(_read(TRACKS_MD)))
+
+
+def test_t299_row_6_mutation_control_turns_red():
+    rule = _row6_rule(_read(TRACKS_MD))
+    old = "an empty effort cell means no effort is passed"
+    assert rule.count(old) == 1
     with pytest.raises(AssertionError):
-        check(rule.replace(old, new))
+        _check_row6(rule.replace(old, "an empty effort cell is bad"))
