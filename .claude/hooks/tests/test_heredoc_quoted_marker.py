@@ -49,7 +49,7 @@ ALSO_HIDDEN = {
 }
 ALL_HIDDEN = {**HIDDEN, **ALSO_HIDDEN}
 
-# Real heredocs: the body is data and is stripped (AC 2).
+# Real heredocs whose body is provably data: the body is stripped (AC 2).
 REAL = {
     "plain": "cat <<EOF\n{push}\nEOF",
     "dash-tab-end": "cat <<-EOF\n{push}\n\tEOF",
@@ -57,25 +57,37 @@ REAL = {
     "double-quoted-tag": 'cat <<"EOF"\n{push}\nEOF',
     "space-before-tag": "cat << EOF\n{push}\nEOF",
     "after-closed-quotes": 'echo "a b" \'c d\' > f <<EOF\n{push}\nEOF',
+    "redirect-to-a-file": "cat > notes.md <<'EOF'\n{push}\nEOF",
+    "stderr-merge-in-the-prefix": "cat 2>&1 <<EOF\n{push}\nEOF",
+    "redirect-after-the-tag": "cat <<EOF > notes.md\n{push}\nEOF",
+    "after-another-command": "git status && cat > notes.md <<'EOF'\n{push}\nEOF",
+    "interpreter-stdin": "python3 - <<'EOF'\n{push}\nEOF",
+    "commit-form": 'git commit -m "$(cat <<\'EOF\'\nT294: fix\n\n{push}\nEOF\n)"',
+    "pr-create-form": 'gh pr create --title t --body "$(cat <<\'EOF\'\nT294: fix\n\n{push}\nEOF\n)"',
+    "quoted-tag-keeps-a-substitution-as-data": "cat <<'EOF'\n$(echo hi; {push})\nEOF",
+    "after-a-previous-heredoc": "cat > a <<'E1'\nx\nE1\ncat > b <<'E2'\n{push}\nE2",
+}
+# Real heredocs the allowlist does NOT read: the text stays, so a push named in the body is blocked
+# (an over-block, the recoverable side). Each is a real heredoc in a real shell.
+OVERBLOCK = {
+    "after-a-comment-with-a-quote": "echo ok # it's\ncat <<EOF\n{push}\nEOF",
+    "after-ansi-c-escaped-quote": "echo $'\\'' > f <<EOF\n{push}\nEOF",
     "after-closed-substitution": "echo $(pwd) > f <<EOF\n{push}\nEOF",
     "after-escaped-quote": "echo \\\" > f <<EOF\n{push}\nEOF",
-    "comment-on-previous-line": "# note <<X\ncat <<EOF\n{push}\nEOF",
     "hash-inside-word": "echo a#b <<EOF\n{push}\nEOF",
     "subshell": "(cat <<EOF\n{push}\nEOF\n)",
-    "after-ansi-c-escaped-quote": "echo $'\\'' > f <<EOF\n{push}\nEOF",
-    # goes red when comment skipping is off: the `'` in the comment would leave a quote open
-    "after-a-comment-with-a-quote": "echo ok # it's\ncat <<EOF\n{push}\nEOF",
+    "variable-in-the-prefix": 'cd "$WT" && cat > f <<\'EOF\'\n{push}\nEOF',
+    "ampersand-redirect-in-the-prefix": "cat &> f <<EOF\n{push}\nEOF",
     "in-substitution": "echo $(cat <<EOF\n{push}\nEOF\n)",
     "in-substitution-quoted-tag": "x=$(cat <<'EOF'\n{push}\nEOF\n); echo done",
     "in-backtick": "echo `cat <<EOF\n{push}\nEOF\n`",
     "in-substitution-in-double-quotes": 'echo "$(cat <<EOF\n{push}\nEOF\n)"',
-    "commit-form": 'git commit -m "$(cat <<\'EOF\'\nT294: fix\n\n{push}\nEOF\n)"',
     "in-substitution-in-arithmetic": "echo $(( $(cat <<EOF\n{push}\nEOF\n) ))",
     "in-substitution-in-brace-default": "echo ${{x:-$(cat <<EOF\n{push}\nEOF\n)}}",
     "subshell-in-substitution": "echo $( (cat <<EOF\n{push}\nEOF\n) )",
-    "quoted-tag-keeps-a-substitution-as-data": "cat <<'EOF'\n$(echo hi; {push})\nEOF",
     "nested-substitution": "echo $(echo $(cat <<EOF\n{push}\nEOF\n))",
     "substitution-after-quote-restart": 'echo "a $(cat <<EOF\n{push}\nEOF\n) b"',
+    "commit-form-with-an-unquoted-tag": 'git commit -m "$(cat <<EOF\nT294: fix\n{push}\nEOF\n)"',
 }
 
 
@@ -156,6 +168,24 @@ def test_ac2_a_push_after_the_terminator_of_a_real_heredoc_is_still_seen():
     assert FORCE in stripped and "body" not in stripped
 
 
+@pytest.mark.parametrize("name", sorted(OVERBLOCK))
+def test_ac2_a_real_heredoc_the_allowlist_does_not_read_keeps_its_text(name):
+    command = shape(OVERBLOCK[name], FORCE)
+    assert strip_heredoc_bodies(command) == command, name
+    assert old_strip(command) != command, f"{name}: the old function stripped it, so this is an over-block"
+
+
+# `echo "…"` is a data command: the gate's quoted-span rule hides the push there whatever this scan does.
+GATE_SEES_QUOTED_ECHO = {"in-substitution-in-double-quotes", "substitution-after-quote-restart"}
+
+
+@pytest.mark.parametrize("name", sorted(set(OVERBLOCK) - GATE_SEES_QUOTED_ECHO))
+def test_ac2_the_gate_blocks_a_push_named_in_a_heredoc_the_allowlist_does_not_read(gate, tmp_path, name):
+    fx = gate(kanban(in_progress=("T900",)))
+    path = transcript(tmp_path, [human("thanks", -60)])
+    assert reason(shape(OVERBLOCK[name], FORCE), fx.main, path) is not None, name
+
+
 # ── AC 3 — the corpus: the old function is the oracle ────────────────────────────────────────────
 OLD_HEADER = re.compile(
     r"<<(?!<)(?P<dash>-?)\s*(?P<quote>['\"]?)(?P<tag>[A-Za-z_][A-Za-z0-9_]*)(?P=quote)")
@@ -213,13 +243,18 @@ CORPUS = [
     "cat > x.py <<'EOF'\nprint(1)\nEOF",
     "cat <<EOF\npython3 -m pytest -q\nEOF",
     "cd /w && cat <<EOF\npython3 -m pytest -q\nEOF",
-    "cat <<A <<B\na\nA\nb\nB",                       # two headers on one line: only the first is read
-    "cat <<A; cat <<B\na\nA\nb\nB",
     "cat <<A\na\nA\ncat <<B\nb\nB",                   # sequential
     "echo hi",
     "cat <<EOF",                                      # header with no body
     "cat <<EOF\nnever ended",                         # unterminated
     "git commit -m 'one' && cat <<EOF\nx\nEOF",
+]
+
+
+# Commands the old function stripped and the allowlist keeps: a second `<<` on a line, a `#` before the header.
+CORPUS_NOW_KEPT = [
+    "cat <<A <<B\na\nA\nb\nB",
+    "cat <<A; cat <<B\na\nA\nb\nB",
     "echo a # trailing note\ncat <<EOF\nx\nEOF",
 ]
 
@@ -227,6 +262,18 @@ CORPUS = [
 @pytest.mark.parametrize("command", CORPUS, ids=lambda c: repr(c)[:50])
 def test_ac3_the_corpus_keeps_its_old_result(command):
     assert strip_heredoc_bodies(command) == old_strip(command)
+
+
+@pytest.mark.parametrize("command", CORPUS_NOW_KEPT, ids=lambda c: repr(c)[:50])
+def test_ac3_the_corpus_commands_the_allowlist_does_not_read_keep_their_text(command):
+    assert old_strip(command) != command
+    assert strip_heredoc_bodies(command) == command
+
+
+@pytest.mark.parametrize("command", CORPUS + CORPUS_NOW_KEPT, ids=lambda c: repr(c)[:50])
+def test_ac3_the_result_is_the_old_result_or_the_whole_command(command):
+    """Never looser than before: the allowlist strips what the old function stripped, or nothing."""
+    assert strip_heredoc_bodies(command) in (old_strip(command), command)
 
 
 @pytest.mark.parametrize("name", sorted(HIDDEN))
@@ -384,10 +431,9 @@ def test_a_quoted_marker_inside_a_substitution_is_blocked_by_the_gate(gate, tmp_
 
 
 # ── Edge cases from the checklist ────────────────────────────────────────────────────────────────
-def test_edge_several_headers_on_one_line_keep_the_old_result():
+def test_edge_several_headers_on_one_line_keep_the_text():
     command = "cat <<A <<B\na\nA\nb\nB\n" + FORCE
-    assert strip_heredoc_bodies(command) == old_strip(command)
-    assert FORCE in strip_heredoc_bodies(command)
+    assert strip_heredoc_bodies(command) == command
 
 
 def test_edge_a_heredoc_marker_after_a_closed_quote_pair_is_real():
@@ -395,26 +441,30 @@ def test_edge_a_heredoc_marker_after_a_closed_quote_pair_is_real():
     assert "push" not in strip_heredoc_bodies(command)
 
 
-def test_edge_a_hash_inside_a_word_is_not_a_comment():
+def test_edge_a_hash_inside_a_word_keeps_the_text():
     command = "echo a#b <<EOF\n" + FORCE + "\nEOF"
-    assert "push" not in strip_heredoc_bodies(command)
+    assert strip_heredoc_bodies(command) == command
 
 
-def test_edge_an_escaped_backslash_does_not_hide_the_marker():
+def test_edge_an_escaped_backslash_keeps_the_text():
     command = "echo \\\\<<EOF\n" + FORCE + "\nEOF"  # `\\` is a literal backslash, `<<EOF` is real
-    assert "push" not in strip_heredoc_bodies(command)
+    assert strip_heredoc_bodies(command) == command
 
 
-def test_edge_a_comment_ends_at_the_newline():
+def test_edge_a_comment_before_a_real_heredoc_keeps_the_text():
     command = "true # <<EOF\ncat <<EOF\nbody\nEOF\n" + FORCE
-    stripped = strip_heredoc_bodies(command)
-    assert "body" not in stripped and FORCE in stripped
+    assert strip_heredoc_bodies(command) == command
 
 
-def test_edge_a_quoted_marker_does_not_swallow_a_later_real_heredoc():
+def test_edge_a_quoted_marker_ends_all_stripping_even_for_a_later_real_heredoc():
     command = 'echo "<<A"\ncat <<B\nbody\nB\n' + FORCE
+    assert strip_heredoc_bodies(command) == command
+
+
+def test_edge_stripping_stops_at_the_first_marker_the_scan_will_not_read_and_keeps_what_came_before():
+    command = "cat <<A\nbody\nA\necho \"<<B\"\ncat <<C\ndata\nC\n" + FORCE
     stripped = strip_heredoc_bodies(command)
-    assert "body" not in stripped and FORCE in stripped
+    assert "body" not in stripped and "data" in stripped and FORCE in stripped
 
 
 # ── The shell is the ground truth ────────────────────────────────────────────────────────────────
@@ -453,9 +503,7 @@ def test_premise_the_shell_runs_the_push_after_a_hidden_marker(tmp_path, shell, 
 
 @pytest.mark.skipif(not SHELLS, reason="no bash or zsh")
 @pytest.mark.parametrize("shell", SHELLS)
-@pytest.mark.parametrize("name", ["plain", "single-quoted-tag", "dash-tab-end", "after-ansi-c-escaped-quote",
-                                  "in-substitution", "in-backtick", "commit-form",
-                                  "in-substitution-in-double-quotes", "nested-substitution"])
+@pytest.mark.parametrize("name", sorted(REAL))
 def test_premise_the_shell_does_not_run_the_body_of_a_real_heredoc(tmp_path, shell, name):
     command = shape(REAL[name])
     assert not pushed_by(shell, command, tmp_path), f"{shell} ran the body of {name}"
@@ -559,6 +607,77 @@ def test_fix_round_premise_the_shell_runs_the_push_and_the_scanner_keeps_it(tmp_
     """The push is an `echo` canary in a throwaway dir (never a real push): `echo CAN""ARY` prints
     `CANARY`, and the text of the command never holds that word."""
     template, runs_in = BYPASS[name]
+    command = template.format(push=CANARY)
+    ran = canary_ran(shell, command, tmp_path)
+    if shell in runs_in:
+        assert ran, f"{shell} did not run the canary of {name}"
+    if ran:
+        assert CANARY in strip_heredoc_bodies(command), f"{name}: the scanner hid a line {shell} runs"
+
+
+# ── Fix round 3: the shapes a second adversarial review found (B1-B7) and the shell consumers ───
+# A heredoc the scanner has no reason to read keeps its text. The shells column says which of
+# bash 5.3.9 and zsh 5.9 run `{push}` (checked by hand); `()` means neither does, and the shape
+# is only kept (an unknown shell version may differ).
+ROUND3 = {
+    "b1-hash-in-brace-default": ("${{x- #'\n}}<<A\n'}}\n{push}\nA", ("bash", "zsh")),
+    "b1-hash-in-brace-default-echo": ("echo ${{x:- #'}}\n}}<<EOF\n'}}\n{push}\nEOF", ("bash", "zsh")),
+    "b1-hash-in-brace-default-split-dollar": ("$\\\n{{x- #'\n}}<<A\n'}}\n{push}\nA", ("bash", "zsh")),
+    "b3-header-then-a-new-substitution": ("$(cat <<A) $(\n{push}\nA\n)", ()),
+    "b3-header-then-a-new-substitution-echo": ("echo $(cat <<A) $(echo\n{push}\nA\n)", ("zsh",)),
+    "b4-case-pattern-in-substitution": (": $(case 1 in 1) ;; esac\ncat <<A\nA) ; {push}\nA\n", ("bash",)),
+    "b4-case-pattern-in-process-substitution": (
+        ": <(case x in x) :;; esac; cat <<A\nA) ; {push}\nA\n)", ("bash",)),
+    "b5-backslash-newline-before-the-marker": ("cat <\\\n<<A\n{push}\nA", ("bash",)),
+    "b5-backslash-newline-no-space": ("cat<\\\n<<A\n{push}\nA", ("bash",)),
+    "b5-backslash-newline-colon": (": <\\\n<<A\n{push}\nA", ("bash",)),
+    "b6-array-with-a-subshell": ("x=( (cat <<A\n{push}\nA\n)", ("bash",)),
+    "b7-subshell-in-brace-default": (": ${{x:-(cat <<A\n)}}\n{push}\nA\n)}}", ("bash",)),
+    # an unquoted body that joins lines with a backslash can end at a line the scanner does not see
+    "unquoted-body-joins-the-terminator": ("cat <<EOF\nE\\\nOF\n{push}\nEOF", ("bash", "zsh")),
+    # the shell RUNS the body of a heredoc that feeds a shell
+    "stdin-of-bash": ("bash <<'EOF'\n{push}\nEOF", ("bash", "zsh")),
+    "stdin-of-sh-dash-form": ("sh <<-EOF\n{push}\nEOF", ("bash", "zsh")),
+    "stdin-of-source": ("source /dev/stdin <<'EOF'\n{push}\nEOF", ("bash", "zsh")),
+    "piped-into-bash": ("cat <<EOF | bash\n{push}\nEOF", ("bash", "zsh")),
+    "piped-into-bash-on-the-next-line": ("cat <<'EOF' |\n{push}\nEOF\nbash", ("bash", "zsh")),
+    "commit-form-feeding-bash-c": ("bash -c \"$(cat <<'EOF'\n{push}\nEOF\n)\"", ("bash", "zsh")),
+}
+for _name, _char in {"carriage-return": "\r", "vertical-tab": "\x0b", "form-feed": "\x0c",
+                     "no-break-space": "\xa0", "em-space": " ", "ideographic-space": "　",
+                     "file-separator": "\x1c", "next-line": "\x85"}.items():
+    ROUND3["b2-%s-after-the-marker" % _name] = ("cat <<%sA\n%sA\n{push}\nA" % (_char, _char), ("bash", "zsh"))
+    ROUND3["b2-%s-after-the-dash-marker" % _name] = ("cat <<-%sA\n%sA\n{push}\nA" % (_char, _char), ("bash", "zsh"))
+
+
+@pytest.mark.parametrize("name", sorted(ROUND3))
+def test_round3_the_scanner_keeps_the_push(name):
+    command = ROUND3[name][0].format(push=FORCE)
+    assert FORCE in strip_heredoc_bodies(command), f"{name}: the scanner hid a push"
+
+
+@pytest.mark.parametrize("name", sorted(ROUND3))
+@pytest.mark.parametrize("mode", ["none", "auto", "admin"])
+def test_round3_the_gate_blocks_the_force_push(gate, tmp_path, name, mode):
+    command = ROUND3[name][0].format(push=FORCE)
+    if mode == "admin":
+        fx = gate(kanban(ready=("T900",)))
+        auto_verified(fx)
+        text = reason(command, fx.wt, session(tmp_path, fx, "do it [admin]"))
+    elif mode == "auto":
+        fx = gate(kanban(done=("T900",)))
+        text = reason(command, fx.main, transcript(tmp_path, [human("go [auto]", -60)]))
+    else:
+        fx = gate(kanban(in_progress=("T900",)))
+        text = reason(command, fx.main, transcript(tmp_path, [human("thanks", -60)]))
+    assert text is not None, f"{mode}, {name}: the gate ALLOWED the hidden force push"
+
+
+@pytest.mark.skipif(not SHELLS, reason="no bash or zsh")
+@pytest.mark.parametrize("shell", SHELLS)
+@pytest.mark.parametrize("name", sorted(ROUND3))
+def test_round3_premise_the_shell_runs_the_push_and_the_scanner_keeps_it(tmp_path, shell, name):
+    template, runs_in = ROUND3[name]
     command = template.format(push=CANARY)
     ran = canary_ran(shell, command, tmp_path)
     if shell in runs_in:

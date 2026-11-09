@@ -31,13 +31,19 @@ ENV = {**os.environ, "GIT_CONFIG_GLOBAL": os.devnull, "GIT_CONFIG_NOSYSTEM": "1"
 # Pieces of a command line. `\n` joins lines, so a heredoc header usually has a body to find.
 HEADS = ["cat", "echo x", "true", "cat <<EOF", "cat <<-EOF", "cat <<'EOF'", 'cat <<"EOF"', "cat << EOF",
          'cat <<E"O"F', "cat <<E\\OF", "cat <<E'O'F", 'cat <<EOF"x"', 'cat <<"EOF"x', "cat <<1", "cat <<A",
-         "cat <<B", "cat <<EOF)", "cat <<EOF;", "cat <<EOF &&", "cat <<<EOF", "cat <<", "echo <<EOF"]
+         "cat <<B", "cat <<EOF)", "cat <<EOF;", "cat <<EOF &&", "cat <<<EOF", "cat <<", "echo <<EOF",
+         "bash <<'EOF'", "cat <<EOF | bash", "cat <<'EOF' |", "sh <<-EOF", "source /dev/stdin <<'EOF'", "cat <<\rA",
+         "cat <<\x0bA", "cat <<\xa0A", "cat <<-\u2003A", "cat > f <<'EOF'", "cat 2>&1 <<EOF", "cat &> f <<EOF"]
 OPENERS = ["$(", "`", "${x:-", "${x:-'", "((", "$((", "$[", "[", "[[", "<(", ">(", "x=(", "x+=(", "(", '"', "'",
-           "$'", "#", "\\", '"$(', '"${x:-', "$(( $(", "$( (", "case x in x) ", "{ "]
-CLOSERS = [")", "`", "}", "))", "]", "]]", '"', "'", ") ;", ")\"", "}\"", ")]", "; }"]
+           "$'", "#", "\\", '"$(', '"${x:-', "$(( $(", "$( (", "case x in x) ", "{ ", "${x- #'", "\\\n", "x=( (", "${x:-(",
+           "$(case 1 in 1) ;; esac\n", "<\\\n", "bash ", "eval ", "$\\\n{x- #'", ": <(case x in x) :;; esac; "]
+CLOSERS = [")", "`", "}", "))", "]", "]]", '"', "'", ") ;", ")\"", "}\"", ")]", "; }", ";;", "esac", "fi", "done", " ;; esac"]
 BODY = ["x", "A", "B", "EOF", "EOF)", "EOFx", "EOF x)", "EOF2case x in x) ", "E", " EOF", "\tEOF", "EOF ", "1",
-        ")", "`", "$(", "a ) b", "cat <<B", "cat <<A", "<<EOF", "#", "'", '"', "EOF`", "EOF}", "EOF]"]
+        ")", "`", "$(", "a ) b", "cat <<B", "cat <<A", "<<EOF", "#", "'", '"', "EOF`", "EOF}", "EOF]", "\rA", "\x0bA", "E\\", "OF", "A) ; ", "'}", "}"]
 JOINERS = ["\n", "\n", "\n", " ", " ; ", " && ", " | "]
+
+
+TEMPLATES = None  # filled on first use: importing the regression tests is slow
 
 
 def canary(k):
@@ -65,10 +71,65 @@ def make_nested(rng):
     return "\n".join(lines), canaries
 
 
+def known_templates():
+    """The shapes the regression tests pin (hidden, real, over-blocked, doubtful), as `{push}` templates."""
+    sys.path.insert(0, HERE)
+    import test_heredoc_quoted_marker as known
+    out = []
+    for table in (known.ALL_HIDDEN, known.REAL, known.OVERBLOCK, known.DOUBT, known.SUB_HIDDEN):
+        out += list(table.values())
+    for table in (known.BYPASS, known.ROUND3):
+        out += [template for template, _ in table.values()]
+    return out
+
+
+MUTATION_TOKENS = HEADS + OPENERS + CLOSERS + BODY + ["\n", " ", "\t", "#", "'", '"', "\\", "<<", "<", ">", "|", "&&", ";",
+                                                      "\x0b", "\x0c", "\x85", "\u3000", "\x1c", "\r", "\xa0", "\u2003"]
+SENTINEL = "\x01"  # stands for the canary line while a template is mutated
+
+
+def make_mutated(rng, templates):
+    """Start from one known shape and change it a little: a token inserted, a character deleted or
+    replaced, a line swapped or doubled. The canary line is never touched."""
+    text = rng.choice(templates).format(push=SENTINEL)
+    for _ in range(rng.randint(1, 3)):
+        op = rng.randrange(5)
+        pieces = text.split(SENTINEL)
+        side = rng.randrange(len(pieces))
+        part = pieces[side]
+        at = rng.randint(0, len(part))
+        if op == 0:
+            part = part[:at] + rng.choice(MUTATION_TOKENS) + part[at:]
+        elif op == 1:
+            part = part[:at] + part[at + rng.randint(1, 3):]
+        elif op == 2 and part:
+            at = min(at, len(part) - 1)
+            part = part[:at] + rng.choice(MUTATION_TOKENS)[:1] + part[at + 1:]
+        elif op == 3:
+            lines = part.split("\n")
+            if len(lines) > 1:
+                a, b = rng.sample(range(len(lines)), 2)
+                lines[a], lines[b] = lines[b], lines[a]
+            part = "\n".join(lines)
+        else:
+            lines = part.split("\n")
+            k = rng.randrange(len(lines))
+            lines.insert(k, lines[k])
+            part = "\n".join(lines)
+        pieces[side] = part
+        text = SENTINEL.join(pieces)
+    if text.count(SENTINEL) != 1:
+        text = rng.choice(templates).format(push=SENTINEL)
+    return text.replace(SENTINEL, canary(0)), [0]
+
+
 def make(rng):
     """One random command and the canary numbers it holds: a header line (openers, a command word, a
     marker, a closer), 2-5 further lines of body-like text and terminators, and 1-2 canary lines."""
-    if rng.random() < 0.5:
+    roll = rng.random()
+    if roll < 0.4:
+        return make_mutated(rng, TEMPLATES)
+    if roll < 0.7:
         return make_nested(rng)
     head = [rng.choice(OPENERS) for _ in range(rng.choice([0, 1, 1, 2]))]
     head += [rng.choice(["cat", "echo", "true", "echo x", ""]), rng.choice(MARKERS)]
@@ -103,6 +164,8 @@ def hidden_lines(shell, command, canaries, cwd, strip=strip_heredoc_bodies):
 @pytest.mark.skipif(not SHELLS, reason="no bash or zsh")
 @pytest.mark.parametrize("shell", SHELLS)
 def test_fuzz_no_line_a_shell_runs_is_hidden_by_the_scanner(shell, tmp_path):
+    global TEMPLATES
+    TEMPLATES = TEMPLATES or known_templates()
     rng = random.Random(SEED)
     failures = []
     for _ in range(RUNS):

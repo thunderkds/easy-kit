@@ -112,194 +112,138 @@ makes the fail-open direction reviewable in one place instead of unbounded.
 """
 import re
 
-# The `<<` / `<<-` header and the terminator word it declares. The word may be
-# quoted (`<<'EOF'`, `<<"EOF"`) — which changes expansion inside the body, not
-# which word ends it — so the quotes are matched and discarded.
-#
-# `<<<` is a *here-string*, not a heredoc: it has no body and no terminator, and
-# the negative lookahead keeps it out rather than letting `<<` match its first
-# two characters and then mis-read the rest of the line as a header.
+# The `<<` / `<<-` header and the terminator word it declares. Only spaces and tabs may sit between
+# `<<` and the tag (never `\s`: the shell reads a carriage return, a form feed or a no-break space there
+# as part of the tag). The tag is a plain word, quoted or not. The quotes change the expansion inside the
+# body, not which word ends it, so they are matched and discarded.
 HEREDOC_HEADER_PATTERN = re.compile(
-    r"<<(?!<)(?P<dash>-?)\s*(?P<quote>['\"]?)(?P<tag>[A-Za-z_][A-Za-z0-9_]*)(?P=quote)"
+    r"<<(?P<dash>-?)[ \t]*(?P<quote>['\"]?)(?P<tag>[A-Za-z_][A-Za-z0-9_]*)(?P=quote)"
 )
 
+# What may follow the tag. The shell reads the whole word, quotes removed, as the tag, so `<<E"O"F` ends
+# at `EOF` and `<<EOF"x"` at `EOFx`: any other character leaves the tag in doubt.
+_AFTER_TAG = ("", " ", "\t", "\n", ";", "&", "|", "<", ">")
 
-# What may follow a heredoc tag. The shell reads the whole word, quotes removed, as the tag, so
-# `<<E"O"F` ends at `EOF` and `<<EOF"x"` at `EOFx`: any other character leaves the tag in doubt.
-HEADER_END = ("", " ", "\t", "\n", ";", "&", "|", "(", ")", "<", ">")
+# A balanced simple quoted atom: single quotes hold anything; double quotes hold no `$`, backtick or
+# backslash. Removing atoms in ONE left-to-right alternation is how the shell lexes them, so an atom
+# never starts inside another one.
+_ATOMS = r"'[^']*'|\"[^\"$`\\]*\""
+_ATOM = re.compile(_ATOMS)
 
-# What an unquoted heredoc tag lets the shell run from inside the body.
-EXPANSION_IN_BODY = re.compile(r"\$\(|`")
+# What the text before a header must not hold, once its balanced simple atoms are removed: a quote, a
+# backslash, a backtick, `$`, any bracket, `#`, `&>`, and any whitespace but space, tab and newline.
+_UNSAFE_BEFORE_HEADER = re.compile(r"['\"\\`$(){}\[\]#]|&>|[^\S \t\n]|[\x00-\x08\x0e-\x1f\x7f]")
+
+# What the rest of the header line may hold: a whitelist of plain characters and balanced simple atoms.
+_HEADER_LINE = re.compile(r"(?:[A-Za-z0-9 \t_./=:,@+%~;|&>-]|" + _ATOMS + r")*")
+
+# The one nested form: `... "$(cat ` right before the header. It is a header only for the kit's commit
+# form `git commit -m "$(cat <<'EOF' ... EOF` newline `)"` (and `gh pr create --body "$(cat <<'EOF'`).
+_NESTED_OPENER = re.compile(r'(?:^|(?<=[ \t=]))"\$\(cat[ \t]+\Z')
+
+# A command word that reads its stdin as commands: the body of a heredoc that feeds it is not data.
+_SHELL_WORDS = frozenset(("bash", "sh", "zsh", "dash", "ksh", "csh", "tcsh", "fish", "source", ".", "eval", "ssh"))
 
 
 def _terminator_pattern(tag, allow_leading_tabs):
-    """The line that ends a heredoc: the tag alone on its own line.
+    """The line that ends a heredoc: the tag alone on its own line, exactly.
 
-    ``<<-`` (and only ``<<-``) permits leading **tabs** before the terminator,
-    which is the whole point of that form. Plain ``<<`` does not, so a line
-    reading ``  EOF`` does not end it — matching the shell rather than guessing
-    keeps the stripped span identical to the one the shell would consume.
+    ``<<-`` (and only ``<<-``) permits leading **tabs** before the terminator, which is the whole point
+    of that form. Plain ``<<`` does not, and a trailing space does not either: matching the shell rather
+    than guessing keeps the stripped span the one the shell would consume.
     """
     lead = "[\t]*" if allow_leading_tabs else ""
-    return re.compile(rf"^{lead}{re.escape(tag)}[ \t]*$", re.MULTILINE)
+    return re.compile(rf"^{lead}{re.escape(tag)}$", re.MULTILINE)
 
 
-def _closes_context(command, stack, newline, terminator, tag):
-    """True when a heredoc opened inside `$(…)` or a backtick (T294) ends the way the shell reads it.
+def _is_plain(text):
+    """True when `text` holds only words, operators `; & | < >` and balanced simple quoted atoms."""
+    return not _UNSAFE_BEFORE_HEADER.search(_ATOM.sub("", text))
 
-    The shell closes a command substitution at its own closer, so a body that runs past that closer
-    is not what the terminator line ends. The body counts only when the terminator line is directly
-    followed by the closer of the innermost context, when no body line starts with the tag (a line
-    such as `EOF) ; …` ends the shell's heredoc and closes the context early, so the scanner would
-    pair the wrong terminator), and, when any backtick is open, when the body holds no backtick (the
-    shell ends a backtick substitution at the first one). Anything else keeps the text.
+
+def _feeds_a_shell(line):
+    """True when a word of `line` is a shell (or `source`, `eval`, `ssh`): its stdin is commands."""
+    words = re.split(r"[\s;|&<>=]+", line.replace('"', "").replace("'", ""))
+    return any(word.rsplit("/", 1)[-1] in _SHELL_WORDS for word in words)
+
+
+def _read_heredoc(command, start, at):
+    """The span of the heredoc whose `<<` is at `at`, or None when its body is not provably data.
+
+    `start` is where the text not yet checked begins (the start of the command, or the end of the last
+    terminator). Returns (body_start, terminator_end, resume): the body is `command[body_start:terminator_end]`
+    and the next scan resumes at `resume`.
     """
-    closer = "`" if stack[-1] == "`" else ")"
-    end = terminator.end()
-    if not (command.startswith("\n", end) and command[end + 1:].lstrip(" \t")[:1] == closer):
-        return False
-    body = command[newline + 1:terminator.start()]
-    if re.search(rf"^[ \t]*{re.escape(tag)}", body, re.MULTILINE):
-        return False
-    return not ("`" in stack and "`" in body)
+    if command.startswith("<<<", at):
+        return None
+    header = HEREDOC_HEADER_PATTERN.match(command, at)
+    if not header or command[header.end():header.end() + 1] not in _AFTER_TAG:
+        return None
+    tag, quoted, dash = header.group("tag"), bool(header.group("quote")), bool(header.group("dash"))
+    prefix = command[start:at]
+    opener = _NESTED_OPENER.search(prefix)
+    if opener:  # `"$(cat <<'TAG'` newline: the commit form
+        if not (quoted and not dash and command.startswith("\n", header.end())):
+            return None
+        prefix = prefix[:opener.start()]
+    if not _is_plain(prefix) or _feeds_a_shell(command[command.rfind("\n", 0, at) + 1:at]):
+        return None
+    if opener:
+        body_start = header.end() + 1
+    else:
+        line = _HEADER_LINE.match(command, header.end())
+        tail = command[header.end():line.end()]
+        if command[line.end():line.end() + 1] != "\n" or "&>" in tail or _feeds_a_shell(tail):
+            return None
+        if tail.rstrip(" \t").endswith("|"):  # `cat <<EOF |` newline `bash`: the next line eats the body
+            return None
+        body_start = line.end() + 1
+    terminator = _terminator_pattern(tag, dash).search(command, body_start)
+    if not terminator:
+        return None  # unterminated: the shell would eat the rest, the scan keeps the text
+    body = command[body_start:terminator.start()]
+    if not quoted and re.search(r"[$`\\]", body):
+        return None  # an unquoted body expands `$(…)` and a backtick, and joins a line ending in a backslash
+    if opener:
+        closer = terminator.end() + len('\n)"')
+        if command[terminator.end():closer] != '\n)"' or re.search(rf"^[ \t]*{re.escape(tag)}", body, re.MULTILINE):
+            return None
+        return body_start, terminator.end(), closer
+    return body_start, terminator.end(), terminator.end()
 
 
 def strip_heredoc_bodies(command):
-    """Replace every terminated heredoc body in `command` with a single space.
+    """Replace every provably simple heredoc body in `command` with a single space.
 
-    Returns `command` unchanged for non-strings and for anything with no `<<`
-    in it. Never raises: callers run before every Bash call in the repo.
+    Returns `command` unchanged for non-strings and for anything with no `<<` in it. Never raises:
+    callers run before every Bash call in the repo.
 
-    A `<<WORD` counts as a heredoc header only where the shell would read one
-    (T294): outside quotes, outside a `#` comment, not escaped by a backslash,
-    and in a place where a command starts — the top level, or directly inside
-    `$(…)` or a backtick, where the quote state restarts (the kit's own commit
-    form, ``git commit -m "$(cat <<'EOF' … EOF)"``, depends on this). Inside
-    `${…}`, `((…))`, `$[…]`, `[…]`, `<(…)`, `>(…)`, `x=(…)` or double quotes it is not a
-    header, and the scan ends all stripping when it meets a `<<` there. A scan from left to right tracks that state, and everything it
-    cannot place resolves toward **keeping the text** — an unbalanced quote ends
-    the scan, a header whose line leaves a different set of contexts open than
-    it started with ends it, a tag that is not a plain word ends it, and a `<<<`
-    here-string is never a header. Before T294 the header was found by a plain regex search, so
-    ``echo "<<EOF"`` / ``git push --force origin main`` / ``EOF`` lost its middle
-    line to the strip, and the gate saw no push (gate hunt P1-1).
+    An allowlist (T294, three review rounds): a body is stripped only when everything before the header
+    and on the header line is plain text, so that the shell cannot read the header any other way. The
+    text before the header must hold no quote left after its balanced simple atoms are removed, no
+    backslash, backtick, `$`, bracket or `#`, and no whitespace but space, tab and newline. The header
+    is `<<` or `<<-`, spaces or tabs, and a plain-word tag. The rest of the header line is a whitelist.
+    The terminator is an exact line. The exception is the commit form `"$(cat <<'TAG'` … `TAG` newline
+    `)"`. Any other `<<` ends ALL stripping in the command, so what is not provably data stays visible.
+    A heredoc that feeds a shell (`bash <<'EOF'`, `… | bash`, `source`, `eval`, `ssh`) is not data either.
     """
     if not isinstance(command, str) or "<<" not in command:
         return command
 
     pieces = []
     pos = 0          # end of the text already copied into `pieces`
-    stack = []       # the open contexts: `"`, `` ` ``, `}`, `]` (`$[` or `[`), `$)` (a `$(…)` or a
-                     # subshell: a command starts here) or `)` (`((`, `<(`, `>(`, `x=(`: doubt)
-    saved = None     # `stack` as it was at the pending header
-    pending = None   # a real header whose body starts at the next top-level newline
-    i, size = 0, len(command)
-    while i < size:
-        char = command[i]
-        top = stack[-1] if stack else None
-        after = command[i + 1:i + 2]
-        if char == "\\":
-            i += 2  # the next character is literal, whatever it is
-            continue
-        if char == '"':
-            if top == '"':
-                stack.pop()
-            else:
-                stack.append('"')
-            i += 1
-            continue
-        if char == "`":
-            if top == "`":
-                stack.pop()
-            else:
-                stack.append("`")
-            i += 1
-            continue
-        if char == "$" and after in ("(", "{"):
-            stack.append("$)" if after == "(" else "}")  # a quote inside starts afresh
-            i += 2
-            continue
-        if top == '"':
-            i += 1  # inside double quotes only the cases above are special
-            continue
-        if char == "'":
-            close = command.find("'", i + 1)
-            if close == -1:
-                break  # unbalanced quote: nothing after it can be placed
-            i = close + 1
-            continue
-        if char == "$" and after == "'":  # $'…' honours backslash escapes
-            j = i + 2
-            while j < size and command[j] != "'":
-                j += 2 if command[j] == "\\" else 1
-            if j >= size:
-                break
-            i = j + 1
-            continue
-        if char == "#" and (i == 0 or command[i - 1] in " \t\n;&|()<>"):
-            end = command.find("\n", i)
-            i = size if end == -1 else end  # a comment runs to the end of the line
-            continue
-        if char == "(":
-            if after == "(" or command[i - 1:i] in ("<", ">", "(", "="):
-                # `((` is arithmetic, `<(` / `>(` a process substitution, `x=(` / `x+=(` an array
-                # literal: no heredoc is read here, doubt
-                stack.append(")")
-            else:
-                stack.append("$)")  # a subshell: a command starts here
-            i += 1
-            continue
-        if char == "[":
-            stack.append("]")  # `$[…]`, a subscript or `[ … ]`: arithmetic, so a `<<` is a shift
-            i += 1
-            continue
-        if char in ")}]":
-            if top == char or (char == ")" and top == "$)"):
-                stack.pop()
-            i += 1
-            continue
-        if char == "<" and command.startswith("<<<", i):
-            i += 3  # a here-string has no body
-            continue
-        if char == "<" and command.startswith("<<", i):
-            header = HEREDOC_HEADER_PATTERN.match(command, i)
-            if pending is not None and top in (None, "$)", "`"):
-                i += 2  # a second header on the line: never read, its text stays
-                continue
-            if top not in (None, "$)", "`") or not header or command[header.end():header.end() + 1] not in HEADER_END:
-                # A `<<` the scan will not read, in a place where the shell may: the lines that
-                # follow could be that heredoc's body or commands, so end all stripping.
-                break
-            pending = header
-            saved = list(stack)
-            i = header.end()
-            continue
-        if char == "\n" and pending is not None:
-            if stack != saved:
-                break  # the line left other contexts open than it started with: cannot tell
-            else:
-                # The body starts after the header's line, so the rest of that line
-                # (redirections, `&& cmd`) stays command text.
-                terminator = _terminator_pattern(
-                    pending.group("tag"), allow_leading_tabs=bool(pending.group("dash"))
-                ).search(command, i + 1)
-                if not terminator:
-                    break  # unterminated: strip nothing, keep scanning the raw text
-                if stack and not _closes_context(command, stack, i, terminator, pending.group("tag")):
-                    break  # inside `$(…)` or a backtick the body must end the context: cannot tell
-                if not pending.group("quote") and EXPANSION_IN_BODY.search(command, i, terminator.start()):
-                    # An unquoted tag expands its body: `$(cmd)` and backticks RUN. The body is
-                    # command text, so keep it, and carry on after the terminator.
-                    pending = None
-                    i = terminator.end()
-                    continue
-                pieces.append(command[pos:i + 1])
-                pieces.append(" ")
-                pos = i = terminator.end()
-                pending = None
-                continue
-        i += 1
-
+    start = 0        # where the text not yet checked begins
+    while True:
+        at = command.find("<<", start)
+        if at == -1:
+            break
+        span = _read_heredoc(command, start, at)
+        if span is None:
+            break
+        body_start, end, start = span
+        pieces.append(command[pos:body_start])
+        pieces.append(" ")
+        pos = end
     if not pieces:
         return command
     pieces.append(command[pos:])
