@@ -393,3 +393,304 @@ def test_row8_corpus_test_run_answers_hold_except_the_fixed_shapes(command):
 
 def test_row8_the_corpus_changes_only_what_the_rows_name():
     assert len(CHANGED_MERGE_SOURCES) == 6 and len(CHANGED_RUNNER) == 4
+
+
+# ═══ Stage 4 fix round (two reviews, ~280 candidates run in real bash and zsh) ═══════════════════
+# Rule behind these: EVERY word whose basename is `git` or `git-<verb>` is a git word; a verb that
+# cannot be read is a doubt; a doubt is a refusal in auto mode (never the other way round).
+EXEC = "/usr/lib/git-core"
+HIDDEN_R2 = {
+    # C1 — a redirect between git and its verb
+    "c1-redirect-out": f"git >/dev/null push origin {B}",
+    "c1-redirect-in": f"git </dev/null push origin {B}",
+    "c1-redirect-both": f"git &>/dev/null push origin {B}",
+    "c1-env-prefix": f"FOO=1 git >/dev/null push origin {B}",
+    "c1-after-C": f"git -C . >/dev/null push origin {B}",
+    "c1-merge-pager": f"git --no-pager >/dev/null merge {B}",
+    "c1-force-main": "git >/dev/null push -f origin main",
+    "c1-merge": f"git >/dev/null merge {B}",
+    "c1-fd-redirect": f"git 2>/dev/null push origin {B}",
+    # S1 — `--attr-source <tree>` takes a value
+    "s1-push": f"git --attr-source HEAD push origin {B}",
+    "s1-merge": f"git --attr-source HEAD merge {B}",
+    "s1-pull": "git --attr-source HEAD pull",
+    "s1-super-prefix": f"git --super-prefix x/ push origin {B}",
+    # S2 — a rebase earlier in the command
+    "s2-rebase-then-quoted-push": 'git rebase --abort 2>/dev/null; git "push" origin main',
+    # S3 — the first word that looks like git is not the git word
+    "s3-env-u": f'env -u git git "push" origin {B}',
+    "s3-xargs-E": f'xargs -E git git "p""ush" origin {B}',
+    # S4 — brace expansion in the command word, eval, a line continuation in the git word
+    "s4a-brace-command-word": f"{{git,push}} origin {B}",
+    "s4a-brace-in-word": f"g{{i,}}t push origin {B}",
+    "s4c-eval-quoted": f"eval 'g\"\"it push origin {B}'",
+    "s4c-eval-var": 'eval "$x push"',
+    "s4c-eval-wrapped": f"env eval 'git push origin {B}'",
+    "s4d-continuation": f"g\\\nit push origin {B}",
+    "s4d-continuation-verb": f"git pu\\\nsh origin {B}",
+    # C2 — env -S with an attached value
+    "c2-attached": f"env -S'git \"push\" origin {B}'",
+    "c2-long": f"env --split-string='git \"push\" origin {B}'",
+    "c2-clustered": f"env -iS'git \"push\" origin {B}'",
+    # C3 — dashed git commands
+    "c3-send-pack": f"{EXEC}/git-send-pack ../origin.git {B}",
+    "c3-push": f"{EXEC}/git-push origin {B}",
+    "c3-exec-path-sub": f'"$(git --exec-path)/git-send-pack" ../origin.git {B}',
+    "c3-path-prefix": f"PATH={EXEC}:$PATH git-push origin {B}",
+    "c3-merge": f"git-merge {B}", "c3-pull": "git-pull", "c3-http-push": "git-http-push x",
+    "c3-remote-ext": "git-remote-ext x", "c3-in-wrapper": f"timeout 5 git-push origin {B}",
+    "c3-var-dashed": f"git-$v origin {B}",
+    # C4 — an alias through the environment
+    "c4-count": f"GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=alias.x GIT_CONFIG_VALUE_0=push git x origin {B}",
+    "c4-parameters": f"GIT_CONFIG_PARAMETERS=\"'alias.x=push'\" git x origin {B}",
+    "c4-env": f"env GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=alias.x GIT_CONFIG_VALUE_0=push git x origin {B}",
+    "c4-export": f"export GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=alias.x GIT_CONFIG_VALUE_0=push; git x origin {B}",
+    "c4-exec-path": f"GIT_EXEC_PATH=/tmp/evil git status",
+    "c4-config-global": "GIT_CONFIG_GLOBAL=/tmp/g git status",
+    "c4-config-system": "GIT_CONFIG_SYSTEM=/tmp/g git status",
+    # C5 — `xargs git` with the verb on stdin
+    "c5-echo-pipe": f"echo push origin {B} | xargs git",
+    "c5-herestring": f"xargs git <<< 'push origin {B}'",
+    "c5-printf0": f"printf 'push\\0origin\\0{B}' | xargs -0 git",
+    # C6 / S5 — a path-qualified git after an unknown head or a redirect
+    "c6-flock": f'flock /tmp/l /usr/bin/git "push" origin {B}',
+    "s5-redirect-head": f'>/dev/null /usr/bin/git "push" origin {B}',
+    "c6-busybox": f'busybox /usr/bin/git "push" origin {B}',
+    "c6-nonwrapper-git": f'strace -f git "push" origin {B}',
+    # C8 — other verbs that publish or run a program
+    "c8-subtree": f"git subtree push --prefix=a origin {B}",
+    "c8-svn": "git svn dcommit", "c8-p4": "git p4 submit", "c8-cvs": "git cvsexportcommit HEAD",
+    "c8-receive-pack": "git receive-pack ../origin.git", "c8-remote-ext": "git remote-ext x",
+    # 9 — shell keywords start a command
+    "k-if": "g=git; if true; then $g push x; fi", "k-for": "g=git; for i in 1; do $g push x; done",
+    "k-not": "g=git; ! $g push x", "k-brace": "g=git; { $g push x; }",
+    # 17 — a command word the shell builds from a glob or a brace
+    "w-glob": "g[i]t push x", "w-brace": "{g,}it push x",
+    # a variable the same command sets, used as the command word
+    "taint-two-vars": f"g=git; v=push; $g $v origin {B}",
+    "taint-wrapped": f"g=git; env $g status",
+}
+
+
+@pytest.mark.parametrize("name", list(HIDDEN_R2))
+def test_r2_unit_each_reviewed_form_is_flagged(name):
+    assert merge_gate.hidden_git_verb(HIDDEN_R2[name]), HIDDEN_R2[name]
+
+
+@pytest.mark.parametrize("name", list(HIDDEN_R2))
+@pytest.mark.parametrize("tag", ["[admin]", "[auto]"])
+def test_r2_the_gate_blocks_each_reviewed_form(gate, tmp_path, name, tag):
+    fx = gate(kanban(done=("T900",)))
+    auto_verified(fx)
+    path = admin_session(tmp_path, fx, request="merge and push T900 " + tag)
+    text = reason(HIDDEN_R2[name], fx.wt, path)
+    assert text is not None and "cannot push/merge" in text, (name, text)
+
+
+@pytest.mark.parametrize("name", list(HIDDEN_R2))
+def test_r2_with_no_tag_the_reviewed_forms_change_nothing(gate, tmp_path, name):
+    """Auto-mode rule only (the Supervisor's verdict on AC 1): no tag, no new block. The forms the
+    plain patterns already read (`--attr-source` is now a known value option) are not in this check."""
+    if name.startswith("s1-"):
+        pytest.skip("`--attr-source <tree>` is now read by the plain patterns, as a push or merge")
+    fx = gate(kanban(done=("T900",)))
+    assert reason(HIDDEN_R2[name], fx.wt, None) is None
+    assert reason(HIDDEN_R2[name], fx.wt, transcript(tmp_path, [human("thanks", AFTER)])) is None
+
+
+def test_r2_attr_source_is_a_value_option_for_the_plain_patterns(gate):
+    """With no tag a push with `--attr-source <tree>` is a push: the verb is `push`, not the tree."""
+    fx = gate(kanban(in_progress=("T900",)))
+    text = reason(f"git --attr-source HEAD push origin {B}", fx.wt, None)
+    assert text is not None and "cannot push/merge" in text, text
+    for option in ("--attr-source", "--super-prefix", "--git-dir", "--work-tree", "--namespace",
+                   "--config-env", "-C", "-c"):
+        assert option in merge_gate.GIT_OPTIONS_WITH_ARG and option in merge_gate.GIT_OPTION_ARGS
+
+
+BENIGN_R2 = [
+    "$PY -m pytest tests/test_*.py", '$PY -m pytest "$f"', "timeout $T $PY -m pytest $ARGS",
+    "env $A $B pytest", 'for f in a b; do $TOOL "$f"; done', "cp $a pull", "cp $a push",
+    "git --version", "git --help", "git -C . status", "git --no-pager -C . log -1",
+    "git --attr-source HEAD status", "git status >/dev/null", "git status 2>&1 | head -3",
+    "git log --oneline >/dev/null 2>&1", "git diff > /dev/null", "ls | xargs git status",
+    "apt-get install git -y", "man git", "which git", "ln -s /usr/bin/git ~/bin/git",
+    "git-lfs ls-files", "git-crypt status", "echo git-push", 'grep "git-push" notes.md',
+    "git add a && git commit -m x", "git stash", "git tag v1",
+    "if [ -f x ]; then echo hi; fi", "for i in 1 2; do echo $i; done", "{ echo a; echo b; }",
+    '"$VENV/bin/pytest" -q', "${VENV}/bin/pytest -q", "FOO=1 pytest -q", "pytest -k 'a*' >/dev/null",
+]
+
+
+@pytest.mark.parametrize("command", BENIGN_R2)
+def test_r2_unit_ordinary_commands_are_not_flagged(command):
+    assert not merge_gate.hidden_git_verb(command), command
+
+
+@pytest.mark.parametrize("command", ["git --version", "git status >/dev/null",
+                                     "$PY -m pytest tests/test_*.py", "git -C . status"])
+@pytest.mark.parametrize("tag", ["[admin]", "[auto]"])
+def test_r2_ordinary_commands_stay_allowed_in_auto_mode(gate, tmp_path, command, tag):
+    fx = gate(kanban(done=("T900",)))
+    path = transcript(tmp_path, [human("go " + tag, AFTER)])
+    assert reason(command, fx.main, path) is None, command
+
+
+def test_r2_a_rebase_does_not_hide_the_rest_of_the_command_from_the_check(gate, tmp_path):
+    """S2: the hidden-verb check ran only when no blocked pattern matched; `rebase` is blocked but
+    not an auto-mode pattern, so a rebase earlier in the command skipped it."""
+    fx = gate(kanban(done=("T900",)))
+    auto_verified(fx)
+    path = admin_session(tmp_path, fx)
+    assert reason('git rebase --abort 2>/dev/null; git "push" origin main', fx.wt, path) is not None
+    # nothing else changed: a plain rebase alone is not an auto-mode block
+    assert reason("git rebase main", fx.wt, path) is None
+
+
+def test_r2_x1_an_error_in_the_check_is_a_block_in_auto_mode_and_nothing_outside_it(gate, tmp_path,
+                                                                                      monkeypatch):
+    """An uncaught exception exits 1, which the harness reads as a non-blocking error."""
+    fx = gate(kanban(done=("T900",)))
+    auto_verified(fx)
+
+    def boom(*_a, **_k):
+        raise RuntimeError("boom")
+    monkeypatch.setattr(merge_gate, "hidden_git_verb", boom)
+    text = reason("echo hello", fx.wt, admin_session(tmp_path, fx))
+    assert text is not None and "cannot push/merge" in text, text
+    assert reason("echo hello", fx.wt, None) is None
+    assert reason("echo hello", fx.wt, transcript(tmp_path, [human("thanks", AFTER)])) is None
+
+
+# [admin]: a dashed or redirect-hidden git word never gets the plain verb's way through
+@pytest.mark.parametrize("command", [
+    f"{EXEC}/git-push origin {B}", f"git-push origin {B}", f"git >/dev/null push origin {B}",
+    f"git push origin {B}; git >/dev/null push -f origin main",
+    f"git push origin {B}; git-push -f origin main"])
+def test_r2_admin_refuses_a_second_or_hidden_git_word(gate, tmp_path, command):
+    fx = gate(kanban(ready=("T900",)))
+    auto_verified(fx)
+    assert reason(command, fx.wt, session(tmp_path, fx, "do it [admin]")) is not None
+
+
+def test_r2_admin_verb_text_does_not_call_add_or_commit_read_only(gate, tmp_path):
+    fx, path = _verified(gate, tmp_path)
+    text = reason("git commit --no-gpg-sign -m x && " + PUSH + " origin " + B, fx.wt, path)
+    assert text is not None and "read-only" not in text, text
+    text = reason("git log --output=/tmp/o && " + PUSH + " origin " + B, fx.wt, path)
+    assert text is not None and "read-only" in text, text
+
+
+# ── real shells: the premise (each shape really pushes without the gate) ─────────────────────
+def _have(shell):
+    import shutil
+    return shutil.which(shell) is not None
+
+
+def _shape_commands():
+    import shutil
+    git_path = shutil.which("git")
+    exec_path = subprocess.run(["git", "--exec-path"], capture_output=True, text=True).stdout.strip()
+    return {
+        "c1-redirect": f"git >/dev/null push origin {B}",
+        "c1-fd-and-env": f"FOO=1 git 2>/dev/null push origin {B}",
+        "c1-after-C": f"git -C . >/dev/null push origin {B}",
+        "s1-attr-source": f"git --attr-source HEAD push origin {B}",
+        "s2-rebase-then-push": f'git rebase --abort 2>/dev/null; git "push" origin {B}',
+        "s3-env-u": f'env -u git git "push" origin {B}',
+        "s3-xargs": f'xargs -E git git "p""ush" origin {B}',
+        "s4a-brace": f"{{git,push}} origin {B}",
+        "s4c-eval": f'x=git; eval "$x push origin {B}"',
+        "s4d-continuation": f"g\\\nit push origin {B}",
+        "c2-env-S": f"env -S'git \"push\" origin {B}'",
+        "c3-dashed-path": f"{exec_path}/git-push origin {B}",
+        "c3-dashed-path-prefix": f"PATH={exec_path}:$PATH git-push origin {B}",
+        "c4-alias-count": f"GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=alias.x GIT_CONFIG_VALUE_0=push git x origin {B}",
+        "c4-alias-parameters": f"GIT_CONFIG_PARAMETERS=\"'alias.x=push'\" git x origin {B}",
+        "c5-xargs-stdin": f"echo push origin {B} | xargs git",
+        "c6-redirect-head": f'>/dev/null {git_path} "push" origin {B}',
+        "c8-subtree": f"git subtree push --prefix=a origin {B}",
+    }
+
+
+SHAPES = list(_shape_commands())
+
+
+def _push_repo(tmp_path):
+    """A clone with `feat/t900-x`, a subdirectory `a`, and a throwaway bare `origin`."""
+    env = {**os.environ, "HOME": str(tmp_path / "home"), "GIT_CONFIG_GLOBAL": os.devnull,
+           "GIT_CONFIG_NOSYSTEM": "1", "GIT_TERMINAL_PROMPT": "0"}
+    (tmp_path / "home").mkdir(exist_ok=True)
+    bare, work = tmp_path / "origin.git", tmp_path / "work"
+
+    def run(cwd, *args):
+        done = subprocess.run(["git", *args], cwd=cwd, env=env, capture_output=True, text=True)
+        assert done.returncode == 0, done.stderr
+    run(tmp_path, "init", "-q", "--bare", str(bare))
+    run(tmp_path, "init", "-q", "-b", "main", str(work))
+    (work / "a").mkdir()
+    (work / "a" / "f.txt").write_text("x\n")
+    run(work, "add", "-A")
+    run(work, "-c", "user.name=t", "-c", "user.email=t@example.invalid", "commit", "-qm", "base")
+    run(work, "checkout", "-q", "-b", B)
+    run(work, "remote", "add", "origin", str(bare))
+    return env, bare, work
+
+
+@pytest.mark.parametrize("shell", ["bash", "zsh"])
+@pytest.mark.parametrize("shape", SHAPES)
+def test_r2_premise_each_shape_really_pushes_without_the_gate(tmp_path, shell, shape):
+    """The control: these commands do push in a real shell (a throwaway bare remote, HOME and git
+    config isolated). Without it the gate tests above could pass on shapes that are harmless."""
+    if not _have(shell):
+        pytest.skip(f"{shell} is not installed")
+    command = _shape_commands()[shape]
+    if shape.startswith("c3") and not os.path.exists("/usr/lib/git-core/git-push"):
+        pytest.skip("no git-push in the exec path")
+    if shell == "zsh" and shape == "s4a-brace":
+        pytest.skip("zsh reads `{git,push}` at the start of a command as a group, not a brace expansion")
+    if shape == "c8-subtree" and subprocess.run(["git", "subtree", "-h"], capture_output=True).returncode \
+            not in (0, 129):
+        pytest.skip("no git subtree")
+    env, bare, work = _push_repo(tmp_path)
+    subprocess.run([shell, "-c", command], cwd=work, env=env, capture_output=True, text=True,
+                   stdin=subprocess.DEVNULL)
+    done = subprocess.run(["git", "-C", str(bare), "rev-parse", "--verify", "-q", f"refs/heads/{B}"],
+                          capture_output=True, text=True)
+    assert done.returncode == 0, f"{shape} did not push in {shell}"
+
+
+# ── (11) the own-remote rule: ROOT / same common dir, and URLs compared after resolving ──────
+def test_r2_a_clone_whose_origin_is_a_symlink_or_relative_path_to_the_same_bare_is_the_same_remote(
+        gate, tmp_path):
+    from test_gate_hidden_verbs import _clone_with_origin  # noqa: F401  (this module)
+    fx, path = _verified(gate, tmp_path)
+    clone = _clone_with_origin(fx)
+    link = os.path.join(fx.root, "origin-link.git")
+    os.symlink(os.path.join(fx.root, "origin.git"), link)
+    git(clone, "remote", "set-url", "origin", link)
+    assert reason("cd " + clone + " && " + PUSH + " origin " + B, fx.wt, path) is None
+    git(clone, "remote", "set-url", "origin", os.path.join("..", "origin.git"))
+    assert reason("cd " + clone + " && " + PUSH + " origin " + B, fx.wt, path) is None
+
+
+def test_r2_the_own_remote_rule_accepts_the_project_root_and_a_same_common_dir(gate, tmp_path,
+                                                                                monkeypatch):
+    fx, path = _verified(gate, tmp_path)
+    other = os.path.join(fx.root, "elsewhere.git")
+    git(fx.root, "init", "-q", "--bare", other)
+    clone = _clone_with_origin(fx, other)
+    # the command starts somewhere unrelated; the clone's origin differs from that repo's: refused
+    assert merge_gate._own_origin_refusal(clone, str(tmp_path)) is not None
+    # ROOT is the project: a clone of the same repository (same common dir) is the project's own
+    monkeypatch.setattr(merge_gate, "ROOT", fx.wt)
+    assert merge_gate._own_origin_refusal(fx.wt, str(tmp_path)) is None  # same common dir as ROOT
+    assert merge_gate._own_origin_refusal(clone, str(tmp_path)) is not None
+    monkeypatch.setattr(merge_gate, "ROOT", clone)
+    assert merge_gate._own_origin_refusal(clone, str(tmp_path)) is None  # `where` is ROOT itself
+
+
+# ── (16) the corpus changes only what the rows name, derived from the data ──────────────────
+def test_r2_corpus_overrides_name_only_keys_that_exist_in_the_corpus():
+    assert all(list(args) in [list(a) for a, _ in OLD_MERGE_SOURCES] for args in CHANGED_MERGE_SOURCES)
+    assert set(CHANGED_RUNNER) <= set(OLD_RUNNER)

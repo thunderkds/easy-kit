@@ -160,3 +160,49 @@ def test_row6_reading_git_commands_and_a_branch_listing_stay_filed(tmp_path):
     s.call("Bash", {"command": _expand(WT + "git status --short && git branch --show-current "
                                        "&& git log -1 && python3 -m pytest -q", tmp_path, project)})
     assert len(trace(project, "T120")) == 1 and trace(project, "T250") == []
+
+
+# ── Stage 4 fix round — SL6 and SL7 ──────────────────────────────────────────────────────────
+def test_sl6_an_even_run_of_backslashes_before_a_newline_is_not_a_continuation(tmp_path):
+    """`echo ok\\\\` + newline: the two backslashes are one escaped backslash, the newline ends the
+    command, and `git branch -m ...` is a second command (the hook must not read one command)."""
+    project, got = _file(tmp_path, WT + "echo ok\\\\\ngit branch -m fix/t999-forged")
+    assert got == {"T120": 0, "T250": 1}, got
+
+
+@pytest.mark.parametrize("command", [
+    WT + "echo ok\\\\\\\\\ngit branch -m fix/t999-forged",          # four backslashes: still even
+    WT + "echo 'a\\'\ngit branch -m fix/t999-forged",                # single quotes have no escapes
+])
+def test_sl6_other_even_or_quoted_backslashes_before_a_newline(tmp_path, command):
+    _, got = _file(tmp_path, command)
+    assert got == {"T120": 0, "T250": 1}, got
+
+
+def test_sl6_an_odd_run_is_still_a_continuation(tmp_path):
+    """One backslash + newline joins the lines: this stays one `echo` command and stays filed."""
+    _, got = _file(tmp_path, WT + "echo ok \\\nand more")
+    assert got == {"T120": 1, "T250": 0}, got
+
+
+@pytest.mark.parametrize("command", [
+    WT + "git --namespace log checkout -b fix/t999-x",      # `--namespace` takes `log` as its value
+    WT + "git --git-dir log checkout -b fix/t999-x",
+    WT + "git --attr-source log checkout -b fix/t999-x",
+    WT + "git --super-prefix log checkout -b fix/t999-x",
+    WT + "git --config-env log checkout -b fix/t999-x",
+    WT + "git -c x=y log -1",
+    WT + "git --unknown-option log -1",
+])
+def test_sl7_a_global_option_before_the_verb_is_not_filed_unless_it_takes_no_value(tmp_path, command):
+    _, got = _file(tmp_path, command)
+    assert got == {"T120": 0, "T250": 1}, got
+
+
+@pytest.mark.parametrize("command", [
+    WT + "git --no-pager log -1", WT + "git -P status", WT + "git --no-pager -P diff --stat",
+    WT + "git --no-optional-locks status",
+])
+def test_sl7_the_no_value_global_options_stay_filed(tmp_path, command):
+    _, got = _file(tmp_path, command)
+    assert got == {"T120": 1, "T250": 0}, got
