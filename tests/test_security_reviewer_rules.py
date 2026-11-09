@@ -71,6 +71,29 @@ def verdict_problems(text):
     return out
 
 
+def _section(text, heading):
+    m = re.search(rf"^#{{1,6}}\s+{re.escape(heading)}\s*$\n(.*?)(?=^#{{1,6}}\s|\Z)", text, re.M | re.S)
+    return m.group(1) if m else ""
+
+
+def outcome_problems(text):
+    """T301 fix round: the noise gate, the merge rule and the `rejected` definition."""
+    sec = _section(text, "Three outcomes")
+    out = []
+    if not re.search(r"cannot name its one missing fact.*dropped|dropped.*cannot name its one missing fact", sec, re.S | re.I):
+        out.append("no bullet: a lead that cannot name its missing fact is dropped, not parked")
+    if "never blocks a merge by itself" not in sec:
+        out.append("no bullet: a needs_validation lead never blocks a merge by itself")
+    if "disproves" not in sec or "raised again" not in sec:
+        out.append("no one-line definition of rejected (disproves the lead; record why)")
+    return out
+
+
+def cap_problems(text):
+    size = len(text.encode("utf-8"))
+    return [f"{size} bytes is over the {CODEX_CAP}-byte Codex skill-body cap"] if size > CODEX_CAP else []
+
+
 def source_problems(text):
     last = [l for l in text.splitlines() if l.strip()][-1] if text.strip() else ""
     out = []
@@ -140,6 +163,10 @@ def test_ac2_kit_surface_is_named():
         assert term in text, f"attack-class text does not mention {term!r}"
 
 
+def test_ac1_outcome_bullets_drop_merge_and_rejected():
+    assert outcome_problems(_read(REF)) == []
+
+
 def test_ac3_source_line():
     assert source_problems(_read(REF)) == []
 
@@ -170,7 +197,7 @@ def test_ac6_stage_4_item_2_names_the_file():
 
 
 def test_ac7_skill_stays_under_codex_cap():
-    assert SKILL.stat().st_size <= CODEX_CAP
+    assert cap_problems(_read(SKILL)) == []
 
 
 # ---- mutation controls: change bytes, show the guard turn red -------------------------------
@@ -241,5 +268,19 @@ def test_mut_stage_4_pointer_removed_turns_red():
 
 
 def test_mut_cap_guard_goes_red_on_an_oversize_body():
-    assert len(_read(SKILL).encode("utf-8")) <= CODEX_CAP
-    assert len((_read(SKILL) + "x" * CODEX_CAP).encode("utf-8")) > CODEX_CAP
+    text = _read(SKILL)
+    assert cap_problems(text) == []
+    bad = text + "x" * CODEX_CAP
+    assert bad != text and cap_problems(bad), "cap guard stayed green on an oversize body"
+
+
+@pytest.mark.parametrize("old,new", [
+    ("cannot name its one missing fact", "is vague"),
+    ("never blocks a merge by itself", "may block a merge"),
+    ("disproves", "suggests"),
+])
+def test_mut_outcome_bullet_changed_turns_the_outcome_guard_red(old, new):
+    text = _read(REF)
+    assert outcome_problems(text) == []
+    bad = _mutate(text, old, new)
+    assert outcome_problems(bad), f"outcome guard stayed green after {old!r} -> {new!r}"

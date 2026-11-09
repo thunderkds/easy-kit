@@ -10,6 +10,9 @@ Rules for the `security-reviewer` persona of `code-review` and for the findings 
 - Give each lead one verdict: `confirmed`, `needs_validation` or `rejected`.
 - Give a severity to `confirmed` only.
 - For `needs_validation`, name the one missing fact and one safe check that would settle it.
+- A lead that cannot name its one missing fact is dropped, not parked as `needs_validation`.
+- A `needs_validation` lead never blocks a merge by itself; the Supervisor decides.
+- `rejected` means the code or a visible control disproves the lead. Record why, so it is not raised again.
 
 ## Severity from impact
 - Critical: an outsider takes over a system, an account or a secret, with no step by the victim.
