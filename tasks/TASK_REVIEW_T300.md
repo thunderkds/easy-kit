@@ -67,8 +67,19 @@ Not done: merge (yours); <auto verify: running (T182) | auto verify: <result> | 
 > **before any implementation commit exists**; if it does not (docs, templates, skill-instruction
 > text), BEFORE is the **verbatim prior content** of what changed — a quoted excerpt, not a command.
 
-**BEFORE**: [pasted timestamped command output showing the thing absent/failing, captured before the
-first implementation commit] OR [verbatim excerpt of the prior content, for non-executable changes]
+**BEFORE**: Verbatim prior state (2026-11-09, before any implementation commit; this task adds a DDR, a data file and a test, no executable code). `ls docs/ddr/` printed:
+```
+0001-measure-first-token-refactor.md
+0002-retire-measure-first-token-instrument.md
+0003-demonstration-block-and-delivery-report.md
+0004-uphold-hard-stop-gate-1-over-spawn-elimination.md
+0005-vital-slice-extends-simplicity-first.md
+0006-provider-adapters-inline-non-negotiables.md
+0007-canonical-skills-and-agents-at-plain-root.md
+0008-saved-tool-output-lives-inside-the-repo.md
+0009-measure-token-work-from-transcripts-and-aim-at-focus.md
+```
+`docs/ddr/data/` and `tests/test_t300_effort_measurement.py` do not exist yet.
 
 **AFTER**: [same command, post-change] OR [verbatim excerpt of the new content]
 
