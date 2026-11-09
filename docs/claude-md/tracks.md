@@ -640,7 +640,8 @@ Known limits:
   backslash that hides the verb (`git "push"`, `g''it push`, `git p\ush`), `${IFS}`, `$(…)`, a backtick or
   `eval` in a segment that names git, and a verb that publishes without being `push` (`git send-pack`,
   `git http-push`). Outside auto mode these forms behave as before. A git alias set in config
-  (`git pp`), a script (`bash push.sh`), `find -exec git …` and `python3 -c` still go unseen.
+  (`git pp`), a script (`bash push.sh`), a git command that runs another (`git submodule foreach`,
+  `git rebase --exec`) and `python3 -c` still go unseen.
 - The gate is a static check of the command text and of the repo config at the time of the command. It
   is not an airtight security boundary: user-global config, a script that calls git, and a hook or
   config added between the check and the push are out of its reach.
