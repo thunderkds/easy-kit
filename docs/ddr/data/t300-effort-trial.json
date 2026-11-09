@@ -1,0 +1,254 @@
+{
+ "source": "Supervisor's results.json, T300, 2026-11-09; records copied unchanged",
+ "price_table": "claude-api skill, cached 2026-10-06; USD per MTok, prompts up to 100K tokens",
+ "prices_per_mtok": {
+  "haiku": {
+   "in": 0.1,
+   "out": 0.5
+  },
+  "sonnet": {
+   "in": 2.0,
+   "out": 10.0
+  },
+  "opus": {
+   "in": 4.0,
+   "out": 20.0
+  }
+ },
+ "trials": [
+  {
+   "task": "T152",
+   "complexity": "C0",
+   "arm": "A",
+   "model": "haiku",
+   "effort": "low",
+   "recorded_models": [
+    "claude-haiku-5-5",
+    "claude-opus-5-5"
+   ],
+   "agent_effort": "low",
+   "price_in_per_mtok": 0.1,
+   "price_out_per_mtok": 0.5,
+   "calls": 6,
+   "cost_usd": 0.012755,
+   "latest_context_tokens": 65093,
+   "oracle_exit": 0,
+   "oracle_last_line": "13 passed in 0.44s",
+   "diff": "2 files changed, 14 insertions(+), 1 deletion(-)"
+  },
+  {
+   "task": "T152",
+   "complexity": "C0",
+   "arm": "B",
+   "model": "opus",
+   "effort": "low",
+   "recorded_models": [
+    "claude-opus-5-5"
+   ],
+   "agent_effort": "low",
+   "price_in_per_mtok": 4.0,
+   "price_out_per_mtok": 20.0,
+   "calls": 4,
+   "cost_usd": 0.390105,
+   "latest_context_tokens": 61205,
+   "oracle_exit": 0,
+   "oracle_last_line": "13 passed in 0.45s",
+   "diff": "2 files changed, 15 insertions(+), 1 deletion(-)"
+  },
+  {
+   "task": "T164",
+   "complexity": "C0",
+   "arm": "A",
+   "model": "haiku",
+   "effort": "low",
+   "recorded_models": [
+    "claude-haiku-5-5",
+    "claude-opus-5-5"
+   ],
+   "agent_effort": "low",
+   "price_in_per_mtok": 0.1,
+   "price_out_per_mtok": 0.5,
+   "calls": 9,
+   "cost_usd": 0.013423,
+   "latest_context_tokens": 68573,
+   "oracle_exit": 0,
+   "oracle_last_line": "37 passed in 0.24s",
+   "diff": "2 files changed, 4 insertions(+), 1 deletion(-)"
+  },
+  {
+   "task": "T164",
+   "complexity": "C0",
+   "arm": "B",
+   "model": "opus",
+   "effort": "low",
+   "recorded_models": [
+    "claude-opus-5-5"
+   ],
+   "agent_effort": "low",
+   "price_in_per_mtok": 4.0,
+   "price_out_per_mtok": 20.0,
+   "calls": 4,
+   "cost_usd": 0.306149,
+   "latest_context_tokens": 61205,
+   "oracle_exit": 0,
+   "oracle_last_line": "37 passed in 0.23s",
+   "diff": "2 files changed, 4 insertions(+), 1 deletion(-)"
+  },
+  {
+   "task": "T104",
+   "complexity": "C0",
+   "arm": "A",
+   "model": "haiku",
+   "effort": "low",
+   "recorded_models": [
+    "claude-haiku-5-5",
+    "claude-opus-5-5"
+   ],
+   "agent_effort": "low",
+   "price_in_per_mtok": 0.1,
+   "price_out_per_mtok": 0.5,
+   "calls": 7,
+   "cost_usd": 0.011833,
+   "latest_context_tokens": 68504,
+   "oracle_exit": 0,
+   "oracle_last_line": "22 passed in 0.09s",
+   "diff": "2 files changed, 34 insertions(+), 2 deletions(-)"
+  },
+  {
+   "task": "T104",
+   "complexity": "C0",
+   "arm": "B",
+   "model": "opus",
+   "effort": "low",
+   "recorded_models": [
+    "claude-opus-5-5"
+   ],
+   "agent_effort": "low",
+   "price_in_per_mtok": 4.0,
+   "price_out_per_mtok": 20.0,
+   "calls": 4,
+   "cost_usd": 0.277113,
+   "latest_context_tokens": 55839,
+   "oracle_exit": 0,
+   "oracle_last_line": "22 passed in 0.07s",
+   "diff": "2 files changed, 34 insertions(+), 2 deletions(-)"
+  },
+  {
+   "task": "T292",
+   "complexity": "C1",
+   "arm": "A",
+   "model": "sonnet",
+   "effort": "low",
+   "recorded_models": [
+    "claude-opus-5-5",
+    "claude-sonnet-5-5"
+   ],
+   "agent_effort": "low",
+   "price_in_per_mtok": 2.0,
+   "price_out_per_mtok": 10.0,
+   "calls": 7,
+   "cost_usd": 0.176892,
+   "latest_context_tokens": 55223,
+   "oracle_exit": 0,
+   "oracle_last_line": "43 passed in 0.09s",
+   "diff": "3 files changed, 11 insertions(+), 13 deletions(-)"
+  },
+  {
+   "task": "T292",
+   "complexity": "C1",
+   "arm": "B",
+   "model": "opus",
+   "effort": "low",
+   "recorded_models": [
+    "claude-opus-5-5"
+   ],
+   "agent_effort": "low",
+   "price_in_per_mtok": 4.0,
+   "price_out_per_mtok": 20.0,
+   "calls": 12,
+   "cost_usd": 0.545474,
+   "latest_context_tokens": 61735,
+   "oracle_exit": 1,
+   "oracle_last_line": "23 failed, 20 passed in 0.14s",
+   "diff": "2 files changed, 2 insertions(+), 18 deletions(-)"
+  },
+  {
+   "task": "T252",
+   "complexity": "C1",
+   "arm": "A",
+   "model": "sonnet",
+   "effort": "low",
+   "recorded_models": [
+    "claude-opus-5-5",
+    "claude-sonnet-5-5"
+   ],
+   "agent_effort": "low",
+   "price_in_per_mtok": 2.0,
+   "price_out_per_mtok": 10.0,
+   "calls": 14,
+   "cost_usd": 0.398823,
+   "latest_context_tokens": 79907,
+   "oracle_exit": 1,
+   "oracle_last_line": "1 failed, 94 passed, 1 deselected in 17.67s",
+   "diff": "3 files changed, 21 insertions(+), 5 deletions(-)"
+  },
+  {
+   "task": "T252",
+   "complexity": "C1",
+   "arm": "B",
+   "model": "opus",
+   "effort": "low",
+   "recorded_models": [
+    "claude-opus-5-5"
+   ],
+   "agent_effort": "low",
+   "price_in_per_mtok": 4.0,
+   "price_out_per_mtok": 20.0,
+   "calls": 22,
+   "cost_usd": 1.265544,
+   "latest_context_tokens": 95299,
+   "oracle_exit": 1,
+   "oracle_last_line": "1 failed, 94 passed, 1 deselected in 17.58s",
+   "diff": "4 files changed, 64 insertions(+), 6 deletions(-)"
+  },
+  {
+   "task": "T042",
+   "complexity": "C1",
+   "arm": "A",
+   "model": "sonnet",
+   "effort": "low",
+   "recorded_models": [
+    "claude-opus-5-5",
+    "claude-sonnet-5-5"
+   ],
+   "agent_effort": "low",
+   "price_in_per_mtok": 2.0,
+   "price_out_per_mtok": 10.0,
+   "calls": 5,
+   "cost_usd": 0.166855,
+   "latest_context_tokens": 57320,
+   "oracle_exit": 0,
+   "oracle_last_line": "7 passed in 0.37s",
+   "diff": "1 file changed, 10 insertions(+), 5 deletions(-)"
+  },
+  {
+   "task": "T042",
+   "complexity": "C1",
+   "arm": "B",
+   "model": "opus",
+   "effort": "low",
+   "recorded_models": [
+    "claude-opus-5-5"
+   ],
+   "agent_effort": "low",
+   "price_in_per_mtok": 4.0,
+   "price_out_per_mtok": 20.0,
+   "calls": 7,
+   "cost_usd": 0.415003,
+   "latest_context_tokens": 59865,
+   "oracle_exit": 0,
+   "oracle_last_line": "7 passed in 0.25s",
+   "diff": "1 file changed, 10 insertions(+), 6 deletions(-)"
+  }
+ ]
+}
