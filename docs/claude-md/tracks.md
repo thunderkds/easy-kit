@@ -642,14 +642,26 @@ Known limits:
   literal word is blocked, because the gate cannot tell what it runs (T296). Every word whose name is `git`
   or `git-<verb>` is a git word, wherever it stands in the command, and a git word whose verb cannot be read
   is a doubt, and a doubt is a block. That covers a `$`, backtick, brace or glob in the git word or its verb
-  (`v=push; git $v`, `git ${v}sh`, `git {p..p}ush`, `git $'push'`, `$g push`, `{git,push} origin b`); the
+  (`v=push; git $v`, `git ${v}sh`, `git {p..p}ush`, `git $'push'`, `{git,push} origin b`, and `$g push`
+  when the same command sets `g` or the name says git, `$GIT push`); the
   same in a wrapper chain before it (`env`, `timeout`, `nice`, `sudo`, `nohup`, `xargs`, `command`), also
-  with `env -S'…'`; a redirect between git and its verb (`git >/dev/null push`); a global option with a
-  value, which hides the verb (`git --attr-source HEAD push`: read as a push); `git` after an unknown
-  command (`flock /tmp/l /usr/bin/git "push"`); `xargs git` (the verb may come on stdin); a dashed command
-  (`/usr/lib/git-core/git-push`, `git-send-pack`); an alias set in the environment (`GIT_CONFIG_COUNT`,
-  `GIT_CONFIG_PARAMETERS`, `GIT_CONFIG_KEY_*`, `GIT_CONFIG_VALUE_*`, `GIT_EXEC_PATH`, `GIT_CONFIG_GLOBAL`,
-  `GIT_CONFIG_SYSTEM` in a command that names git); `eval`; a `bash -c '…'` string read the same way; a
+  with `env -S'…'`; a redirect between git and its verb (`git >/dev/null push`, and `>|`, `>>|`, `<>`, `>&`,
+  `<&`, `&>>`, `2>|` the same: none of them is a pipe); a global option with a value, which hides the verb
+  (`git --attr-source HEAD push`: read as a push), also when its value is an empty quoted word
+  (`git -C '' "push"`); `git` after an unknown command (`flock /tmp/l /usr/bin/git "push"`); `xargs` before
+  a git word that has no verb, wherever `xargs` stands (`xargs git`, `env xargs git`, `busybox xargs git`:
+  the verb may come on stdin); a dashed command in a command position (`/usr/lib/git-core/git-push`,
+  `git-send-pack`, also after `find -exec`; `man git-push` is a name, not a command); an alias set in the
+  environment (`GIT_CONFIG_COUNT` or `GIT_CONFIG_PARAMETERS` with a value, `GIT_CONFIG_KEY_*`,
+  `GIT_CONFIG_VALUE_*`, `GIT_EXEC_PATH`, `GIT_CONFIG_GLOBAL`, `GIT_CONFIG_SYSTEM`) in a command that names
+  git, unless every git verb in it is `status`, `log`, `diff`, `show` or `rev-parse` and `GIT_CONFIG_COUNT`
+  and `GIT_CONFIG_PARAMETERS` are empty (`GIT_CONFIG_GLOBAL=/dev/null git status` passes); an ANSI-C
+  `$'…'` or locale `$"…"` quote in a simple command that also holds a publishing verb, a brace expansion, a
+  hex or octal escape or a git verb that is not `add`, `commit`, `status`, `log`, `diff` or `show`, or in a
+  `-c` string; an ANSI-C quote with `\'` inside it, and a backtick span with an odd number of quotes (the
+  shell and shlex end the quote in different places); a head word that says git once its variables are cut
+  out (`$GIT`, `${G:-git}`, `g${E}it`) or that globs to it (`gi?`); `function f { git push; }`;
+  `eval`; a `bash -c '…'` string read the same way; a
   line continuation in the git word; a quote or backslash that hides the verb (`git "push"`, `g''it push`,
   `git p\ush`); `${IFS}`, `$(…)`, a backtick in a segment that names git; and a verb that publishes
   without being `push` (`git send-pack`, `http-push`, `receive-pack`, `remote-ext`, `subtree`, `svn`, `p4`,
@@ -664,9 +676,21 @@ Known limits:
     overlaps T294.
   - A command that builds a git command from data: `$(echo 'git push origin b')` and a backtick form.
   - Word splitting of a variable (bash only): `g=git\ push; $g origin b`.
-  - A variable set outside the command: `$g $v origin b`, with `g` and `v` set earlier in the profile.
-    The tool shell keeps no variables between calls, and a variable the same command sets (`g=git; $g …`)
-    is read. The rule that would catch it also blocks `$PY -m pytest "$f"`.
+  - A variable set outside the command: `$g $v origin b` and `$g push origin b`, with `g` and `v` set earlier
+    in the profile. The tool shell keeps no variables between calls, and a variable the same command sets
+    (`g=git; $g …`) is read, and so is a name that says git (`$GIT push`). The rule that would catch the
+    rest also blocks `$PY -m pytest "$f"` and `$DOCKER push registry/img`.
+  - Deliberate obfuscation (round 3 of the T296 review; the gate guards against an accident, not against a
+    hostile agent, so these are not chased). An unknown wrapper before a hidden word: `flock /tmp/l $'git' push
+    origin b`, `strace -f {git,} push origin`, `taskset 1 bash -c 'git "push" origin b'`, `find . -exec $'git' push
+    origin b \;`, `busybox env $'git' push`, `flock /tmp/l git-push origin b` (a dashed name counts only in a
+    command position); `g=git; flock /tmp/l $g push origin b`; `env -S` with an exotic split (`env -S'git'
+    push origin b`, `env -S "git\_push\_origin\_b"`, `env -vS 'git "push" b'`); a shell alias (`shopt -s
+    expand_aliases; alias g=git; g push origin b`); `${G:-git}`, `g${E}it`, `{git,}` and a glob after an
+    unknown wrapper (`strace g${E}it pull`, `busybox setsid {git,} push`); a `\$` inside a double-quoted
+    `-c` string (`bash -c "\$'\x67it' merge b"`, which shlex does not unescape). A fuzz run of 35000
+    commands against a stand-in git let 2848 publishes through before round 3 and 147 after it, 133 of
+    them behind an unknown wrapper.
   - `GIT_CONFIG_*` set in the profile or by the harness.
   - The own-remote rule trusts the directory the command starts in: the shell's working directory is
     carried from an earlier call, so a call that starts in a clone with another `origin` is judged against
@@ -715,7 +739,7 @@ Read these before you rely on `[auto]`. T180 left them open, on purpose. T186 re
   Examples: a test run in the main checkout while the session's active-task file names another task; a
   `code-review` or `security-review` Skill call made then; a Debate whose `resolve-question` call names no
   task; a test run after a `cd` that uses `;`, or from a session that was already in the worktree.
-  Point the session at the task (minimal-track step 1) before you work on it. Nine more limits:
+  Point the session at the task (minimal-track step 1) before you work on it. Ten more limits:
   - The filing proves where the command started, not what it ran. Inline code (`python3 -c`, `bash -c`,
     `node -e`, `perl -e`, `ruby -e`) is refused, but a script file in the worktree that does its own `cd`,
     or a symlink inside the worktree that points to main, is not seen. An agent that wants to mislead the
@@ -734,7 +758,9 @@ Read these before you rely on `[auto]`. T180 left them open, on purpose. T186 re
   - The merge gate's `invokes_test_runner` (older than T287, not changed here) counts a runner named in a
     heredoc body, or on the far side of `||` (`true || python3 -m pytest`), as a test run. The filing rules
     above keep such a call out of a worktree's trace, but a call filed by the session's active-task file
-    still passes the gate that way.
+    still passes the gate that way. A quote the shell and shlex end in different places desyncs it too:
+    `echo $'\' ; pytest ; \''` counts `pytest` as a test run (older than T296; the hidden-verb scan
+    reads `$'…'` itself, this reader does not).
   - A file planted in this session's transcript folder with this session's id is still read; only the
     `.claude/settings.json` deny rules (T251) protect that folder.
   - A Debate counts only from the task's first change in this session (T293). A Debate that ran before the
