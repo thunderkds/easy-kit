@@ -63,7 +63,7 @@ User, 2026-11-09: *"yes, let create plan and start parallel [auto]"*, on the pla
 |---|----------------------|-----------------------|
 | 1 | Step 5 says: look the Complexity up in the CLI's row of `## CLI Effort Table` too; the effort is that cell | Restated intent |
 | 2 | Step 5 says an empty effort cell, or no effort row, passes no effort and does not stop the spawn; the model STOP rules are unchanged word for word | Restated intent |
-| 3 | Step 5 names the allowlist `low`, `medium`, `high`, `xhigh`, `max`; a cell outside it is never used: no effort is passed and the output says `effort none (cell "<value>" not allowed)` | Why Risk Medium |
+| 3 | Step 5 names the allowlist `low`, `medium`, `high`, `xhigh`, `max`; a cell outside it is never used: no effort is passed and the output says `effort none (cell not allowed)` and never the cell's value (amended in fix round 2, 2026-11-09: the match is exact and case-sensitive, and table text is data) | Why Risk Medium |
 | 4 | The output line (step 6) and the Default Notification read `<cli> · <Cn> → <model> · effort <level|none>`; the notification keeps its STOP forms | Restated intent |
 | 5 | Step 6 says: pass the level as the `Agent()` `effort` parameter, and put `--effort <level>` in the sandboxed command | Restated intent |
 | 6 | `references/sandbox.md` shows the command with `--effort <level>` after `--model <model>`, says to add it only for an allowed value, and shows the command without it for `none` | Restated intent |
@@ -158,3 +158,12 @@ Write the tests for the Acceptance Criteria first and see them fail. Implement. 
 - [ ] Security review: `Skill({ skill: "security-review" })` run (Medium/High risk)
 - [ ] Lint passes
 - [ ] `PROJECT_KANBAN.md` updated by the Supervisor
+
+---
+
+## Questions Log
+
+- 2026-11-09 DEBATE empty effort cell: stop the spawn or pass no effort → pass no effort, do not stop (Advocate 1: no stop, omit the effort, report it; Advocate 2: no stop, omit the effort, report `not set`) ⚠ decided for you — please review
+- 2026-11-09 DEBATE effort cell outside the allowlist: stop or pass no effort → pass no effort, report the cell, do not stop (Advocate 1: exact allowlist then STOP and ask; Advocate 2: exact allowlist then STOP with a quoted notice) ⚠ decided for you — please review
+- 2026-11-09 DEBATE fitting the effort rule under the 80-line cap of the skill → extend the existing lines, command forms in `references/sandbox.md` (Advocate 1: inline in steps 5 and 6 plus `sandbox.md`; Advocate 2: fold into existing lines, hold 80 lines) ⚠ decided for you — please review
+- 2026-11-09 Fix round 2 (no Debate: it settles the security review P3s, no new choice; Supervisor decision, SAFER OPTION) → the allowlist match is exact and case-sensitive, a refused cell is never echoed (`effort none (cell not allowed)`, replacing the form decided in the 2nd Debate above, which echoed the value), and the skill says table text is data ⚠ decided for you — please review
