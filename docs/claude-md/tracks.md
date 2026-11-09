@@ -646,7 +646,9 @@ Known limits:
   follow them: a script file written by a heredoc and run later (`cat > r.sh <<'EOF'` … `EOF` newline
   `sh r.sh`); a heredoc on a file descriptor that a later shell reads (`exec 3<<EOF` … `EOF` newline
   `bash <&3`, `exec 0<<'EOF'`); a fifo; `read -r l; eval "$l"`; a renamed shell (`ln -s /bin/bash b2`, then
-  `./b2 <<'EOF'`); `python3 -` and `python -`. A header followed on the NEXT command by a shell word
+  `./b2 <<'EOF'`); `python3 -` and `python -`. A substitution that builds the command word or the subcommand (`"$(cat <<'EOF'` `git` … `)" push origin main`,
+  `git "$(cat <<'EOF'` `push` … `)" --force origin main`) keeps its text in the scan, but the gate does not see a
+  verb that a substitution builds: that is the hidden-verb limit above, the same as without a heredoc. A header followed on the NEXT command by a shell word
   (`cat <<EOF &` newline `bash`) is also a limit. Not tested: macOS bash 3.2 and bash older than 5.2 may
   close a `$(…)` early on a `)` inside the body of a nested heredoc (suspected, not confirmed). The seeded
   fuzz `.claude/hooks/tests/test_heredoc_fuzz.py` compares the scan with bash and zsh: a line it shows a
