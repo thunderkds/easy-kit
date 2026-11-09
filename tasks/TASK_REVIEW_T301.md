@@ -103,9 +103,9 @@ If no findings in a severity group: emit "None."
 
 Red run of the new tests before the change (`python3 -m pytest tests/test_security_reviewer_rules.py -q -p no:cacheprovider`): `17 failed, 3 passed in 0.73s`. The 3 passes are the guards that hold on prior content (the non-security gate text, the 8192-byte cap, and the cap mutation control); the 17 failures include `test_ac1_reference_exists_with_six_rules_and_the_limit` (FileNotFoundError, reference file absent), `test_ac4_persona_row_links_the_reference`, `test_ac5_phase_2_and_3_text` and `test_ac6_stage_4_item_2_names_the_file`.
 
-**AFTER**: [same command, post-change] OR [verbatim excerpt of the new content]
+**AFTER**: persona row now ends `Rules: [security-reviewer.md](references/security-reviewer.md)`; Phase 2 step 3 adds "A security lead that fails the gate stays as `needs_validation` (no severity)"; step 4 adds "by a verifier that did not find them"; Phase 3 has a `## Needs validation` group after P3; Stage 4 item 2 adds "The findings of `security-review` use the verdicts and rules in `skills/code-review/references/security-reviewer.md`."; the new reference file is 47 lines. `SKILL.md` is 8184 bytes (cap 8192). `python3 -m pytest tests/test_security_reviewer_rules.py .claude/hooks/tests/test_skill_reference_pointers.py tests/test_token_economy_docs.py tests/test_stale_reference_sweep.py -q -p no:cacheprovider` printed `41 passed`.
 
-**DELTA**: [one sentence — what a user can now do that they could not before]
+**DELTA**: A `security-reviewer` or `security-review` run now has one short rule file, and a security lead that cannot be proven yet is kept as `needs_validation` instead of being dropped.
 
 **WITNESS**: [who ran it and when — derived from `memory/event-trace/Txxx.jsonl`, never the
 implementing agent alone]
