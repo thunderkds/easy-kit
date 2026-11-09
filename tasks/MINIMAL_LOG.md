@@ -5,6 +5,22 @@
 > this template and deletes the example comment. The same block is the Supervisor's final chat message.
 
 
+## T302 — The docs page says how Stage 4 treats a security finding · minimal
+**Asked:** "Just wanna make sure if it is documented, or not, let check and update"
+**Decisions:**
+- Track minimal — one fold-out on an existing docs page plus a test: C1, Risk Low, one session, no new UI component.
+- Checked where T301 is documented: it is in `skills/code-review/references/security-reviewer.md`, `skills/code-review/SKILL.md`, `docs/claude-md/pipeline-stages.md` Stage 4 item 2, `memory/decisions.md` and the T301 guide and review. The installers need no change: `MANIFEST` lists `skills` as a whole directory and `plugin/skills` is a symlink to `../skills`. The public docs page (`site/docs.html`) said nothing about it, so that is the gap.
+- Put the text in a collapsed fold-out, not a visible lead: the page caps a visible lead at 35 words and a section at 150 visible words (`tests/test_site_content.py` `test_visible_lead_paragraphs_are_one_line_summaries`, `tests/test_site_visual_first.py` `test_every_section_shows_at_most_150_words_on_first_load`); the first version failed both.
+- Did not add a row to the "Agent focus" table: it lists token-saving ideas from three named repos and its headers and sources are pinned (`tests/test_site_content.py:714`, `:732`).
+- Assumed: "documented" meant the public docs page, because the kit docs and memory already hold T301.
+**Checked:**
+- New test `tests/test_t302_docs_security_rules.py` — before the change `3 failed, 1 passed` (no fold-out); after it `4 passed`; with the site pin tests `219 passed`; two mutation controls change bytes and turn the guard red.
+- Suite: `python3 -m pytest .claude/hooks/tests tests -q -p no:cacheprovider` — `6 failed, 4406 passed`: 5 are the `MEMORY.md` budget tests (`MEMORY.md` was 550 chars over 42,000 on `main` after the T301 memory pass; fixed on `main` in `d93d1ded`, the two budget test files print `18 passed`), 1 is the flaky `tests/test_auto_verify.py::test_t208_ac2_the_saved_t207_output_writes_a_pass_row` (also fails on the T301 parent commit).
+- Real run: `python3 -m http.server 8791` in `site/`, then `curl http://127.0.0.1:8791/docs.html` — `HTTP 200`, and the page holds `<summary>Security finding rules</summary>` with the paragraph.
+- Simplify: skipped: under 20 lines outside tests and docs.
+**Files:** `site/docs.html`, `tests/test_t302_docs_security_rules.py`, `tasks/MINIMAL_LOG.md`
+**Not done:** merge (the user decides); the T302 branch was not merged with `main`, so its own suite run still shows the budget failures that `d93d1ded` fixed on `main`.
+
 ## T282 — The home journey's improve step is an Easy Kit step, not "Your step" · minimal
 Mode: auto
 **Asked:** "but from the easy-kits, I saw the improve is your step, not the Easy kit"
