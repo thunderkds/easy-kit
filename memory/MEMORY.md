@@ -25,7 +25,7 @@
      run; read them there. The enforced gate is the whole-file character budget above. -->
 
 ### Decisions
-- [T301: security-finding rules in `skills/code-review/references/security-reviewer.md`](decisions.md) — verdicts `confirmed`/`needs_validation`/`rejected`; `code-review/SKILL.md` is at the 8 KB Codex cap, move text out before adding
+- [T301: security-finding rules in `security-reviewer.md`](decisions.md) — `confirmed`/`needs_validation`/`rejected`; `code-review/SKILL.md` is at the 8 KB cap
 - [T232–T236, T239, T240: plugin, init, Stage 0–5, repo `easy-kit`](decisions.md) — never reuse old repo name
 - [Anonymous GitHub check: block SSH](learnings.md) — T236
 - [T231: story `index.html`, reference `docs.html`](decisions.md) — 300-word cap; new skill goes on both pages
@@ -34,14 +34,14 @@
 - [T213: scroll-spy band starts below the header; click holds its link until a hand scroll](decisions.md) — test `node --test tests/site_scrollspy/*.mjs` (bare dir fails on Node 26)
 - [T212: neon accent `#3CF5A8` + glow tokens; supersedes T204 no-glow](decisions.md) — glow only via `--glow-*`; links stay `#7EDDB0` (`--link`); `prefers-contrast: more` turns glow off
 - [T207–T209: visual-first site; verdict parser](decisions.md) — diagrams lead, prose in Details; `**Verdict: PASS …**` reads; a line listing choices is ignored
-- [T143/T191/T189: CI re-runs a Done task's Verification Command; `score` skill; auto close-out](decisions.md) — `# ci: skip — <reason>`; score row optional; Stop check (7) needs a task test run
-- [T200/T201: settings profiles — `settings-setup` at Stage 1, High security default, add-only](decisions.md) — one source `profiles.json`; dry run first; Legacy = the kit's 2 anchor rules
+- [T143/T191/T189: CI re-runs a Done task's Verification Command; `score` skill; auto close-out](decisions.md) — `# ci: skip — <reason>`; score row optional
+- [T200/T201: settings profiles — `settings-setup` at Stage 1, High security default, add-only](decisions.md) — one source `profiles.json`
 - [T199: site `#mcps` lists easy-memory-mcp as a third OPTIONAL companion card](decisions.md) — README facts only; Open: T194 + T199 both edit the `#mcps` lead, merge by hand
-- [T198: `wake` prints Decisions + Learning Records via `memory_sections.py`, never all of MEMORY.md](decisions.md) — ~9k tokens less/session; **add new index lines at a section's TOP**
-- [T195: easy-memory installed; sub-agents use memory_search/read and the spawn slice](decisions.md) — OPTIONAL; `memory/` NOT replaced; review after ~2 weeks of `easy_memory.py report`
+- [T198: `wake` prints Decisions + Learning Records via `memory_sections.py`, never all of MEMORY.md](decisions.md) — **add new index lines at a section's TOP**
+- [T195: easy-memory installed; sub-agents use memory_search/read and the spawn slice](decisions.md) — OPTIONAL; `memory/` NOT replaced
 - [T182: auto verify — Stop hook runs real `/verify` headless for `[auto]` tasks](decisions.md) — gate trusts the row only with the anchor-dir run record; $2 cap per commit
-- [T203: auto verify for every task — Supervisor runs `stop_auto_verify.py --start <ID>` at Ready for Review](decisions.md) — Stop hook backstop; `CLAUDE_AUTO_VERIFY=off` = `[auto]`-only; open T205, T206
-- [T180: auto mode — `[auto]` runs either track; Debate size by Risk; auto-mode Stop hook](decisions.md) — Low decides, Medium 2 / High 3 Advocates; merge/push stay the user's (T189: pass → Done; T186: pause sticks)
+- [T203: auto verify for every task — Supervisor runs `stop_auto_verify.py --start <ID>` at Ready for Review](decisions.md) — `CLAUDE_AUTO_VERIFY=off` = `[auto]`-only
+- [T180: auto mode — `[auto]` runs either track; Debate size by Risk; auto-mode Stop hook](decisions.md) — Low decides, Medium 2 / High 3 Advocates; merge/push stay the user's
 - [T221-2: Advocates frame What/Why/How; strict count](decisions.md)
 - [T223: PROJECT_SPEC `## Readiness`; spawn warns HIGH RISK while incomplete](decisions.md)
 - [T226: Stage 1 offers companion MCPs; the kit never installs one](decisions.md) — static list; only strangers' installable servers are choices
@@ -53,14 +53,14 @@
 - [A batch guide ages against the tasks that merge after it, and the stalest part is its interactions](learnings.md) — re-read the call sites before the spawn
 - [A handoff warning is a measurement, and editing the block around it does not refresh it](learnings.md) — re-run the check before re-asserting, don't re-read the sentence
 - [T112: install is backup-then-overwrite; `harness_backup_path` is public for T114](decisions.md) — differing dest → `<path>.bak[.N]`; identical content left alone
-- [An identical-content short-circuit is what separates backup-on-install from backup-breeding](learnings.md) — judge a backup feature on run two: without it every update litters `.bak.N`
+- [An identical-content short-circuit is what separates backup-on-install from backup-breeding](learnings.md) — judge a backup feature on run two
 - [An error message's scope claim outlives the path it was written for](learnings.md) — check the caller's loop before trusting an abort's scope
 - [T111: settings.json is merged, kit owns an entry by its command path](decisions.md) — install/update both merge via lib/merge-settings.py
 - [An atomic write silently changes the file's mode](learnings.md) — mkstemp is 0600 and os.replace carries it onto the destination; chmod the temp file before replace
 - [Classification-only matching fails safe; a source path does not](learnings.md) — ask what the match is used for
 - [A restricted-PATH stub missing a binary fakes a convincing failure](learnings.md) — subtract one binary from a full link farm, never hand-list
 - [`claude_md_source` records the CLAUDE file a project installed with](decisions.md) — T110: `update.sh` now delivers `CLAUDE.md` under the edit-safe rule
-- [A lock-file value is untrusted the moment it becomes a path](learnings.md) — T110: allowlist before concatenation, and pick a fallback that can't carry the bad value into the rewritten lock
+- [A lock-file value is untrusted the moment it becomes a path](learnings.md) — T110: allowlist before concatenation
 - [The Supervisor's own mutant is the Stage 4 step](learnings.md) — an agent's mutation controls prove its mutants fail, not that its suite is non-vacuous
 - [The push gate reads the board and the trace](learnings.md) — since T196 a sub-agent is bound by its spawn prompt; the main session writes `.state/active_task.d/$CLAUDE_CODE_SESSION_ID`
 - [Interactive CLIs need a pty to verify](learnings.md) — drive the real binary with `script -qec` at Stage 5, and add a define-only source guard for the unit path (T108)
@@ -71,7 +71,7 @@
 - [T097 per-harness projection](decisions.md) — `--harness` selects CLIs at install; Codex 8 KB cap skips and names, never truncates
 - [Verify at the harness, not the filesystem](learnings.md) — when the value is "tool X can now see Y", the evidence is X's own output
 - [An unvalidated test seam is an invisible off switch](learnings.md) — HARNESS_SKILL_BODY_CAP silently disabled the cap it gated
-- [Multi-harness portability: canon at plain root](decisions.md) — Stage 0.5 grilling 2026-08-27: user locked `skills/`+`agents/` at plain root, per-project (not central), copy-not-symlink
+- [Multi-harness portability: canon at plain root](decisions.md) — Stage 0.5 grilling 2026-08-27: user locked `skills/`+`agents/` at plain root
 - [v2 is the working branch, main frozen](decisions.md) — from 2026-08-25 all work lands on `v2`
 - [CLAUDE_LEGACY.md sync policy](decisions.md) — mirror new skills + session-startup gates + Hard-Stop Gates from CLAUDE.md into CLAUDE_LEGACY.md on each addition
 - [Hard-stop gates in Permanent Rules](decisions.md) — 4 Supervisor self-checks: no TASK_GUIDE=no work
@@ -158,7 +158,7 @@
 - [Merge gate after T210/T211](learnings.md) — verify row committed on the branch; any `git <global opts> push|merge|pull|rebase` and `-c alias.` gated; open: `echo … | sh`
 - [Parallel sessions overwrite the shared active-task file](learnings.md) — rerun a task's tests under its own state file; smooth scroll breaks CDP clicks
 - [Task IDs: scan the whole board for the highest ID before registering](learnings.md) — `git log` and `tasks/` filenames miss Todo rows with no guide (T119 collision, 2026-09-23)
-- [Open T111/T115 follow-ups](learnings.md) — `.claude/hooks/` user entry silently dropped by the ownership rule; ~35 duplicated `merge_settings` lines in setup/update; un-pruned worktrees
+- [Open T111/T115 follow-ups](learnings.md) — `.claude/hooks/` user entry silently dropped by the ownership rule
 - [A rule the agent can meet by labelling, it meets by labelling](learnings.md) — T180: only trace counts (Advocate calls, forced High Debate) changed behavior
 - [A short SHA is hex — lock pair regex would read `kit_commit` as a file](learnings.md) — scope lock readers to the `"files"` block (T137)
 - [Writing a TASK_GUIDE auto-adds a Todo row](learnings.md) — `post_write_register_task.py`; move that row to In Progress at spawn, never add a second
@@ -199,7 +199,7 @@
 - [A test that shares a root can't detect a root-split defect](learnings.md) — T047's write/read paths collapse inside one worktree
 - ["It runs now" is not "it applies now"](learnings.md) — the built-in diffs the **checked-out** branch vs `origin/HEAD`
 - [Working-tree-vs-HEAD is a scope guard, not a repeatable test](learnings.md) — works exactly once, pre-commit
-- [post_agent_move_to_review.py fires at spawn, not completion](learnings.md) — PostToolUse/`Agent` fires when the async spawn is *issued*, so the board says Ready for Review before work exists
+- [post_agent_move_to_review.py fires at spawn, not completion](learnings.md) — PostToolUse/`Agent` fires when the async spawn is *issued*
 - [`git diff --stat` can't verify a sub-agent's claim](learnings.md) — untracked files show nowhere in it; use `git status --short` + `git log --oneline`
 - ["Already covered" must mean reaches-the-context](learnings.md) — not "exists in the repo": CLAUDE.md and `tdd` never reach a sub-agent unless sent
 - [Agent files must not tell sub-agents to write memory](learnings.md) — backend/frontend/qa.md + CLAUDE_LEGACY.md had "Update MEMORY.md"
@@ -207,7 +207,7 @@
 - [Report filename: skill_branch_timestamp.html](learnings.md) — `reports/<skill>_<branch>_<YYYYMMDDTHHMMSS>.html`; sortable, collision-free
 - [html-report scoring rubric + slot format](learnings.md) — Risk 0–30=green, 31–65=yellow, 66–100=red
 - [verify Evidence-row gate regex](learnings.md) — Check cell must be exactly `verify` immediately before the `|`
-- [Sub-agent "changed" ≠ committed](learnings.md) — always `git status --short` the worktree and check `git diff <base> --stat` against the TASK_GUIDE's predicted files before trusting a merge
+- [Sub-agent "changed" ≠ committed](learnings.md) — always `git status --short` the worktree and check `git diff <base> --stat`
 - [`git checkout -- <file>` is guardrail-blocked](learnings.md) — not just `checkout .`
 - [Kanban merge hygiene when both sides edit the board](learnings.md) — restore the Supervisor-side board to the merge base, merge, THEN move to Done
 - [Install-era shell gotchas (T031–T033)](learnings.md) — temp-dir cleanup must expose a var not stdout (`$(fn)` registers the EXIT trap in a subshell)
@@ -278,7 +278,7 @@
 - [A board-pulled guide is gate input](learnings.md) — T154: forged Evidence vacated; sensitive-path ask → T157
 - [Injected input hid a dead /dev/tty](learnings.md) — T155: test on a real pty
 - [Parallel tasks merge together; 401 ≠ permanent](learnings.md) — T156/T157: gate serialises merges
-- [Full suite fills `/tmp` and stops Bash; `test_auto_verify*` is flaky](learnings.md) — T301: one run at a time, `TMPDIR` and `--basetemp` on the home volume; re-run on the parent commit before blaming a task
+- [Full suite fills `/tmp`; `test_auto_verify*` is flaky](learnings.md) — T301: one run at a time, `TMPDIR`+`--basetemp` on home; re-run on the parent commit
 
 ### Learning Records
 - [Audit every public claim in one pass](learnings.md) — T231: verify failed 3 times, one sentence each
