@@ -225,6 +225,7 @@ For every task that reaches "Ready for Review" (auto mode: Stage 4 still runs be
    ```
    Skill({ skill: "security-review" })
    ```
+   The findings of `security-review` use the verdicts and rules in `skills/code-review/references/security-reviewer.md`.
 
 3. **Blast-Radius Analysis** (if task Risk Level is Medium or High and the task touches sensitive data — PII/PHI/credentials/payment data):
    ```
