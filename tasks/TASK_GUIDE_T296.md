@@ -55,7 +55,7 @@ User, 2026-11-08: *"do all the jobs pls"* (the open follow-ups after T291-T293 w
 
 | # | Criterion (testable) | Traces to requirement |
 |---|----------------------|-----------------------|
-| 1 | Negative: each hidden-verb form of the finding is BLOCKED under `[auto]` and `[admin]` and still blocked with no tag (the force push and plain push are blocked for `[auto]` already): `v=push; git $v origin br`, `g=git; $g push origin br`, `git ${v}sh origin br`, `git {p..p}ush origin br`, `git $'push' origin br`, `$'git' push origin br`, `env -i git "push" origin br`, `timeout 20 git "push" origin br`, `nice git "push" origin br`, `bash -c 'git "push" origin br'`, `git send-pack ../origin.git br` | Requirement |
+| 1 | Negative: each hidden-verb form of the finding is BLOCKED under `[auto]` and `[admin]` and with no tag unchanged, allowed as before (amended 2026-11-09 by the Supervisor after a 3-Advocate Debate, see `tasks/TASK_REVIEW_T296.md` Auto decisions, item 1) (the force push and plain push are blocked for `[auto]` already): `v=push; git $v origin br`, `g=git; $g push origin br`, `git ${v}sh origin br`, `git {p..p}ush origin br`, `git $'push' origin br`, `$'git' push origin br`, `env -i git "push" origin br`, `timeout 20 git "push" origin br`, `nice git "push" origin br`, `bash -c 'git "push" origin br'`, `git send-pack ../origin.git br` | Requirement |
 | 2 | Allowed as today: `git push origin feat/t900-x`, `git -C <dir> merge feat/t900-x`, `git --no-pager merge feat/t900-x`, `cd <dir> && git merge feat/t900-x` in a clean repo with a passed verify under `[admin]` | no regression |
 | 3 | Merge parser: `git merge --message feat/t900-x`, `-m feat/t900-x`, `--file feat/t900-x`, `-F feat/t900-x`, `-s ours feat/t900-x`, `-X theirs feat/t900-x`, `--cleanup=strip feat/t900-x` each yields the right branch (or no branch, and then the gate refuses); a test with a real repo and `merge.defaultToUpstream=true` shows `--message feat/t900-x` can no longer make the gate check the wrong branch | Requirement |
 | 4 | Slot 2b: calls that hold a brace, `{`, `}` or an unquoted `*`, `?`, `[` in any token are not filed: `echo hi > {.,..}/f`, `git diff --output={.,..}/d`, `pytest {..,.}/main/tests`, `pytest mt*` (symlink to main). Quoted globs (`pytest -k "a*"`) and the normal `cd <dir> && pytest tests/test_x.py` stay filed | Requirement |
@@ -74,7 +74,7 @@ User, 2026-11-08: *"do all the jobs pls"* (the open follow-ups after T291-T293 w
 
 | # | Given (input/state) | Expect (output/behavior) | How it's checked |
 |---|---------------------|--------------------------|------------------|
-| 1 | Hidden-verb forms (11) under no tag, `[auto]`, `[admin]` | BLOCKED in all | gate test through the `gate` fixture |
+| 1 | Hidden-verb forms (11) under no tag, `[auto]`, `[admin]` | BLOCKED under `[auto]` and `[admin]`; with no tag unchanged (allowed as before) — amended 2026-11-09 by the Supervisor after a 3-Advocate Debate (`tasks/TASK_REVIEW_T296.md` Auto decisions, item 1) | gate test through the `gate` fixture |
 | 2 | Real run in a throwaway repo with a bare remote, bash and zsh, for three of the forms, with the gate and without it | Without the gate the push lands (control); with the gate it is refused | script in the review file |
 | 3 | Merge options with a value | Right branch or refusal | unit test with a real repo |
 | 4 | Slot 2b brace and glob shapes (5) and backslash shapes (3) | Not filed / not counted | unit test through `task_context` |

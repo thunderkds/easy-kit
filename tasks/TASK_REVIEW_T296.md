@@ -29,19 +29,16 @@ or adds `Paused: done not moved — <reason>`. It moves the row only when this b
 numbered decision, `Checks:`, `Memory:`, the `Not done:` auto verify slot with its result, and `Not done:`
 naming the merge — no `<...>` left (`docs/claude-md/tracks.md` `### Auto close-out`).
 
+-->
+
 ## Auto decisions
 
 Mode: auto
-1. <what was decided> — RULE: <the rule>
-2. <what was decided> — FACT: <path>:<line> "<quoted text>"
-3. <what was decided> — DEBATED: <option> (Advocate 1: <its proposal>; Advocate 2: <its proposal>) ⚠ decided for you — please review
-4. <what was decided> — SAFER OPTION: <why> ⚠ decided for you — please review
-Paused: <only when a stop that stays paused the task: which one, and why>
-Checks: tests `<command>` — <result>; reviews <skill — result>; real run `<command>` — printed `<what it printed>` (auto-checked, not /verify)
-Memory: <each entry the memory pass wrote, as `file — entry` | nothing new>
-Not done: merge (yours); <auto verify: running (T182) | auto verify: <result> | /verify (yours)>
-
--->
+1. The hidden-verb refusal applies only under `[auto]` and `[admin]`; with no tag the 11 forms stay allowed as before, and a no-tag refusal is a separate task with its own corpus of ordinary commands. The guide's AC row 1 (line 58) and test row 1 (line 77) say "still blocked with no tag", but requirement (a) (line 28) says "Under `[auto]` and `[admin]`" — DEBATED: auto-mode only, amend AC row 1 and test row 1 (Advocate 1: keep auto-only, because a no-tag refusal blocks ordinary `$(…)` and `$var` git commands in every session; Advocate 2: keep auto-only, correct the two guide rows, open a follow-up task with a false-positive corpus if a no-tag refusal is wanted; Advocate 3: keep auto-only as the smallest safe thing, because the hook comment says "Outside auto mode nothing changes" and `docs/claude-md/tracks.md:642` says "Outside auto mode these forms behave as before") ⚠ decided for you — please review
+2. The code review and the security review of this branch must report before the task is marked ready — RULE: `docs/claude-md/pipeline-stages.md` § Stage 4 ("Skill({ skill: "code-review" }) always; security-review for Medium/High risk")
+Checks: tests (implementer) `python3 -m pytest .claude/hooks/tests tests -q -p no:cacheprovider` — 4797 passed; 414 new tests, 19 mutation controls red; real run in bash and zsh, 11 forms, with and without the gate (auto-checked, not /verify); reviews code-review and security-review — pending
+Memory: nothing new yet — the pass runs after the reviews
+Not done: merge (yours); auto verify: not started, Stage 4 reviews are open
 
 ## Evidence
 
