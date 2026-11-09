@@ -158,3 +158,11 @@ Write the tests for the Acceptance Criteria first and see them fail. Implement. 
 - [ ] Security review: `Skill({ skill: "security-review" })` run (Medium/High risk)
 - [ ] Lint passes
 - [ ] `PROJECT_KANBAN.md` updated by the Supervisor
+
+---
+
+## Questions Log
+
+- 2026-11-09 DEBATE empty effort cell: stop the spawn or pass no effort → pass no effort, do not stop (Advocate 1: no stop, omit the effort, report it; Advocate 2: no stop, omit the effort, report `not set`) ⚠ decided for you — please review
+- 2026-11-09 DEBATE effort cell outside the allowlist: stop or pass no effort → pass no effort, report the cell, do not stop (Advocate 1: exact allowlist then STOP and ask; Advocate 2: exact allowlist then STOP with a quoted notice) ⚠ decided for you — please review
+- 2026-11-09 DEBATE fitting the effort rule under the 80-line cap of the skill → extend the existing lines, command forms in `references/sandbox.md` (Advocate 1: inline in steps 5 and 6 plus `sandbox.md`; Advocate 2: fold into existing lines, hold 80 lines) ⚠ decided for you — please review
