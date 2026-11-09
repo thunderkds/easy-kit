@@ -1492,10 +1492,18 @@ def _admin_config_refusal(where):
         return "cannot read the repository config"
     url_counts = {}
     for scope, entry in zip(fields[0::2], fields[1::2]):
-        if scope not in ("local", "worktree"):
-            continue
         key, _, value = entry.partition("\n")
         shape = _config_key_shape(key)
+        if scope not in ("local", "worktree"):
+            # Review P1: a `url` set in global or system config adds a push target too, so count it
+            # with the repo's own; nothing else in those scopes is read.
+            if shape == ("remote", True, "url"):
+                remote = key.partition(".")[2].rpartition(".")[0]
+                url_counts[remote] = url_counts.get(remote, 0) + 1
+                if url_counts[remote] > 1:
+                    return (f"repo config `{_shown(key)}` is set more than once: a push to that "
+                            "remote would go to every URL")
+            continue
         if shape not in ADMIN_ALLOWED_CONFIG:
             return (f"repo config `{_shown(key)}` is not on the `[admin]` allowlist: it can run a "
                     "command or send git elsewhere, so `[admin]` refuses")

@@ -568,6 +568,21 @@ def test_f2a_a_remote_with_a_second_url_blocks(gate, tmp_path, remote):
         assert text is not None and f"remote.{remote}.url" in text and "more than once" in text, text
 
 
+# Review P1 — a second `url` of the same remote set in user-global config also counts. Git lists
+# the global scope before the local one, so the local `url` is the one that trips the count.
+def test_f2a_a_global_url_for_the_same_remote_blocks(gate, tmp_path, monkeypatch):
+    fx, path = merge_ready(gate, tmp_path)
+    other = os.path.join(fx.root, "other.git")
+    git(fx.root, "init", "-q", "--bare", other)
+    glob = os.path.join(fx.root, "global.gitconfig")
+    write(glob, f'[remote "upstream"]\n\turl = {other}\n')
+    monkeypatch.setenv("GIT_CONFIG_GLOBAL", glob)
+    assert reason(TASK_PUSH, fx.wt, path) is None  # control: the global url is another remote's
+    write(glob, f'[remote "origin"]\n\turl = {other}\n')
+    text = reason(TASK_PUSH, fx.wt, path)
+    assert text is not None and "remote.origin.url" in text and "more than once" in text, text
+
+
 # F2b — a local push target runs its own hooks; `updateInstead` runs its checkout's filters.
 @pytest.mark.parametrize("hook", ["post-receive", "pre-receive", "update", "push-to-checkout"])
 def test_f2b_a_local_push_target_with_an_executable_hook_blocks(gate, tmp_path, hook):

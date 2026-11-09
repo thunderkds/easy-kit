@@ -630,7 +630,16 @@ Known limits:
 - A local-path or `file://` `origin` runs programs on this machine when you push to it. The gate refuses
   an executable hook in that target and `updateInstead`. It does not stop the other work that target
   does after the push, such as its own `git gc --auto`, and it does not read a network `origin`. A remote
-  with a second `url` entry is refused, because git pushes to every URL.
+  with a second `url` entry is refused, because git pushes to every URL; the count includes a `url` in
+  user-global or system config. A `url` that starts with `-` or `::`, or has the `@-` or `://-` form, is
+  refused too.
+- The refusals are wide on purpose and may stop an ordinary repo: a `.gitattributes` line with any
+  `filter=`, `diff=` or `merge=` driver (including the built-in `diff=markdown` and `merge=union`) and
+  one in an ignored or vendored directory; any executable file in `.git/hooks` (such as `pre-commit`);
+  a local config key off the allowlist (such as `submodule.active`, `init.defaultBranch`,
+  `branch.<b>.pushRemote`); a `file://localhost/…` URL; a path that holds `%`. The refusal text says the
+  key "can run a command or send git elsewhere" even when it cannot. Remove the line or key, or push
+  yourself.
 - `git --attr-source <tree> merge …` skips the gate until T296 lands; T296 fixes it; do not merge T295
   alone.
 - The run record the gate trusts is a file in the trace anchors' directory
