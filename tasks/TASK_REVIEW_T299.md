@@ -103,14 +103,16 @@ Not done: merge (yours; merge T297 first, T298 and T299 read its table); the fiv
 ```
 - When a task moves up, or when `verify` returns `fail` (not `blocked`), the Supervisor first raises the
   effort of the next spawn by one step on the ladder `low`, `medium`, `high`, `xhigh`, `max`. The count
-  starts from the effort of the task's last spawn, or for the first raise from the cell of its Complexity in
-  `## CLI Effort Table`, so two failures raise two steps. This comes before it changes the model, splits the
-  task or moves any other lever. At `max`, or with an empty or missing cell, the rule changes nothing and
-  the other levers apply; the Supervisor never lowers effort on its own.
+  starts from the effort of the task's last spawn, whoever set it, even if the cell of its Complexity in
+  `## CLI Effort Table` is empty, or, with no spawn yet, from that cell; two failures with a spawn between
+  them raise two steps, but two triggers before the same spawn raise one step in total. This comes before it
+  changes the model, splits the task or moves any other lever. At `max`, or when the last spawn passed no
+  effort and the task has an empty or missing cell, the rule changes nothing and the other levers apply; the
+  Supervisor never lowers effort on its own.
 ```
 
 Row 6 rule cell, new tail: `... No row or an empty cell: row 14. Also read the `## CLI Effort Table`: an empty effort cell means no effort is passed, not a stop.`
 
-**DELTA**: The Supervisor now has a written rule to raise effort one step (from the last spawn's effort, stopping at `max` or at an empty cell) before it changes the model or splits the task, whenever a task moves up or `verify` returns `fail`; an empty effort cell is not a stop.
+**DELTA**: The Supervisor now has a written rule to raise effort one step (from the last spawn's effort even when the cell is empty, or from the cell when no spawn yet; two triggers before one spawn are one step; stopping at `max` or when there is no effort to count from) before it changes the model or splits the task, whenever a task moves up or `verify` returns `fail`; an empty effort cell is not a stop.
 
 **WITNESS**: Implemented by the common-infrastructure sub-agent on 2026-11-09 (first round, then a fix round: tests red before, green after; every mutation control red then restored green). To be confirmed by the reviewer from `memory/event-trace/T299.jsonl`.

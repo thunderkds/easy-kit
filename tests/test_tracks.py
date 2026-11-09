@@ -670,12 +670,34 @@ def _check_empty_cell(rule):
     _need(rule, r"empty or missing cell[^.]*changes nothing", "the empty-or-missing-cell case")
 
 
+def _check_first_raise(rule):
+    _need(rule, r"with no spawn yet, from that cell", "the first raise from the cell when there is no spawn yet")
+
+
+def _check_stacking(rule):
+    _need(rule, r"two failures with a spawn between them raise two steps", "'two failures with a spawn between them raise two steps'")
+
+
+def _check_last_effort(rule):
+    """The count starts from the last spawn's effort even when the cell is empty; 'changes nothing' only with no effort to count from."""
+    _need(rule, r"whoever set it, even if the cell[^.;]*is empty",
+          "the count from the last spawn's effort even if the cell is empty")
+    _need(rule, r"when the last spawn passed no effort and the task has an",
+          "'changes nothing' only when the last spawn passed no effort")
+
+
+def _check_two_triggers(rule):
+    _need(rule, r"two triggers before the same spawn raise one step in total",
+          "'two triggers before the same spawn raise one step in total'")
+
+
 def _check_never_lowers(rule):
     _need(rule, r"never lowers effort on its own", "'never lowers effort on its own'")
 
 
 CHECKS = (_check_short, _check_moves_up, _check_verify_fail_not_blocked, _check_ladder, _check_before,
-          _check_table_pointer, _check_last_spawn, _check_max, _check_empty_cell, _check_never_lowers)
+          _check_table_pointer, _check_last_spawn, _check_max, _check_empty_cell, _check_never_lowers,
+          _check_first_raise, _check_stacking, _check_last_effort, _check_two_triggers)
 
 
 @pytest.mark.parametrize("check", CHECKS, ids=lambda c: c.__name__)
@@ -705,8 +727,13 @@ MUTATIONS = [  # (id, bytes to change, replacement, the one check that must turn
     ("no-max", "At `max`", "At the top", _check_max),
     ("no-empty-cell", "empty or missing cell", "cell", _check_empty_cell),
     ("no-never-lowers", "; the Supervisor never lowers effort on its own", "", _check_never_lowers),
-    ("too-long", "so two failures raise two steps.", "so two failures raise two steps. One. Two. Three.",
-     _check_short),
+    ("no-first-raise", "with no spawn yet, from that cell", "from that cell", _check_first_raise),
+    ("no-stacking", "raise two steps", "raise one step", _check_stacking),
+    ("no-last-effort-count", "whoever set it, even if", "only if", _check_last_effort),
+    ("no-nothing-needs-no-effort", "when the last spawn passed no effort and the task has", "when the task has",
+     _check_last_effort),
+    ("no-two-triggers", "raise one step in total", "raise two steps", _check_two_triggers),
+    ("too-long", "raise one step in total.", "raise one step in total. One. Two. Three.", _check_short),
 ]
 
 

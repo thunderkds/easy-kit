@@ -61,10 +61,12 @@ scaffold code or a spec file never makes a project "not new".
   its own.
 - When a task moves up, or when `verify` returns `fail` (not `blocked`), the Supervisor first raises the
   effort of the next spawn by one step on the ladder `low`, `medium`, `high`, `xhigh`, `max`. The count
-  starts from the effort of the task's last spawn, or for the first raise from the cell of its Complexity in
-  `## CLI Effort Table`, so two failures raise two steps. This comes before it changes the model, splits the
-  task or moves any other lever. At `max`, or with an empty or missing cell, the rule changes nothing and
-  the other levers apply; the Supervisor never lowers effort on its own.
+  starts from the effort of the task's last spawn, whoever set it, even if the cell of its Complexity in
+  `## CLI Effort Table` is empty, or, with no spawn yet, from that cell; two failures with a spawn between
+  them raise two steps, but two triggers before the same spawn raise one step in total. This comes before it
+  changes the model, splits the task or moves any other lever. At `max`, or when the last spawn passed no
+  effort and the task has an empty or missing cell, the rule changes nothing and the other levers apply; the
+  Supervisor never lowers effort on its own.
 - A task grows when it needs more than one file beyond its first estimate, a design choice, or a second
   session. Move it up, then write the task guide from what was learned. The extended track continues from
   Stage 2 with that guide.
