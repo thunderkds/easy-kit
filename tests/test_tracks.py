@@ -611,3 +611,95 @@ def test_t261_change_step_runs_simplify_with_guards():
 
 def test_t261_record_template_has_a_simplify_line():
     assert "- Simplify: <N kept, M undone" in _read(TEMPLATE), "the record must say what simplify kept and undid"
+
+
+# ── T299 — a task that moves up or fails `verify` gets one more effort step first ─────────
+# The rule is doctrine text the Supervisor follows. It sits in `## Switching track`, beside the
+# "never moves a task down" rule, and names `## CLI Effort Table` (T297) as the start level.
+LADDER = ("low", "medium", "high", "xhigh", "max")
+
+
+def _effort_rule(text: str) -> str:
+    """The one bullet of `## Switching track` that talks about effort, whitespace-normalised."""
+    body = _section(text, "Switching track")
+    bullets = [_norm(b) for b in re.split(r"^- ", body, flags=re.M) if "effort" in b]
+    assert len(bullets) == 1, f"expected one effort bullet in '## Switching track', found {len(bullets)}"
+    return bullets[0].strip()
+
+
+def _check_short(rule: str) -> None:
+    sentences = [s for s in re.split(r"(?<=\.)\s+", rule) if s]
+    assert len(sentences) <= 4, f"the effort rule has {len(sentences)} sentences, cap is 4"
+
+
+def _check_triggers(rule: str) -> None:
+    assert re.search(r"moves? up", rule), "trigger 'a task moves up' is missing"
+    assert re.search(r"`verify` fails", rule), "trigger 'verify fails' is missing"
+
+
+def _check_ladder_and_before(rule: str) -> None:
+    ladder = ", ".join(f"`{x}`" for x in LADDER)
+    assert ladder in rule, f"the ladder {ladder} is missing or out of order"
+    assert re.search(r"one step", rule), "'one step' is missing"
+    assert re.search(r"\bbefore\b[^.]*\bmodel\b", rule), "'before ... model' (the other levers) is missing"
+
+
+def _check_never_lowers_and_max(rule: str) -> None:
+    assert re.search(r"never lowers? effort on its own", rule), "'never lowers effort on its own' is missing"
+    assert re.search(r"At `max`[^.]*other levers apply", rule), "the `max` case is missing"
+
+
+def _check_table_pointer(rule: str) -> None:
+    assert "`## CLI Effort Table`" in rule, "the pointer to `## CLI Effort Table` is missing"
+
+
+CHECKS = (_check_short, _check_triggers, _check_ladder_and_before,
+          _check_never_lowers_and_max, _check_table_pointer)
+
+
+def test_t299_effort_rule_is_at_most_4_sentences_in_switching_track():
+    _check_short(_effort_rule(_read(TRACKS_MD)))
+
+
+def test_t299_effort_rule_names_both_triggers():
+    _check_triggers(_effort_rule(_read(TRACKS_MD)))
+
+
+def test_t299_effort_rule_names_the_ladder_and_says_before_other_levers():
+    _check_ladder_and_before(_effort_rule(_read(TRACKS_MD)))
+
+
+def test_t299_effort_rule_never_lowers_and_max_hands_over():
+    _check_never_lowers_and_max(_effort_rule(_read(TRACKS_MD)))
+
+
+def test_t299_effort_rule_points_at_the_effort_table():
+    _check_table_pointer(_effort_rule(_read(TRACKS_MD)))
+
+
+def test_t299_existing_switch_sentences_stay_word_for_word():
+    body = _norm(_section(_read(TRACKS_MD), "Switching track"))
+    for sentence in (
+        "The Supervisor may move a task **up** (minimal → extended) mid-task when it finds a row of the rule "
+        "that is true. It says so in one line: `Track: extended — moved up: <reason>`. "
+        "It never moves a task **down** on its own.",
+        "A task grows when it needs more than one file beyond its first estimate, a design choice, or a second "
+        "session. Move it up, then write the task guide from what was learned.",
+    ):
+        assert sentence in body, f"existing rule text changed: {sentence[:50]!r}"
+
+
+@pytest.mark.parametrize("old,new,check", [
+    ("or when `verify` fails", "", _check_triggers),
+    ("`low`, `medium`, `high`, `xhigh`, `max`", "", _check_ladder_and_before),
+    ("The Supervisor never lowers effort on its own.", "", _check_never_lowers_and_max),
+    ("`## CLI Effort Table`", "the table", _check_table_pointer),
+    ("The Supervisor never lowers effort on its own.", " One. Two. Three. Four.", _check_short),
+], ids=["no-verify-trigger", "no-ladder", "no-never-lowers", "no-table-pointer", "too-long"])
+def test_t299_mutation_controls_turn_each_check_red(old, new, check):
+    """Each guard must be able to fail: the same rule with the guarded bytes changed makes it red."""
+    rule = _effort_rule(_read(TRACKS_MD))
+    assert old in rule, f"mutation target {old!r} not in the rule"
+    check(rule)  # green on the real rule, so the red below comes from the change alone
+    with pytest.raises(AssertionError):
+        check(rule.replace(old, new))

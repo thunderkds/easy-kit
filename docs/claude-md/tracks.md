@@ -59,6 +59,11 @@ scaffold code or a spec file never makes a project "not new".
 - The Supervisor may move a task **up** (minimal → extended) mid-task when it finds a row of the rule that
   is true. It says so in one line: `Track: extended — moved up: <reason>`. It never moves a task **down** on
   its own.
+- When a task moves up, or when `verify` fails, the Supervisor first raises the effort of the next spawn by
+  one step on the ladder `low`, `medium`, `high`, `xhigh`, `max`, counted from the cell of the task's
+  Complexity in `## CLI Effort Table`. This comes before it changes the model, splits the task or moves any
+  other lever. At `max` the rule changes nothing, and the other levers apply. The Supervisor never lowers
+  effort on its own.
 - A task grows when it needs more than one file beyond its first estimate, a design choice, or a second
   session. Move it up, then write the task guide from what was learned. The extended track continues from
   Stage 2 with that guide.
