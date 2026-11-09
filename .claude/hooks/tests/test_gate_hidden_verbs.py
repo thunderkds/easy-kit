@@ -55,7 +55,7 @@ HIDDEN_MORE = [
     f'timeout -k 5 20 git "push" origin {B}', f'sudo -u root git "push" origin {B}',
     f'nohup git "push" origin {B}', f'command git "$v" origin {B}', f'exec git "push" origin {B}',
     f'time -p git "push" origin {B}', f"/usr/bin/git $'push' origin {B}",
-    f"$g -C /x push origin {B}", f"$g $v origin {B}", f"timeout 20 $g push origin {B}",
+    f"$g -C /x push origin {B}", f"timeout 20 $g push origin {B}",
     f"git ${{v}}sh origin {B}", f"git pu* origin {B}", f"git p?sh origin {B}", f"git `echo push` x",
     f"=git push origin {B}", f"bash -c '$g push origin {B}'", f'sh -c "git \\"push\\" origin {B}"',
     f"git http-push https://example.invalid/r.git {B}", f"git -C /x send-pack ../o.git {B}",
@@ -104,7 +104,9 @@ def test_row1_unit_a_long_wrapper_chain_is_read_fast_and_flagged():
     started = time.time()
     assert merge_gate.hidden_git_verb("env " * 300 + 'git "push" origin x')
     assert time.time() - started < 2
-    assert merge_gate._hidden_in_command(["ls"], merge_gate.HIDDEN_DEPTH_LIMIT + 1)  # nested too deep: doubt
+    deep = merge_gate._Scan()
+    merge_gate._scan_simple(["ls"], merge_gate.HIDDEN_DEPTH_LIMIT + 1, set(), deep)
+    assert deep.doubt  # nested too deep: doubt
 
 
 @pytest.mark.parametrize("command", HIDDEN_FORMS)
@@ -581,16 +583,33 @@ def test_r2_admin_verb_text_does_not_call_add_or_commit_read_only(gate, tmp_path
     assert text is not None and "read-only" in text, text
 
 
-# ── real shells: the premise (each shape really pushes without the gate) ─────────────────────
+# ── real shells, no push: the premise (each shape reaches git with the verb `push`) ──────────
+# Supervisor rule for this round: no agent runs a real `git push` or `git merge`, even into a throwaway
+# remote. So `git` here is a stand-in script (first on PATH, or named by its path) that only records
+# its own name and arguments; the shell, not the gate, decides what the stand-in is called with. The
+# real-push witness for these shapes is a lab script the user runs (see the review file).
+FAKE_GIT = """#!/bin/sh
+printf '%s' "$(basename "$0")" >> "$CANARY_FILE"
+for a in "$@"; do printf ' %s' "$a" >> "$CANARY_FILE"; done
+printf '\\n' >> "$CANARY_FILE"
+"""
+
+
 def _have(shell):
     import shutil
     return shutil.which(shell) is not None
 
 
-def _shape_commands():
-    import shutil
-    git_path = shutil.which("git")
-    exec_path = subprocess.run(["git", "--exec-path"], capture_output=True, text=True).stdout.strip()
+def _fake_bin(tmp_path):
+    fake = tmp_path / "fakebin"
+    fake.mkdir()
+    for name in ("git", "git-push", "git-send-pack", "git-merge", "git-pull"):
+        (fake / name).write_text(FAKE_GIT)
+        (fake / name).chmod(0o755)
+    return str(fake)
+
+
+def _stand_in_shapes(fake):
     return {
         "c1-redirect": f"git >/dev/null push origin {B}",
         "c1-fd-and-env": f"FOO=1 git 2>/dev/null push origin {B}",
@@ -603,61 +622,63 @@ def _shape_commands():
         "s4c-eval": f'x=git; eval "$x push origin {B}"',
         "s4d-continuation": f"g\\\nit push origin {B}",
         "c2-env-S": f"env -S'git \"push\" origin {B}'",
-        "c3-dashed-path": f"{exec_path}/git-push origin {B}",
-        "c3-dashed-path-prefix": f"PATH={exec_path}:$PATH git-push origin {B}",
-        "c4-alias-count": f"GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=alias.x GIT_CONFIG_VALUE_0=push git x origin {B}",
-        "c4-alias-parameters": f"GIT_CONFIG_PARAMETERS=\"'alias.x=push'\" git x origin {B}",
+        "c3-dashed-path": f"{fake}/git-push origin {B}",
+        "c3-dashed-path-prefix": f"PATH={fake}:$PATH git-push origin {B}",
+        "c3-send-pack": f"{fake}/git-send-pack ../origin.git {B}",
         "c5-xargs-stdin": f"echo push origin {B} | xargs git",
-        "c6-redirect-head": f'>/dev/null {git_path} "push" origin {B}',
-        "c8-subtree": f"git subtree push --prefix=a origin {B}",
+        "c6-redirect-head": f'>/dev/null {fake}/git "push" origin {B}',
+        "c8-subtree-like": f"git subtree push --prefix=a origin {B}",
     }
 
 
-SHAPES = list(_shape_commands())
-
-
-def _push_repo(tmp_path):
-    """A clone with `feat/t900-x`, a subdirectory `a`, and a throwaway bare `origin`."""
-    env = {**os.environ, "HOME": str(tmp_path / "home"), "GIT_CONFIG_GLOBAL": os.devnull,
-           "GIT_CONFIG_NOSYSTEM": "1", "GIT_TERMINAL_PROMPT": "0"}
-    (tmp_path / "home").mkdir(exist_ok=True)
-    bare, work = tmp_path / "origin.git", tmp_path / "work"
-
-    def run(cwd, *args):
-        done = subprocess.run(["git", *args], cwd=cwd, env=env, capture_output=True, text=True)
-        assert done.returncode == 0, done.stderr
-    run(tmp_path, "init", "-q", "--bare", str(bare))
-    run(tmp_path, "init", "-q", "-b", "main", str(work))
-    (work / "a").mkdir()
-    (work / "a" / "f.txt").write_text("x\n")
-    run(work, "add", "-A")
-    run(work, "-c", "user.name=t", "-c", "user.email=t@example.invalid", "commit", "-qm", "base")
-    run(work, "checkout", "-q", "-b", B)
-    run(work, "remote", "add", "origin", str(bare))
-    return env, bare, work
+SHAPES = list(_stand_in_shapes("/x"))
 
 
 @pytest.mark.parametrize("shell", ["bash", "zsh"])
 @pytest.mark.parametrize("shape", SHAPES)
-def test_r2_premise_each_shape_really_pushes_without_the_gate(tmp_path, shell, shape):
-    """The control: these commands do push in a real shell (a throwaway bare remote, HOME and git
-    config isolated). Without it the gate tests above could pass on shapes that are harmless."""
+def test_r2_premise_each_shape_reaches_git_with_the_verb_in_a_real_shell(tmp_path, shell, shape):
+    """The control: in a real shell each shape calls git (a stand-in that only records its arguments)
+    with the verb `push` (or the dashed command `git-push`). Without it the gate tests above could pass
+    on shapes that are harmless. Nothing is pushed."""
     if not _have(shell):
         pytest.skip(f"{shell} is not installed")
-    command = _shape_commands()[shape]
-    if shape.startswith("c3") and not os.path.exists("/usr/lib/git-core/git-push"):
-        pytest.skip("no git-push in the exec path")
     if shell == "zsh" and shape == "s4a-brace":
         pytest.skip("zsh reads `{git,push}` at the start of a command as a group, not a brace expansion")
-    if shape == "c8-subtree" and subprocess.run(["git", "subtree", "-h"], capture_output=True).returncode \
-            not in (0, 129):
-        pytest.skip("no git subtree")
-    env, bare, work = _push_repo(tmp_path)
-    subprocess.run([shell, "-c", command], cwd=work, env=env, capture_output=True, text=True,
-                   stdin=subprocess.DEVNULL)
-    done = subprocess.run(["git", "-C", str(bare), "rev-parse", "--verify", "-q", f"refs/heads/{B}"],
-                          capture_output=True, text=True)
-    assert done.returncode == 0, f"{shape} did not push in {shell}"
+    fake = _fake_bin(tmp_path)
+    canary = tmp_path / "canary.txt"
+    env = {**os.environ, "PATH": fake + os.pathsep + os.environ["PATH"], "CANARY_FILE": str(canary),
+           "HOME": str(tmp_path)}
+    subprocess.run([shell, "-c", _stand_in_shapes(fake)[shape]], cwd=tmp_path, env=env,
+                   capture_output=True, text=True, stdin=subprocess.DEVNULL)
+    text = canary.read_text() if canary.exists() else ""
+    words = text.split()
+    assert "push" in words or "git-push" in words or "git-send-pack" in words, (shape, shell, text)
+
+
+@pytest.mark.parametrize("shell", ["bash", "zsh"])
+def test_r2_premise_an_alias_set_by_the_environment_runs(tmp_path, shell):
+    """C4: `GIT_CONFIG_COUNT` and `GIT_CONFIG_PARAMETERS` define an alias for one command. The alias
+    here is `!echo CANARY` (a shell alias that prints), so nothing is pushed."""
+    if not _have(shell):
+        pytest.skip(f"{shell} is not installed")
+    env = {**os.environ, "HOME": str(tmp_path), "GIT_CONFIG_GLOBAL": os.devnull, "GIT_CONFIG_NOSYSTEM": "1"}
+    for command in ("GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=alias.x GIT_CONFIG_VALUE_0='!echo CANARY' git x",
+                    "GIT_CONFIG_PARAMETERS=\"'alias.x=!echo CANARY'\" git x"):
+        done = subprocess.run([shell, "-c", command], cwd=tmp_path, env=env, capture_output=True, text=True)
+        assert "CANARY" in done.stdout, (command, done.stdout, done.stderr)
+
+
+def test_r2_premise_attr_source_takes_a_separate_value(tmp_path):
+    """S1, on real git, with a read-only verb: `HEAD` is the option's value, `rev-parse` is the verb."""
+    env = {**os.environ, "HOME": str(tmp_path), "GIT_CONFIG_GLOBAL": os.devnull, "GIT_CONFIG_NOSYSTEM": "1"}
+    subprocess.run(["git", "init", "-q", str(tmp_path / "r")], env=env, check=True)
+    (tmp_path / "r" / "f").write_text("x\n")
+    subprocess.run(["git", "-C", str(tmp_path / "r"), "add", "f"], env=env, check=True)
+    subprocess.run(["git", "-C", str(tmp_path / "r"), "-c", "user.name=t", "-c", "user.email=t@e.invalid",
+                    "commit", "-qm", "m"], env=env, check=True)
+    done = subprocess.run(["git", "-C", str(tmp_path / "r"), "--attr-source", "HEAD", "rev-parse",
+                           "--git-dir"], env=env, capture_output=True, text=True)
+    assert done.returncode == 0 and done.stdout.strip() == ".git", done
 
 
 # ── (11) the own-remote rule: ROOT / same common dir, and URLs compared after resolving ──────
@@ -694,3 +715,11 @@ def test_r2_the_own_remote_rule_accepts_the_project_root_and_a_same_common_dir(g
 def test_r2_corpus_overrides_name_only_keys_that_exist_in_the_corpus():
     assert all(list(args) in [list(a) for a, _ in OLD_MERGE_SOURCES] for args in CHANGED_MERGE_SOURCES)
     assert set(CHANGED_RUNNER) <= set(OLD_RUNNER)
+
+
+def test_r2_limit_a_variable_set_outside_the_command_is_not_followed():
+    """Documented limit (`docs/claude-md/tracks.md` Admin tag Known limits): `$g $v origin B` with both
+    names set before the command is not flagged, because `$PY -m pytest "$f"` and `$TOOL "$f"` must
+    stay allowed and the two look the same. The same command that sets the names is flagged."""
+    assert not merge_gate.hidden_git_verb(f"$g $v origin {B}")
+    assert merge_gate.hidden_git_verb(f"g=git; v=push; $g $v origin {B}")
