@@ -42,6 +42,16 @@ handled the same way, with the same two rules copied deliberately:
 * **A shell consumer keeps the text.** A header that feeds `bash`, `sh`, `zsh`, `source`, `eval` or
   `ssh` (also after a pipe) is not data: the shell runs the body. A body after an *unquoted* tag that
   holds `$`, a backtick or a backslash is not data either: the shell expands or joins it.
+* **Round 4 (a third review).** A header line that ends in `|`, `|&`, `&&` or `||` keeps the text: the
+  next line is the other side of the pipe. The nested form is allowed only as the VALUE of an option
+  (`-m`, `-F`, `--body`, `--message=` …), because only there is the substitution an argument and never
+  a word the shell runs (`"$(cat <<'EOF' … )" push`, `git "$(cat …)"`, `x="$(cat …)"` keep the text); the
+  rest of the line after `)"` must hold no `|`, `$`, backtick or `<` token and no shell word. The
+  consumer list holds the shells and the interpreters that read a script on stdin (`xargs`, `perl`,
+  `node`, `awk`, `make` …), a `/proc/…` path and `env -S…`. A glob character before the header keeps
+  the text (`/bin/ba?h <<'EOF'` is `bash`). Accepted limits, not followed here: a script file a heredoc
+  writes and a later command runs, a heredoc on a file descriptor, a fifo, `read -r l; eval "$l"`, a
+  renamed shell and `python3 -` (see `docs/claude-md/tracks.md`, Admin tag limits).
 * **A doubt keeps the text.** The cost is that unusual real headers (`$(cat <<EOF`, a subshell, a
   variable before the header) over-block, which is recoverable. A bypass is not.
 * An **unterminated** heredoc is left entirely alone. A shell would consume the
@@ -377,7 +387,9 @@ def strip_quoted_spans(command):
     direction itself, not just the enumerated shapes.
 
     A span whose own text carries an executor (``SPAN_EXECUTOR_PATTERN``) is
-    kept even behind a data command — over-blocking, the safe side.
+    kept even behind a data command — over-blocking, the safe side. A command
+    substitution (`$(` or a backtick) counts as an executor: `echo "$(git push)"`
+    runs the push (T294 round 4).
 
     An **unterminated** quote ends the scan: the rest of the command is left
     exactly as it arrived. A shell would treat it as an open string, but

@@ -621,17 +621,34 @@ Known limits:
   terminator is an exact line. An unquoted tag whose body holds `$`, a backtick or a backslash is not
   stripped, because the shell expands it. The one nested form is the commit form
   `git commit -m "$(cat <<'EOF'` newline … `EOF` newline `)"` (also after `gh pr create --body`), with a
-  quoted tag. Any other `<<` keeps the text after it as command text, in every mode, and ends all
+  quoted tag, and only as the value of an option: the word before it is `-m`, `-F`, `-b`, `-t` (also in a
+  cluster such as `-am`), `--message`, `--msg`, `--body`, `--title`, `--notes`, `--description`, `--file`,
+  `--body-file` or `--notes-file`, then a space or `=`. After `)"` the line is empty, or holds a space, a tab
+  or `;` and then tokens that do not start with `|`, `$`, a backtick or `<` and name no shell word. So
+  `"$(cat <<'EOF'` … `)" push origin main` (the substitution is the command word), `git "$(cat <<'EOF'` …
+  (the subcommand), `x="$(cat …)"` and `echo "$(cat …)" | sh` keep their text. A header line that ends in
+  `|`, `|&`, `&&` or `||` keeps its text too (the next line is the other side of the pipe). A glob character
+  `*` or `?` before the header keeps the text (`/bin/ba?h <<'EOF'` is `bash`). A quoted span behind a data command such as `echo` is kept when it holds `$(` or a backtick, because the substitution runs (`echo "$(git push)"`). Any other `<<` keeps the text after it as command text, in every mode, and ends all
   further stripping in that command: `echo "<<EOF"` followed by `git push --force origin main` is
-  blocked. A heredoc that feeds a shell (`bash <<'EOF'`, `… | bash`, `source`, `eval`, `ssh`, `sh`) keeps
-  its body as command text, because the shell runs it. When the scan cannot tell, it keeps the text. The
+  blocked. A heredoc that feeds a shell or an interpreter keeps its body as command text, because the
+  shell runs it: `bash`, `sh`, `zsh`, `dash`, `ash`, `rbash`, `busybox`, `ksh`, `mksh`, `pdksh`, `csh`,
+  `tcsh`, `fish`, `source`, `eval`, `ssh`, `xargs`, `perl`, `node`, `nodejs`, `ruby`, `php`, `lua`, `awk`,
+  `gawk`, `ed`, `ex`, `tclsh`, `make`, `expect`, `parallel`, `at`, a `/proc/…` path (`/proc/self/exe` is
+  the shell itself) and `env -S…`, anywhere on the header line or before it. When the scan cannot tell, it keeps the text. The
   cost is over-blocking: a push named in the body of a heredoc written as `cd "$WT" && cat > f <<'EOF'`
   (a `$VAR` in the prefix), `echo $(pwd) > f <<EOF`, `(cat <<EOF` (a subshell), `cat &> f <<EOF`, a
   command after `#`, or a heredoc inside `$(…)`, a backtick or `<(…)` (other than the commit form) is
   blocked like a push. Write the body to a file with a plain header, or put `git push` out of the body.
   Still not handled: `eval "…"`, `bash -c '…'` and an interpreter argument stay visible as quoted text
   (which the gate reads under its own quoted-span rule), and a body that an interpreter runs
-  (`python3 - <<'EOF'` with `os.system("git push")` inside) is data to this scan, as before. The seeded
+  (`python3 - <<'EOF'` with `os.system("git push")` inside) is data to this scan, as before. These shapes
+  are accepted limits, found by the third adversarial review (T294 round 4), and the scan does not
+  follow them: a script file written by a heredoc and run later (`cat > r.sh <<'EOF'` … `EOF` newline
+  `sh r.sh`); a heredoc on a file descriptor that a later shell reads (`exec 3<<EOF` … `EOF` newline
+  `bash <&3`, `exec 0<<'EOF'`); a fifo; `read -r l; eval "$l"`; a renamed shell (`ln -s /bin/bash b2`, then
+  `./b2 <<'EOF'`); `python3 -` and `python -`. A header followed on the NEXT command by a shell word
+  (`cat <<EOF &` newline `bash`) is also a limit. Not tested: macOS bash 3.2 and bash older than 5.2 may
+  close a `$(…)` early on a `)` inside the body of a nested heredoc (suspected, not confirmed). The seeded
   fuzz `.claude/hooks/tests/test_heredoc_fuzz.py` compares the scan with bash and zsh: a line it shows a
   shell running and the scan hiding is a bug.
 - The run record the gate trusts is a file in the trace anchors' directory
