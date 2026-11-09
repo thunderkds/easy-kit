@@ -66,6 +66,10 @@ REAL = {
     "pr-create-form": 'gh pr create --title t --body "$(cat <<\'EOF\'\nT294: fix\n\n{push}\nEOF\n)"',
     "quoted-tag-keeps-a-substitution-as-data": "cat <<'EOF'\n$(echo hi; {push})\nEOF",
     "after-a-previous-heredoc": "cat > a <<'E1'\nx\nE1\ncat > b <<'E2'\n{push}\nE2",
+    # Quote characters inside the other quote kind: the atoms are removed in ONE left-to-right pass,
+    # so neither order of two passes (doubles first, singles first) reads both of these.
+    "double-quoted-single-then-single-quoted-double": "echo \"'\" '\"' <<EOF\n{push}\nEOF",
+    "single-quoted-double-then-double-quoted-single": "echo '\"' \"'\" <<EOF\n{push}\nEOF",
 }
 # Real heredocs the allowlist does NOT read: the text stays, so a push named in the body is blocked
 # (an over-block, the recoverable side). Each is a real heredoc in a real shell.
@@ -78,6 +82,8 @@ OVERBLOCK = {
     "subshell": "(cat <<EOF\n{push}\nEOF\n)",
     "variable-in-the-prefix": 'cd "$WT" && cat > f <<\'EOF\'\n{push}\nEOF',
     "ampersand-redirect-in-the-prefix": "cat &> f <<EOF\n{push}\nEOF",
+    "dollar-inside-double-quotes": 'echo "$HOME" > f <<EOF\n{push}\nEOF',
+    "backslash-inside-double-quotes": 'echo "a\\b" > f <<EOF\n{push}\nEOF',
     "in-substitution": "echo $(cat <<EOF\n{push}\nEOF\n)",
     "in-substitution-quoted-tag": "x=$(cat <<'EOF'\n{push}\nEOF\n); echo done",
     "in-backtick": "echo `cat <<EOF\n{push}\nEOF\n`",
