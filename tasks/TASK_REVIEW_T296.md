@@ -45,11 +45,11 @@ Not done: merge (yours); auto verify: not started, Stage 4 reviews are open
 | Check | Result | Notes / output snippet |
 |-------|--------|------------------------|
 | **New test(s) cover Acceptance Criteria (file paths pasted)** | ☑ pass | `.claude/hooks/tests/test_gate_hidden_verbs.py` (rows 1, 2, 3, 5, 6, 7, 8) and `.claude/hooks/tests/test_slot2b_brace_glob.py` (rows 4, 5, 6); `merge_gate_guard.py` and `test_merge_gate_guard.py` (row 8, `T296` in `AUTHORISED_TASKS`). Run against the unchanged hooks they gave 114 failed (see Demonstration); now `414 passed in 5.76s`. |
-| Verification command run | ☑ pass | `python3 -m pytest .claude/hooks/tests -q -k "admin or merge_gate or slot or task_context or hidden"` -> `1147 passed, 1690 deselected in 28.33s`. `python3 -m pytest .claude/hooks/tests tests -q -p no:cacheprovider` -> `4797 passed, 25 subtests passed in 332.50s (0:05:32)` (2026-11-09, HEAD `7503935d`). |
-| Negative cases hold | ☑ pass | Red run against the prior content: 114 failed, 268 passed (Demonstration). Mutation controls (19), each one byte change in `pre_bash_block_unsafe_merge.py` or `lib/task_context.py` (`git diff --stat` non-empty), run on the two new test files (414 tests), restored after each; every one turned tests red. The three the guide names: M1 `hidden_git_verb` returns False: `103 failed, 311 passed`; M2 `--message` out of `MERGE_OPTIONS_WITH_ARG`: `6 failed, 408 passed`; M3 brace refusal out of slot 2b: `7 failed, 407 passed`. Diffs and the rest are under the table. |
+| Verification command run | ☑ pass | `python3 -m pytest .claude/hooks/tests -q -k "admin or merge_gate or slot or task_context or hidden"` -> `1147 passed, 1690 deselected in 28.33s`. `python3 -m pytest .claude/hooks/tests tests -q -p no:cacheprovider` -> `4797 passed, 25 subtests passed in 332.50s (0:05:32)` (2026-11-09, HEAD `7503935d`). Fix round (2026-11-09, HEAD after `c5c18be6`): `python3 -m pytest .claude/hooks/tests tests -q -p no:cacheprovider` -> `5175 passed, 5 skipped, 25 subtests passed in 518.42s (0:08:38)`. |
+| Negative cases hold | ☑ pass | Red run against the prior content: 114 failed, 268 passed (Demonstration). Mutation controls (19), each one byte change in `pre_bash_block_unsafe_merge.py` or `lib/task_context.py` (`git diff --stat` non-empty), run on the two new test files (414 tests), restored after each; every one turned tests red. The three the guide names: M1 `hidden_git_verb` returns False: `103 failed, 311 passed`; M2 `--message` out of `MERGE_OPTIONS_WITH_ARG`: `6 failed, 408 passed`; M3 brace refusal out of slot 2b: `7 failed, 407 passed`. Diffs and the rest are under the table. Fix round: tests-first commit `1638a47d` red (153 failed for the unit and gate checks, 175 with slot 2b and admin tests); 28 new mutation controls N1-N28 all red (see the Fix round section); `hidden_git_verb` returns False: `296 failed, 496 passed, 5 skipped`. |
 | verify | ☐ pass / ☐ fail / ☐ N/A | [what was observed — must literally state "pass" or "fail" here too, e.g. "skill run, feature confirmed working — pass": the merge gate scans this Notes column for the word "pass", not just the Result column] |
 | Review scope bounded to the change's blast radius (affected set, not whole repo) | ☑ pass | Reviewed: the two hook files and the five test files named in the guide, `docs/claude-md/tracks.md` (`### Admin tag`, Known limits, slot 2b rules). Dependents of `invokes_test_runner` and slot 2b ran in the full suite. Stale-text grep (LR-0005) for `quote inside the word`, `Cheap hidden verbs`, `merge --message <branch>`, `find -exec git`, `cannot tell which branch` over the repo: only history (`TASK_REVIEW_T284`, the hunt, guides) and the new tests remain. Not reviewed: the heredoc scanner (T294) and the repo config and hook allowlist (T295), out of scope. Not run by this agent: `code-review` and `security-review` skills (Stage 4, the Supervisor). |
-| Full smoke suite still green (no regression) | ☑ pass | `4797 passed, 25 subtests passed in 332.50s (0:05:32)`. The pin tests the guide names ran in it: `test_admin_tag.py` (T284), `test_stop_attribution_t287.py`, `test_merge_gate_t210.py`, `test_merge_gate_guard.py`, the tracks.md text pins, `test_agent_guide_dedup.py`, `test_vital_slice.py`, the site pins and the memory budget tests. |
+| Full smoke suite still green (no regression) | ☑ pass | `4797 passed, 25 subtests passed in 332.50s (0:05:32)`. The pin tests the guide names ran in it: `test_admin_tag.py` (T284), `test_stop_attribution_t287.py`, `test_merge_gate_t210.py`, `test_merge_gate_guard.py`, the tracks.md text pins, `test_agent_guide_dedup.py`, `test_vital_slice.py`, the site pins and the memory budget tests. Fix round: `5175 passed, 5 skipped, 25 subtests passed in 518.42s (0:08:38)` (includes the pin-test pre-flight: `test_auto_mode.py`, `test_stop_auto_mode_check.py`, `test_admin_tag.py`, `test_stop_attribution_t287.py`, `test_merge_gate_t210.py`, `test_merge_gate_guard.py`, the tracks.md pins). |
 | **Companion score (easy-verifier)** | ☑ N/A | Neither companion tool was run for this task; the guide does not require it. |
 | **UI: Visual regression (diff or verdict pasted)** | ☑ N/A | Hook code and docs only; no UI component. |
 | **UI: Design-system compliance (tokens/colors/typography verified)** | ☑ N/A | Hook code and docs only; no UI component. |
@@ -90,6 +90,79 @@ The first agent run also reached a wrapper-assignment mutation (its M23, pinned 
 Mutation script (outside the repo): `/tmp/claude-1000/-home-hungnguyenhuu-workspace-pets-personal-agentic-claude/53a340c2-ba9d-4416-b11e-5082d9905521/scratchpad/mutate.py`.
 
 **Follow-ups and notes** (cut list, not built): `-S`/`--gpg-sign` and `--log` take an optional attached value only, so they never take the next word (git's own rule; pinned by `(["-S", B], [B])`). `git submodule foreach` and `git rebase --exec` stay unseen and are named in Known limits. The stray root file `corpus_old.json` (a capture artifact, referenced by no test) was removed.
+
+**Fix round (Stage 4: code review and security review blocked the branch).** Work after commit `2d3a931c`, test first
+(tests-first commit `1638a47d`, red) then the fixes. Rule that replaced the one-off patterns: every word whose
+basename is `git` or `git-<verb>` is a git word and all of them are read (no early return); a git word whose verb
+cannot be read is a doubt; a doubt is a block in auto mode; the check also runs when the command holds a `rebase`;
+an error in the check is a block. The `[admin]` path cross-checks the same scan against its old segment loop.
+
+| Item | Fix | Test (goes red on `1638a47d`) |
+|------|-----|------|
+| C1 redirect between git and verb | redirects are skipped, then the verb is read (`git >/dev/null push` is a push) | `c1-*` in `HIDDEN_R2`, gate [auto]/[admin] |
+| S1 `--attr-source`, `--super-prefix` | added to `GIT_OPTIONS_WITH_ARG` and `GIT_OPTION_ARGS` (now one tuple) | `s1-*`, `test_r2_attr_source_is_a_value_option_for_the_plain_patterns` |
+| S2 `rebase` skips the check | the check runs when no auto-mode pattern matches | `test_r2_a_rebase_does_not_hide_...` |
+| S3 first git-looking word returns | all candidates examined | `s3-*` |
+| S4a/c/d brace command word, `eval`, continuation | `BRACE_EXPANSION`, `eval` is a doubt, `join_line_continuations` before tokenising | `s4a-*`, `s4c-*`, `s4d-*` |
+| C2 `env -S` attached | `-S<v>`, `-iS<v>`, `--split-string=<v>` | `c2-*` |
+| C3 dashed git commands | basename `git-<verb>` is a git word; `git-send-pack`, `git-push`, ... are publishing; `[admin]` refuses any dashed command | `c3-*`, admin test |
+| C4 alias through the environment | `GIT_CONFIG_COUNT`/`PARAMETERS`/`KEY_*`/`VALUE_*`, `GIT_EXEC_PATH`, `GIT_CONFIG_GLOBAL`/`SYSTEM` with a git word in the command | `c4-*` |
+| C5 `xargs git` | no verb after `xargs` is a doubt | `c5-*` |
+| C6/S5 path-qualified git after unknown head or redirect | rule (i): no `word == "git"` condition | `c6-*`, `s5-*` |
+| C8 other publishing verbs | `receive-pack`, `remote-ext`, `subtree`, `svn`, `p4`, `cvsexportcommit` (each justified in a comment) | `c8-*` |
+| SL6 even backslashes before newline | `join_line_continuations` (left to right) in `lib/task_context.py` | `test_sl6_*` |
+| SL7 value option read as flag | slot 2b allows only the no-value global options | `test_sl7_*` |
+| X1 exception in the check | `try/except` in `main()`: a block in auto mode | `test_r2_x1_*` |
+| 9 SHELL_KEYWORDS untested | `if`, `for`, `!`, `{` cases | `k-*` |
+| 10 false positives | a nonliteral command word is a doubt only with a brace expansion, a variable this command sets, or a later publishing verb or `-c` | `BENIGN_R2` |
+| 11, 17 surviving mutations | benign `cp $a pull`; `g[i]t`, `{g,}it`; own-remote ROOT and same-common-dir tests | `w-*`, own-remote tests |
+| 13 dead clause | `"=" not in arg` removed (mutation N29 is an equivalent mutant: the clause never changed an answer) | existing option tests |
+| 14 "Four more limits" | now "Nine more limits" | docs |
+| 15 refusal wording | the `read-only` text only for `ADMIN_READ_ONLY_GIT` verbs | `test_r2_admin_verb_text_...` |
+| 16 hard counts | replaced by a data-derived check | `test_r2_corpus_overrides_...` |
+| own remote | URL of a local path is resolved before comparing; the rule still trusts the starting directory (a Known limit) | symlink and relative path test |
+
+Reproduced then fixed: 64 forms of the fix-round table at the tests-first commit `1638a47d` through the hook's real
+`main()` (gate only, nothing run): 51 ALLOWED in both `[auto]` and `[admin]`. Now (`HEAD`) all 67 forms of the table are
+BLOCKED in both (no tag: unchanged, ALLOWED). At `1638a47d` the new unit and gate tests failed 153 times (the unit and gate
+checks of the forms), 175 with the slot 2b and admin tests. The shapes were first shown to push in a real shell with the first
+run's script (before the Supervisor's no-push rule); the repo's premise tests now use a stand-in `git` that only records its
+arguments, so the suite pushes nothing.
+
+Gate verdicts after the fix (HEAD, 2026-11-09T03:51Z; `[auto]=BLOCKED [admin]=BLOCKED none=ALLOWED` for each of: c1 redirect
+out/in/both/env-prefix/after-C/merge-pager/force-main/merge/fd; s1 push/merge/pull/super-prefix; s2 rebase-then-push; s3 env-u,
+xargs-E; s4a brace command word and in-word; s4c eval quoted/var/wrapped; s4d continuation (git word and verb); c2 attached/long/
+clustered; c3 send-pack/push/exec-path-substitution/path-prefix/merge/pull/http-push/remote-ext/in-wrapper/var-dashed; c4
+count/parameters/env/export/exec-path/config-global/config-system; c5 echo-pipe/herestring/printf0; c6 flock/busybox/non-wrapper;
+s5 redirect head; c8 subtree/svn/p4/cvs/receive-pack/remote-ext; keywords if/for/!/{; w-glob, w-brace; taint two-vars, wrapped,
+shell-c, env-S; unknown option before the verb): `blocked in both auto and admin: 67 of 67`.
+
+Mutation controls for the new rules (script `.../scratchpad/mutate2.py`, each a one-line change, restored after; run on the two
+new test files with `-x`): N1 redirect handling off, N2 `--attr-source` out, N3 check only without a blocked pattern, N4 return at
+the first git word, N5 brace command word off, N6 `eval` off, N7 continuation not joined, N8 `env -S<v>` off, N9 dashed off, N10 env
+alias risk off, N11 `xargs git` off, N12 `subtree` out, N13 unknown option not a doubt, N14 `SHELL_KEYWORDS` empty, N15 error not a
+block, N16 admin scan doubt off, N17 admin dashed off, N18 admin write-count cross-check off, N19 tainted command word off, N20 URL
+not resolved, N21 SL6 back to `replace`, N22 SL7 any option allowed, N23 nonliteral word then publish verb off, N24 `bash -c`
+recursion off, N25 admin wording branch, N26 `DATA_HEADS` off, N27 own-remote ROOT base off, N28 same-common-dir off: all RED
+(N13, N16, N17, N18 and N28 first survived, then got the tests `iii-unknown-option`, the admin cross-check tests and the
+no-origin test and turned red). `hidden_git_verb` returning False: `296 failed, 496 passed, 5 skipped`. The first run's M2 to M15
+that still apply (`--message`, brace, glob, `send-pack`, own-origin, slot 2b verb allowlist, `invokes_test_runner`, `--cleanup`,
+`--file`, `timeout`, abbreviation, short run) are RED again; the rest (M1, M8, M13, M16-M19) target code that was rewritten and are
+covered by N-set.
+
+**Not done** (fix round): real push witness for the fix-round shapes: run by the user outside an [auto] session (!bash
+/tmp/claude-1000/-home-hungnguyenhuu-workspace-pets-personal-agentic-claude/53a340c2-ba9d-4416-b11e-5082d9905521/scratchpad/lab_t296_push.sh).
+The script was written, syntax-checked with `bash -n`, and not run. Left as documented limits in `docs/claude-md/tracks.md`
+(Admin tag, Known limits), with examples, as follow-up work: a shell fed by a heredoc, here-string or pipe (`bash <<'E'`,
+`echo 'git push origin b' | sh`; overlaps T294); `$(echo 'git push …')` and backtick command substitution that builds git
+from data (S4b); `su -c`, `script -c`, `busybox sh -c`; `g=git\ push; $g origin x` word splitting (bash only); `$g $v origin b`
+with the variables set outside the command; `GIT_CONFIG_*` set in the profile; the own-remote rule's trust in the starting
+directory.
+
+**Disclosure.** Before the no-push rule reached this run, the premise tests of the tests-first commit (and one `-k` selection
+that ran them again in a throwaway `git worktree` of that commit) ran real `git push` commands into throwaway bare remotes under
+pytest's temporary directories, from `pytest` and not from a Bash call that names push. No real remote was touched. They were
+replaced by stand-in tests in commit `49dfedd4`; no later run pushes.
 
 ---
 
