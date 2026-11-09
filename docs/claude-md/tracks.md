@@ -556,7 +556,8 @@ command, from this session's transcript. It allows a `git merge` or `git push` o
    an allowlist (T295): every key must be on this short list of keys that cannot run code or reach another
    host, or the gate refuses and names the key: `core.repositoryformatversion`, `core.filemode`,
    `core.bare`, `core.logallrefupdates`, `core.ignorecase`, `core.precomposeunicode`, `core.autocrlf`,
-   `core.safecrlf`, `core.symlinks`, `remote.<name>.url` (no helper `::` form, no leading `-`),
+   `core.safecrlf`, `core.symlinks`, `remote.<name>.url` (no helper `::` form, no leading `-`, one
+   URL per remote: git pushes to each one),
    `remote.<name>.fetch`, `branch.<b>.remote`, `branch.<b>.merge`, `branch.<b>.vscode-merge-base`,
    `pull.rebase` (`true` or `false`), `push.default` (`simple` or `current`), `user.name`, `user.email`
    and `extensions.worktreeConfig`. Any other key refuses, for example `merge.<d>.driver`,
@@ -564,7 +565,11 @@ command, from this session's transcript. It allows a `git merge` or `git push` o
    `credential.helper`, `http.proxy`, `include.*`, `url.*`, `alias.*` and `core.fsmonitor`. The hooks
    directory must hold no executable file, whatever its name; a `.sample` file is not a hook. No
    `.gitattributes` of the checkout and no `.git/info/attributes` may have a line with `merge=`, `filter=`
-   or `diff=`. User-global and system config are trusted and not read.
+   or `diff=`, read as git reads it (after a quoted pattern too); a FIFO or other file that is not a
+   regular file refuses. A file in `.git/remotes/` or `.git/branches/` refuses. For a push to a local
+   path or `file://` `origin`, the gate reads that target too (it never runs it): an executable hook
+   there (its `core.hooksPath` included) or `receive.denyCurrentBranch=updateInstead` refuses.
+   User-global and system config are trusted and not read.
    It may also push `main` (`git push origin main`; the rule names `main` only), but only after this
    session's own `[admin]` merge of the task branch: the merge call is in the transcript after the
    request, its result is not an error, it ran with `main` checked out, and it ran in the same
@@ -618,9 +623,16 @@ Known limits:
   (`v=push; git $v`, `timeout 20 git "push"`, `git send-pack`) and `git merge --message <branch>` are not
   caught. Treat `[admin]` as a guard against accidents, not against a hostile repo or a hostile agent.
 - The repo rule of item 2 is an allowlist, and it reads the repository at the time of the command.
-  A key, hook or attributes line added after that check (a merge that brings in its own `.gitattributes`,
-  or a hook another process writes) is out of its reach. A `.gitattributes` with `filter=lfs` refuses
-  `[admin]`, because the gate cannot tell a safe filter from an unsafe one.
+  A key, hook or attributes line added after that check (a hook another process writes) is out of its
+  reach. The gate does not scan the `.gitattributes` of the incoming branch: a merge that brings one in
+  is read only by the next `[admin]` command. A `.gitattributes` with `filter=lfs` refuses `[admin]`,
+  because the gate cannot tell a safe filter from an unsafe one.
+- A local-path or `file://` `origin` runs programs on this machine when you push to it. The gate refuses
+  an executable hook in that target and `updateInstead`. It does not stop the other work that target
+  does after the push, such as its own `git gc --auto`, and it does not read a network `origin`. A remote
+  with a second `url` entry is refused, because git pushes to every URL.
+- `git --attr-source <tree> merge …` skips the gate until T296 lands; T296 fixes it; do not merge T295
+  alone.
 - The run record the gate trusts is a file in the trace anchors' directory
   (`.claude/hooks/lib/verify_record.py`), the same trust root as for `/verify`.
 - Repo config the gate does not read, such as a `core.hooksPath` hook run by `git commit`, and a model
