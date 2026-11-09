@@ -425,12 +425,24 @@ GIT_BRANCH_LISTING = frozenset({"--show-current", "--list", "-l", "-a", "--all",
                                 "-v", "-vv", "--verbose"})
 
 
+# T296 (SL7): the git global options that take NO value. Any other `-` word before the verb is a
+# doubt: an option that takes a value (`--namespace log`) would hide the real verb behind it, and
+# `-c` can define an alias, so none of them is read.
+GIT_NO_VALUE_OPTIONS = frozenset({"--no-pager", "-P", "-p", "--paginate", "--no-optional-locks",
+                                  "--no-replace-objects", "--literal-pathspecs", "--glob-pathspecs",
+                                  "--noglob-pathspecs", "--icase-pathspecs", "--no-lazy-fetch",
+                                  "--no-advice"})
+
+
 def _git_verb_allowed(args):
-    """T296 (P3-2): True when the git verb of `args` (past `-c <k=v>` and flags) cannot move the
-    worktree's branch: a verb of `GIT_VERBS`, `branch` with listing options only, or no verb."""
+    """T296 (P3-2, SL7): True when the git verb of `args` cannot move the worktree's branch: a verb of
+    `GIT_VERBS`, `branch` with listing options only, or no verb. Only the no-value global options of
+    `GIT_NO_VALUE_OPTIONS` may stand before the verb; any other `-` word is refused."""
     index = 0
     while index < len(args) and args[index].startswith("-"):
-        index += 2 if args[index] == "-c" else 1
+        if args[index] not in GIT_NO_VALUE_OPTIONS:
+            return False
+        index += 1
     if index >= len(args):
         return True
     verb, rest = args[index], args[index + 1:]
@@ -468,6 +480,30 @@ def _allowed_command(words):
     if head not in COUNT_EXEMPT and any(a == "-" or re.fullmatch(r"[-+]\d+", a) for a in args):
         return False
     return True
+
+
+def join_line_continuations(command):
+    """T296 (SL6): `command` with each line continuation removed, the way the shell reads it: left to
+    right, a backslash escapes the next character, so `\\\\` + newline is an escaped backslash and a
+    line break, and only a lone backslash + newline joins two lines. A single-quoted span has no
+    escapes. A trailing backslash is kept."""
+    out, index, quote = [], 0, None
+    while index < len(command):
+        char = command[index]
+        if char == "\\" and quote != "'":
+            if command[index + 1:index + 2] == "\n":
+                index += 2
+                continue
+            out.append(command[index:index + 2])
+            index += 2
+            continue
+        if quote is None and char in "'\"":
+            quote = char
+        elif quote == char:
+            quote = None
+        out.append(char)
+        index += 1
+    return "".join(out)
 
 
 def _unquoted_glob(command):
@@ -527,7 +563,7 @@ def _leading_cd_dir(command, cwd):
     """
     if not isinstance(cwd, str) or not os.path.isabs(cwd):
         cwd = None
-    command = command.replace("\\\n", "")  # T296: the shell deletes a backslash + newline, it joins
+    command = join_line_continuations(command)  # T296: the shell deletes a lone backslash + newline
     if not command.startswith("cd ") or "\n" in command or "\r" in command:
         return None
     if "<<" in command or "$" in command or "`" in command:
