@@ -25,7 +25,7 @@
      run; read them there. The enforced gate is the whole-file character budget above. -->
 
 ### Decisions
-- [T297–T299: effort per Complexity, passed at spawn](decisions.md) — `## CLI Effort Table`; raise one step on move up or `fail`; T300 unmeasured
+- [T297–T299: effort per Complexity, passed at spawn](decisions.md) — `## CLI Effort Table`; raise one step on move up or `fail`; T300: opus·low 4.1x cost, lost a pass (DDR-0010)
 - [T301: security-finding rules in `security-reviewer.md`](decisions.md) — `confirmed`/`needs_validation`/`rejected`; `code-review/SKILL.md` is at the 8 KB cap
 - [T232–T236, T239, T240: plugin, init, Stage 0–5, repo `easy-kit`](decisions.md) — never reuse old repo name
 - [Anonymous GitHub check: block SSH](learnings.md) — T236
