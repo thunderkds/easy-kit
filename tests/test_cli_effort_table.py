@@ -124,8 +124,8 @@ def _stage1_problems(doc):
         out.append("does not name ## CLI Effort Table")
     if not re.search(r"ask for the effort at each level", item2):
         out.append("does not ask for the effort per level")
-    if not re.search(r"empty (effort )?cell[^.]*no effort", item2):
-        out.append("does not say an empty cell passes no effort")
+    if not re.search(r"empty (effort )?cell[^.]*no effort[^.]*not a STOP", item2):
+        out.append("does not say an empty cell passes no effort and is not a STOP")
     return out
 
 
@@ -138,6 +138,20 @@ def test_ac4_control_heading_removed_is_reported():
     mutated = doc.replace("`## CLI Effort Table`", "the effort table")
     assert mutated != doc
     assert "does not name ## CLI Effort Table" in _stage1_problems(mutated)
+
+
+def test_ac4_control_effort_per_level_removed_is_reported():
+    doc = _read(*PIPELINE)
+    mutated = doc.replace("Also ask for\n   the effort at each level", "Also ask for\n   the effort")
+    assert mutated != doc
+    assert _stage1_problems(mutated) == ["does not ask for the effort per level"]
+
+
+def test_ac4_control_no_effort_not_a_stop_removed_is_reported():
+    doc = _read(*PIPELINE)
+    mutated = doc.replace("An empty effort cell means no effort is\n   passed; it is not a STOP.", "An empty effort cell is fine.")
+    assert mutated != doc
+    assert _stage1_problems(mutated) == ["does not say an empty cell passes no effort and is not a STOP"]
 
 
 def test_ac5_model_table_keeps_header_and_cells():
