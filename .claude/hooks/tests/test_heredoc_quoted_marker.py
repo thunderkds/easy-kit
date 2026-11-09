@@ -520,6 +520,9 @@ BYPASS = {
     # P0-3: `$[…]` and a subscript are arithmetic, so `<<` is a shift.
     "dollar-bracket-arithmetic": ("echo $[1<<n]\n{push}\nn", ("bash", "zsh")),
     "array-subscript-arithmetic": ("a[1<<n]=3\n{push}\nn", ("bash",)),
+    # the same with a space after the tag, so that the tag check alone does not catch them
+    "dollar-bracket-arithmetic-spaced": ("echo $[ 1<<n ]\n{push}\nn", ("bash", "zsh")),
+    "array-subscript-arithmetic-spaced": ("a[ 1<<n ]=3\n{push}\nn", ("bash",)),
     # P0-4: an array literal is not a subshell: its `<<EOF` line is a syntax error in bash.
     "array-literal": ("x=(cat <<EOF\n{push}\nEOF\n)", ("bash",)),
     "array-literal-append": ("x+=(cat <<EOF\n{push}\nEOF\n)", ("bash",)),

@@ -215,15 +215,13 @@ def strip_heredoc_bodies(command):
                 stack.append("`")
             i += 1
             continue
-        if char == "$" and after in ("(", "{", "["):
-            stack.append({"(": "$)", "{": "}", "[": "]"}[after])  # a quote inside starts afresh
+        if char == "$" and after in ("(", "{"):
+            stack.append("$)" if after == "(" else "}")  # a quote inside starts afresh
             i += 2
             continue
         if top == '"':
             i += 1  # inside double quotes only the cases above are special
             continue
-        if char == "'" and top == "}":
-            break  # zsh reads a `'` in `"${x:-'}"` as a plain character: the scan cannot place it
         if char == "'":
             close = command.find("'", i + 1)
             if close == -1:
@@ -252,7 +250,7 @@ def strip_heredoc_bodies(command):
             i += 1
             continue
         if char == "[":
-            stack.append("]")  # a subscript or `[ … ]`: arithmetic, so a `<<` is a shift
+            stack.append("]")  # `$[…]`, a subscript or `[ … ]`: arithmetic, so a `<<` is a shift
             i += 1
             continue
         if char in ")}]":
