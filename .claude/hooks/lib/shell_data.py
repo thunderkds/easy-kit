@@ -134,8 +134,8 @@ _ATOMS = r"'[^']*'|\"[^\"$`\\]*\""
 _ATOM = re.compile(_ATOMS)
 
 # What the text before a header must not hold, once its balanced simple atoms are removed: a quote, a
-# backslash, a backtick, `$`, any bracket, `#`, `&>`, and any whitespace but space, tab and newline.
-_UNSAFE_BEFORE_HEADER = re.compile(r"['\"\\`$(){}\[\]#]|&>|[^\S \t\n]|[\x00-\x08\x0e-\x1f\x7f]")
+# backslash, a backtick, `$`, any bracket, `#`, a glob character `*` or `?`, `&>`, and any whitespace but space, tab and newline.
+_UNSAFE_BEFORE_HEADER = re.compile(r"['\"\\`$(){}\[\]#*?]|&>|[^\S \t\n]|[\x00-\x08\x0e-\x1f\x7f]")
 
 # What the rest of the header line may hold: a whitelist of plain characters and balanced simple atoms.
 _HEADER_LINE = re.compile(r"(?:[A-Za-z0-9 \t_./=:,@+%~;|&>-]|" + _ATOMS + r")*")
@@ -144,8 +144,25 @@ _HEADER_LINE = re.compile(r"(?:[A-Za-z0-9 \t_./=:,@+%~;|&>-]|" + _ATOMS + r")*")
 # form `git commit -m "$(cat <<'EOF' ... EOF` newline `)"` (and `gh pr create --body "$(cat <<'EOF'`).
 _NESTED_OPENER = re.compile(r'(?:^|(?<=[ \t=]))"\$\(cat[ \t]+\Z')
 
+# The header line ends in one of these: the command goes on in the next line (`cat <<EOF |&` newline `bash`).
+_CONTINUING_OPERATORS = ("|", "|&", "&&", "||")
+
+# The text before `"$(cat <<'TAG'` must end in the VALUE of a known option (`-m `, `-F`, `--body `,
+# `--message=`): then the substitution is an argument, never a word the shell runs. Any other word
+# position (`"$(cat …)" push`, `git "$(cat …)"`, `x="$(cat …)"`, `echo "$(cat …)" | sh`) is not data.
+_OPTION_VALUE = re.compile(
+    r"[ \t](?:-[A-Za-z]*[mFbt]|--(?:message|msg|body|title|notes|description|file|body-file|notes-file))(?:=|[ \t]+)\Z"
+)
+
 # A command word that reads its stdin as commands: the body of a heredoc that feeds it is not data.
-_SHELL_WORDS = frozenset(("bash", "sh", "zsh", "dash", "ksh", "csh", "tcsh", "fish", "source", ".", "eval", "ssh"))
+_SHELL_WORDS = frozenset((
+    "bash", "sh", "zsh", "dash", "ksh", "csh", "tcsh", "fish", "rbash", "ash", "busybox", "mksh", "pdksh",
+    "source", ".", "eval", "ssh",
+    # an interpreter or a runner that reads a script, or the commands to run, from its stdin (T294 round 4).
+    # `python` and `python3` are deliberately not here: `python3 - <<'EOF'` is a pinned, documented limit.
+    "xargs", "perl", "node", "nodejs", "ruby", "php", "lua", "awk", "gawk", "ed", "ex", "tclsh", "make",
+    "expect", "parallel", "at",
+))
 
 
 def _terminator_pattern(tag, allow_leading_tabs):
@@ -165,9 +182,18 @@ def _is_plain(text):
 
 
 def _feeds_a_shell(line):
-    """True when a word of `line` is a shell (or `source`, `eval`, `ssh`): its stdin is commands."""
+    """True when a word of `line` reads its stdin as commands or a script: a shell, an interpreter,
+    `source`, `eval`, `ssh`, `xargs`, a `/proc/…` path (`/proc/self/exe` is the shell itself) or `env -S…`."""
     words = re.split(r"[\s;|&<>=]+", line.replace('"', "").replace("'", ""))
-    return any(word.rsplit("/", 1)[-1] in _SHELL_WORDS for word in words)
+    return any(word.rsplit("/", 1)[-1] in _SHELL_WORDS or word.startswith(("/proc/", "-S")) for word in words)
+
+
+def _nested_rest_is_plain(rest):
+    """The text after `)"` on its line: empty, or a space, a tab or `;` and then tokens that do not
+    start with `|`, `$`, a backtick or `<`, and that hold no shell word."""
+    if rest and rest[0] not in " \t;":
+        return False
+    return not any(token[0] in "|$`<" for token in rest.split()) and not _feeds_a_shell(rest)
 
 
 def _read_heredoc(command, start, at):
@@ -189,6 +215,8 @@ def _read_heredoc(command, start, at):
         if not (quoted and not dash and command.startswith("\n", header.end())):
             return None
         prefix = prefix[:opener.start()]
+        if not _OPTION_VALUE.search(prefix):
+            return None
     if not _is_plain(prefix) or _feeds_a_shell(command[command.rfind("\n", 0, at) + 1:at]):
         return None
     if opener:
@@ -198,7 +226,7 @@ def _read_heredoc(command, start, at):
         tail = command[header.end():line.end()]
         if command[line.end():line.end() + 1] != "\n" or "&>" in tail or _feeds_a_shell(tail):
             return None
-        if tail.rstrip(" \t").endswith("|"):  # `cat <<EOF |` newline `bash`: the next line eats the body
+        if tail.rstrip(" \t").endswith(_CONTINUING_OPERATORS):  # `cat <<EOF |&` newline `bash`: the next line eats the body
             return None
         body_start = line.end() + 1
     terminator = _terminator_pattern(tag, dash).search(command, body_start)
@@ -210,6 +238,9 @@ def _read_heredoc(command, start, at):
     if opener:
         closer = terminator.end() + len('\n)"')
         if command[terminator.end():closer] != '\n)"' or re.search(rf"^[ \t]*{re.escape(tag)}", body, re.MULTILINE):
+            return None
+        line_end = command.find("\n", closer)
+        if not _nested_rest_is_plain(command[closer:len(command) if line_end == -1 else line_end]):
             return None
         return body_start, terminator.end(), closer
     return body_start, terminator.end(), terminator.end()
@@ -314,6 +345,9 @@ SPAN_EXECUTOR_PATTERN = re.compile(
     # character before them would miss exactly the spelling that appears.
     r"|(?:system|popen|spawn\w*|exec\w*)\s*\("
     r"|subprocess\b"
+    # A command substitution inside a double-quoted span RUNS even behind `echo` (T294 round 4):
+    # `echo "$(git push)"` is a push. A single-quoted `$(` is only text; keeping it over-blocks.
+    r"|\$\(|`"
 )
 
 # Where a shell starts a new command, so a data command seen earlier stops
