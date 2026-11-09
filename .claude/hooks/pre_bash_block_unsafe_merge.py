@@ -27,6 +27,7 @@ T296: in that mode a git word or git verb that is not a plain literal word is a 
 a branch push goes only to the repository's own remote; `invokes_test_runner` reads backslashes
 as the shell does.
 """
+import fnmatch
 import json
 import os
 import re
@@ -1395,8 +1396,17 @@ GIT_ATTACHED_GLOBALS = ("--exec-path=", "--list-cmds=")
 # command it can define an alias (`GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=alias.x ... git x`), a doubt.
 GIT_ENV_RISK = re.compile(r"^(?:GIT_(?:CONFIG_COUNT|CONFIG_PARAMETERS|CONFIG_KEY_\d+|CONFIG_VALUE_\d+"
                           r"|EXEC_PATH|CONFIG_GLOBAL|CONFIG_SYSTEM))=")
+# `GIT_CONFIG_COUNT` or `GIT_CONFIG_PARAMETERS` with a value can define an alias, so it is a doubt before
+# any verb; the other `GIT_ENV_RISK` names are a doubt only before a verb that is not read-only.
+GIT_ENV_ALIAS = re.compile(r"^GIT_CONFIG_(?:COUNT|PARAMETERS)=.")
+# One shell operator out of a run of punctuation (`>|` is a redirect, not a pipe; `&>>`, `<>`, `>&`).
+OPERATOR_PIECE = re.compile(r"&>>|<<<|<<-|&>|>>\||>\||<>|>>|>&|<&|<<|\|&|\|\||&&|;;|[<>|&;()]")
+ANSI_MARK = "\x01"  # stands for the `$` of an ANSI-C `$'…'` or locale `$"…"` quote while shlex runs
+FIND_EXEC = frozenset({"-exec", "-execdir", "-ok", "-okdir"})  # the word after these is a command
 ASSIGNMENT_NAME = re.compile(r"^([A-Za-z_][A-Za-z0-9_]*)\+?=")
 VARIABLE_REFERENCE = re.compile(r"\$\{?([A-Za-z_][A-Za-z0-9_]*)")
+VARIABLE_PART = re.compile(r"\$\{[^}]*\}|\$[A-Za-z_][A-Za-z0-9_]*")
+ANSI_ESCAPE = re.compile(r"\\(?:x[0-9A-Fa-f]|[0-7]{1,3}|[uU][0-9A-Fa-f]|c.)")  # a hex, octal or code-point escape
 BRACE_EXPANSION = re.compile(r"(?<!\$)\{[^{}]*(?:,|\.\.)[^{}]*\}")
 NONLITERAL = re.compile(r"[$`{}*?\[]")
 PLAIN_VERB = re.compile(r"[A-Za-z][A-Za-z0-9-]*")
@@ -1586,7 +1596,7 @@ def _read_git_word(words, index, strict):
     base = _basename(word)
     if base.startswith("git-"):
         verb = base[4:]
-        return verb, bool(NONLITERAL.search(base)) or not verb
+        return verb, bool(NONLITERAL.search(base)) or not verb or bool(re.search(r"[^A-Za-z0-9._-]", verb))
     if NONLITERAL.search(base):
         return None, True
     j = index + 1
@@ -1618,6 +1628,7 @@ class _Scan:
         self.verbs = []
         self.git_words = 0
         self.env_risk = False
+        self.env_alias = False
 
 
 def _assigned_names(simple_commands):
@@ -1635,21 +1646,28 @@ def _assigned_names(simple_commands):
     return names
 
 
-def _scan_simple(words, depth, tainted, scan):
+def _scan_simple(words, depth, tainted, scan, ansi=False):
     """Read one simple command (`words`: shlex-unquoted, redirects removed) into `scan`. Every word is
-    examined: nothing returns at the first word that looks like git."""
+    examined: nothing returns at the first word that looks like git. `ansi` is true when a word was an
+    ANSI-C `$'…'` or locale `$"…"` quote, which shlex cannot unquote the way the shell does."""
     if depth > HIDDEN_DEPTH_LIMIT:
         scan.doubt = True
         return
     if any(GIT_ENV_RISK.match(w) for w in words):
         scan.env_risk = True
+    if any(GIT_ENV_ALIAS.match(w) for w in words):
+        scan.env_alias = True
     start = 0
     while start < len(words) and (ASSIGNMENT_NAME.match(words[start]) or words[start] in SHELL_KEYWORDS):
         start += 1
     words = words[start:]
+    if words and words[0] == "function" and "{" in words:
+        words = words[words.index("{") + 1:]  # `function f { git push; }`: the body is a command
     if not words or _basename(words[0]) in DATA_HEADS:
         return
+    git_before, verbs_before = scan.git_words, len(scan.verbs)
     wrapped = _basename(words[0]) in SHELL_WRAPPERS
+    xargs_at = next((i for i, w in enumerate(words) if _basename(w) == "xargs"), len(words))
     for k, word in enumerate(words):
         if wrapped and k:
             split = None
@@ -1664,12 +1682,14 @@ def _scan_simple(words, depth, tainted, scan):
         if k and (word.startswith("-") or ASSIGNMENT_NAME.match(word)):
             continue  # a wrapper's option, or a `VAR=value` it sets: not a command word
         base = _basename(word)
-        command_position = wrapped or k == 0
+        command_position = wrapped or k == 0 or words[k - 1] in FIND_EXEC
         if _is_git_word(word):
+            if base.startswith("git-") and not command_position:
+                continue  # `man git-push`, `ls /usr/lib/git-core/git-push`: a name, not a command
             scan.git_words += 1
             verb, doubt = _read_git_word(words, k, command_position)
-            if verb is None and _basename(words[0]) == "xargs" and k > 0:
-                doubt = True  # `xargs git`: the verb may come on stdin
+            if verb is None and k > xargs_at:
+                doubt = True  # `env xargs git`, `busybox xargs git`: the verb may come on stdin
             scan.doubt = scan.doubt or doubt
             if verb is not None:
                 scan.verbs.append(verb)
@@ -1681,13 +1701,28 @@ def _scan_simple(words, depth, tainted, scan):
         elif base in SHELLS:
             for j in range(k + 1, len(words) - 1):
                 if re.fullmatch(r"-[A-Za-z]*c[A-Za-z]*", words[j]):
+                    if ansi:
+                        scan.doubt = True  # `sh -c $'git \\x70ush x'`: the string is not what shlex sees
                     _merge_scan(scan, words[j + 1], depth + 1, tainted)
                     break
         elif NONLITERAL.search(base) and base not in TEST_BRACKETS:
             names = set(VARIABLE_REFERENCE.findall(base))
+            # A variable the command sets, a head that says git once its variables are cut out (`$GIT`,
+            # `${G:-git}`, `g${E}it`) and a glob that matches `git` (`gi?`) may be git; a variable it does
+            # not set (`$PY`, `$DOCKER`) is data (`$DOCKER push registry/img`).
             if (BRACE_EXPANSION.search(base) or names & tainted
-                    or any(_publishes(w) or w == "-c" for w in words[k + 1:])):
-                scan.doubt = True
+                    or "git" in base.lower() or "git" in VARIABLE_PART.sub("", base).lower()
+                    or fnmatch.fnmatchcase("git", base)
+                    or any(w == "-c" for w in words[k + 1:])
+                    or ("$" not in base and any(_publishes(w) for w in words[k + 1:]))):
+                scan.doubt = True  # (a glob or a backtick word, not a variable, plus a publish verb)
+    if ansi and (any(_publishes(w) or BRACE_EXPANSION.search(w) or ANSI_ESCAPE.search(w) for w in words)
+                 or (scan.git_words > git_before
+                     and any(v not in SAFE_GIT_SUBCOMMANDS for v in scan.verbs[verbs_before:]))):
+        # `$'\\x67it' push x`, `$'git-push' x`: an ANSI-C or locale quote hides the git word, and shlex
+        # reads `\\x67it` as a plain word. Doubt only when a publishing verb, an expansion or a git verb
+        # that is not a plain commit or read stands in the same simple command.
+        scan.doubt = True
 
 
 def _merge_scan(scan, command, depth, tainted=frozenset()):
@@ -1696,18 +1731,64 @@ def _merge_scan(scan, command, depth, tainted=frozenset()):
     scan.verbs += inner.verbs
     scan.git_words += inner.git_words
     scan.env_risk = scan.env_risk or inner.env_risk
+    scan.env_alias = scan.env_alias or inner.env_alias
+
+
+def _mark_ansi_quotes(text):
+    """`(text, unbalanced)`: `text` with the `$` of each ANSI-C `$'…'` and locale `$"…"` quote that the
+    shell reads (not one inside another quote) replaced by `ANSI_MARK`. `unbalanced` is true when an
+    ANSI-C span holds `\\'`, where shlex and the shell disagree about where the quote ends."""
+    out, mode, unbalanced, i, n = [], None, False, 0, len(text)
+    while i < n:
+        c = text[i]
+        nxt = text[i + 1] if i + 1 < n else ""
+        if mode == "s":
+            out.append(c)
+            mode = None if c == "'" else mode
+        elif mode == "d":
+            out.append(c)
+            if c == "\\" and nxt:
+                out.append(nxt)
+                i += 1
+            elif c == '"':
+                mode = None
+        elif c == "\\" and nxt:
+            out.append(c + nxt)
+            i += 1
+        elif c == "$" and nxt == "'":
+            j = i + 2
+            while j < n and text[j] != "'":
+                j += 2 if text[j] == "\\" else 1
+            unbalanced = unbalanced or "\\'" in text[i + 2:j]
+            out.append(ANSI_MARK + text[i + 1:j + 1])
+            i = j
+        elif c == "$" and nxt == '"':
+            out.append(ANSI_MARK)
+        else:
+            out.append(c)
+            mode = "s" if c == "'" else "d" if c == '"' else None
+        i += 1
+    return "".join(out), unbalanced
 
 
 def _scan_command(command, depth=0, outer_tainted=frozenset()):
     """Read `command` into a `_Scan`. Two layers: `${IFS}`, `$(…)`, a backtick or `eval` in a segment that
     names git; then each simple command, after shlex removed quotes and backslashes (a lone backslash +
-    newline is joined first, as the shell does): redirects are skipped, every git word is read."""
+    newline is joined first, as the shell does): redirects are skipped, every git word is read. An
+    empty quoted word is a word. `>|` and the other redirect operators are not pipes."""
     scan = _Scan()
     text = join_line_continuations(strip_heredoc_bodies(command))
     for segment in re.split(r"[;&|\n]+", QUOTED_SPAN_PATTERN.sub(" ", text)):
         if re.search(r"git", segment, re.I) and OBFUSCATION.search(segment):
             scan.doubt = True
             return scan
+    text, unbalanced = _mark_ansi_quotes(text)
+    if unbalanced or any(m.group(1).count("'") % 2 or m.group(1).count('"') % 2
+                         for m in re.finditer(r"`([^`]*)`", text)):
+        # `echo $'\\'' ; git "push" x #'`, "echo `echo '` ; git push x": the shell and shlex end the
+        # quote in different places, so shlex would read a command as quoted data. Rare in real use.
+        scan.doubt = True
+        return scan
     lexer = shlex.shlex(text.replace("\n", " ; "), posix=True, punctuation_chars=True)
     lexer.whitespace_split = True
     lexer.commenters = ""
@@ -1716,27 +1797,29 @@ def _scan_command(command, depth=0, outer_tainted=frozenset()):
     except ValueError:
         scan.doubt = "git" in text.lower()
         return scan
-    simple, words, skip = [], [], False
+    simple, words, skip, ansi = [], [], False, False
     for token in tokens + [";"]:
-        redirect = bool(set(token) <= set("<>&") and set(token) & set("<>"))
-        if skip and not (redirect or set(token) <= SHELL_PUNCTUATION):
+        if token and set(token) <= SHELL_PUNCTUATION:
+            for operator in OPERATOR_PIECE.findall(token):
+                skip = False
+                if "<" in operator or ">" in operator:
+                    if words and words[-1].isdigit():
+                        words.pop()  # `2>/dev/null`: the fd number
+                    skip = True
+                else:  # `;` `&&` `||` `|` `&` `(` `)`: ends a simple command
+                    simple.append((words, ansi))
+                    words, ansi = [], False
+        elif skip:
             skip = False  # the target of a redirect
-            continue
-        skip = False
-        if redirect:
-            if words and words[-1].isdigit():
-                words.pop()  # `2>/dev/null`: the fd number
-            skip = True
-        elif set(token) <= SHELL_PUNCTUATION:  # `;` `&&` `||` `|` `&` `(` `)`: ends a simple command
-            simple.append(words)
-            words = []
         else:
-            words.append(token)
-    tainted = _assigned_names(simple) | set(outer_tainted)
-    for words in simple:
-        _scan_simple(words, depth, tainted, scan)
-    if scan.env_risk and scan.git_words:
-        scan.doubt = True
+            ansi = ansi or ANSI_MARK in token
+            words.append(token.replace(ANSI_MARK, ""))
+    tainted = _assigned_names([w for w, _ in simple]) | set(outer_tainted)
+    for words, ansi in simple:
+        _scan_simple(words, depth, tainted, scan, ansi)
+    if scan.git_words and (scan.env_alias or (scan.env_risk and (
+            len(scan.verbs) != scan.git_words or any(v not in ADMIN_READ_ONLY_GIT for v in scan.verbs)))):
+        scan.doubt = True  # an alias through the environment, or a program path, before more than a read
     return scan
 
 

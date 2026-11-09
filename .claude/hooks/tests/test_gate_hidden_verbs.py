@@ -55,9 +55,9 @@ HIDDEN_MORE = [
     f'timeout -k 5 20 git "push" origin {B}', f'sudo -u root git "push" origin {B}',
     f'nohup git "push" origin {B}', f'command git "$v" origin {B}', f'exec git "push" origin {B}',
     f'time -p git "push" origin {B}', f"/usr/bin/git $'push' origin {B}",
-    f"$g -C /x push origin {B}", f"timeout 20 $g push origin {B}",
+    f"$GIT -C /x push origin {B}", f"timeout 20 $GIT push origin {B}",
     f"git ${{v}}sh origin {B}", f"git pu* origin {B}", f"git p?sh origin {B}", f"git `echo push` x",
-    f"=git push origin {B}", f"bash -c '$g push origin {B}'", f'sh -c "git \\"push\\" origin {B}"',
+    f"=git push origin {B}", f"bash -c '$GIT push origin {B}'", f'sh -c "git \\"push\\" origin {B}"',
     f"git http-push https://example.invalid/r.git {B}", f"git -C /x send-pack ../o.git {B}",
     f'echo hi; timeout 5 git "push" x', f"true && v=push && git $v origin {B}",
     f'strace -f git "push" origin {B}', f"flock /tmp/l git $'push' origin {B}",
@@ -447,9 +447,9 @@ HIDDEN_R2 = {
     "c4-parameters": f"GIT_CONFIG_PARAMETERS=\"'alias.x=push'\" git x origin {B}",
     "c4-env": f"env GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=alias.x GIT_CONFIG_VALUE_0=push git x origin {B}",
     "c4-export": f"export GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=alias.x GIT_CONFIG_VALUE_0=push; git x origin {B}",
-    "c4-exec-path": f"GIT_EXEC_PATH=/tmp/evil git status",
-    "c4-config-global": "GIT_CONFIG_GLOBAL=/tmp/g git status",
-    "c4-config-system": "GIT_CONFIG_SYSTEM=/tmp/g git status",
+    "c4-exec-path": f"GIT_EXEC_PATH=/tmp/evil git x origin {B}",
+    "c4-config-global": f"GIT_CONFIG_GLOBAL=/tmp/g git x origin {B}",
+    "c4-config-system": f"GIT_CONFIG_SYSTEM=/tmp/g git x origin {B}",
     # C5 — `xargs git` with the verb on stdin
     "c5-echo-pipe": f"echo push origin {B} | xargs git",
     "c5-herestring": f"xargs git <<< 'push origin {B}'",
@@ -631,6 +631,18 @@ def _stand_in_shapes(fake):
         "c5-xargs-stdin": f"echo push origin {B} | xargs git",
         "c6-redirect-head": f'>/dev/null {fake}/git "push" origin {B}',
         "c8-subtree-like": f"git subtree push --prefix=a origin {B}",
+        # round 3
+        "r3-a-clobber": f"git >|/dev/null push origin {B}",
+        "r3-a-fd-clobber": f"git 2>|/dev/null push origin {B}",
+        "r3-e-empty-option": f"git -C '' \"push\" origin {B}",
+        "r3-e-empty-config": f"git -c '' 'push' origin {B}",
+        "r3-g-env-xargs": f"echo push origin {B} | env xargs git",
+        "r3-g-nice-xargs": f"echo push origin {B} | nice xargs git",
+        "r3-g-time-xargs": f"echo push origin {B} | time xargs git",
+        "r3-ansi-both": f"$'git' $'push' origin {B}",
+        "r3-ansi-dashed": f"$'git-pu\\x73h' origin {B}",
+        "r3-ansi-unbalanced": f"echo $'\\'' ; git \"push\" origin {B} #'",
+        "r3-ansi-c-string": f"bash -c $'git pu\\\\sh origin {B}'",
     }
 
 
@@ -725,7 +737,10 @@ def test_r2_limit_a_variable_set_outside_the_command_is_not_followed():
     names set before the command is not flagged, because `$PY -m pytest "$f"` and `$TOOL "$f"` must
     stay allowed and the two look the same. The same command that sets the names is flagged."""
     assert not merge_gate.hidden_git_verb(f"$g $v origin {B}")
+    assert not merge_gate.hidden_git_verb(f"$g push origin {B}")  # round 3: `$DOCKER push img` must pass
     assert merge_gate.hidden_git_verb(f"g=git; v=push; $g $v origin {B}")
+    assert merge_gate.hidden_git_verb(f"g=git; $g push origin {B}")
+    assert merge_gate.hidden_git_verb(f"$GIT push origin {B}")  # a name that says git stays a doubt
 
 
 @pytest.mark.parametrize("tag", ["[admin]", "[auto]"])
@@ -771,3 +786,144 @@ def test_r2_the_own_remote_rule_accepts_a_worktree_of_the_project_with_no_origin
     git(str(repo), "worktree", "add", "-q", "-b", "feat/t900-x", str(wt))
     monkeypatch.setattr(merge_gate, "ROOT", str(repo))
     assert merge_gate._own_origin_refusal(str(wt), str(tmp_path)) is None
+
+
+# --- Round 3 (the second adversarial review: 45300 candidates against a stand-in git) ------------------
+# Fixed: A (`>|` is a redirect), E (an empty quoted word is a word), G (`xargs` after a wrapper), the
+# dashed name as an argument, the variable head, the environment assignments before a read, and a cheap
+# rule for `$'…'` quotes. Each shape below passed the gate before this round.
+R3_BLOCKED = {
+    # A: `>|` and the other redirect operators are not pipes
+    "a-clobber": f"git >|/dev/null push origin {B}",
+    "a-clobber-merge": f"git >|/dev/null merge origin {B}",
+    "a-clobber-space": f"git >| /dev/null push origin {B}",
+    "a-after-pipe": f"git log | git >|/dev/null push origin {B}",
+    "a-admin-other-branch": "git >|/dev/null push origin other",
+    "a-fd-clobber": f"git 2>|/dev/null push origin {B}",
+    "a-append-clobber": f"git >>|/dev/null push origin {B}",
+    "a-readwrite": f"git <>/dev/null push origin {B}",
+    "a-dup-out": f"git >&/dev/null push origin {B}",
+    "a-dup-in": f"git <&0 push origin {B}",
+    "a-both-append": f"git &>>/dev/null push origin {B}",
+    # E: an empty quoted word stays a word, so an option value does not swallow the verb
+    "e-C-dq": f"git -C '' \"push\" origin {B}",
+    "e-C-sq": f"git -C '' 'push' origin {B}",
+    "e-C-escape": f"git -C '' pu\\sh origin {B}",
+    "e-C-merge": f"git -C '' \"merge\" {B}",
+    "e-C-split": f"git -C '' \"p\"ush origin {B}",
+    "e-C-ansi": f"git -C '' $'push' origin {B}",
+    "e-C-empty-dq": f"git -C \"\" \"push\" origin {B}",
+    "e-c": f"git -c '' \"push\" origin {B}",
+    "e-namespace": f"git --namespace '' \"push\" origin {B}",
+    "e-work-tree": f"git --work-tree '' 'push' origin {B}",
+    "e-git-dir": f"git --git-dir '' \"push\" origin {B}",
+    "e-super-prefix": f"git --super-prefix '' \"push\" origin {B}",
+    "e-attr-source": f"git --attr-source '' \"push\" origin {B}",
+    "e-env": f"env git -C '' \"push\" origin {B}",
+    # G: `xargs` after a wrapper or an unknown head, with the verb on stdin
+    "g-env": f"echo push origin {B} | env xargs git",
+    "g-nice": f"echo push origin {B} | nice xargs git",
+    "g-sudo": f"echo push origin {B} | sudo xargs git",
+    "g-time": f"echo push origin {B} | time xargs git",
+    "g-command": f"echo push origin {B} | command xargs git",
+    "g-nohup": f"echo push origin {B} | nohup xargs git",
+    "g-timeout": f"echo push origin {B} | timeout 5 xargs git",
+    "g-exec": f"echo push origin {B} | exec xargs git",
+    "g-stdbuf": f"echo push origin {B} | stdbuf -oL xargs git",
+    "g-setsid": f"echo push origin {B} | setsid -w xargs git",
+    "g-flock": f"echo push origin {B} | flock /tmp/l xargs git",
+    "g-busybox": f"echo push origin {B} | busybox xargs git",
+    # the cheap rule: an ANSI-C or locale quote next to a git word, or in a `-c` string
+    "q-both": f"$'git' $'push' origin {B}",
+    "q-dashed": f"$'git-push' origin {B}",
+    "q-dashed-hex": f"$'git-pu\\x73h' origin {B}",
+    "q-unbalanced": f"echo $'\\'' ; git \"push\" origin {B} #'",
+    "q-c-string": f"bash -c $'git pu\\\\sh origin {B}'",
+    "q-c-hex": f"sh -c $'git \\x70ush origin {B}'",
+    "q-locale": f"$\"git\" push origin {B}",
+    # found by the fuzz run: a head that says git once its variables are cut out or that globs to it, a
+    # hex-escaped ANSI-C head, a function body, a quote that ends in a different place in a backtick
+    "z-var-cut": f"g${{E}}it push origin {B}",
+    "z-default-head": f"${{G:-git}} merge {B}",
+    "z-glob-head": f"gi? pull origin {B}",
+    "z-ansi-hex-head": f"$'\\x67it' push origin {B}",
+    "z-ansi-hex-dashed": f"$'\\x67it\\x2dsend-pack' origin {B}",
+    "z-ansi-brace": f"$'git' {{push,}} origin {B}",
+    "z-function": f"function f {{ g${{E}}it merge {B}; }}; f",
+    "z-function-plain": f"function f {{ git push origin {B}; }}; f",
+    "z-backtick-quote": f"echo `echo '` ; git push origin {B} ; echo `echo '`",
+    "z-backtick-quote-var": f"echo `echo '` ; g${{E}}it push origin {B}",
+    "z-ansi-quote-var": f"echo $'\\'' ; g${{E}}it push origin {B} #'",
+    # a dashed command after `find -exec` is a command
+    "f-find-exec": f"find . -exec git-push origin {B} \\;",
+    # a variable the command sets to a git word, an alias through the environment
+    "v-set-to-git": f"g=git; $g push origin {B}",
+    "v-env-alias": f"GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=alias.x GIT_CONFIG_VALUE_0=push git x origin {B}",
+    "v-env-exec-path-write": f"GIT_EXEC_PATH=/x git x origin {B}",
+    "v-env-params-read": "GIT_CONFIG_PARAMETERS=\"'alias.log=push'\" git log",
+    "v-env-count-read": "GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=alias.x GIT_CONFIG_VALUE_0=push git status",
+    "v-env-read-then-write": f"GIT_CONFIG_GLOBAL=/dev/null git status; git x origin {B}",
+}
+# Allowed again in `[auto]` (blocked by the first fix round, allowed at bc5ccc34) and the earlier corpus.
+R3_BENIGN = [
+    "man git-push", "man git-merge", "man git-pull", "git help git-push", "which git-push",
+    "ls /usr/lib/git-core/git-push",
+    "$DOCKER push registry/img", '"$DOCKER" pull img', "$PY tool.py merge a b", "$PY -m pip push",
+    "$SCRIPT merge-reports",
+    "GIT_CONFIG_GLOBAL=/dev/null git status", "GIT_EXEC_PATH=/x git status", "GIT_CONFIG_PARAMETERS= git status",
+    "GIT_CONFIG_COUNT= git log --oneline", "GIT_CONFIG_GLOBAL=/dev/null git diff --stat",
+    "python3 -m pytest tests/test_x.py -q", '$PY -m pytest "$f"', "timeout 20 pytest -q", "git status",
+    "git diff --stat", "git log --oneline -5", "git -C dir status", 'git add -A && git commit -m "msg"',
+    "cd dir && pytest", 'for f in a b; do echo "$f"; done', "env FOO=1 python3 x.py",
+    'grep -rn "git push" docs/', 'echo "git push is blocked"', "ls | xargs wc -l",
+    "find . -name '*.py' -exec wc -l {} \\;",
+    # the new code must not over-block these
+    'git commit -m "costs 5$"', 'git grep -n "^foo$"', 'echo "5$" ; git status', "printf $'a\\n'; git status",
+    "echo $'x'", "git log | git >/dev/null status", "git status >|/dev/null", "git log >|/tmp/out",
+    "git -C '' status", "git -C '' log -1", "echo push | xargs wc -l", "xargs git status < list",
+    "find . -exec ls {} \\;", "echo $'git push'",
+    "function f { git status; }; f", "echo `date`", 'echo "it\'s"', "echo `echo it`", 'git commit -m "it\'s"',
+    "cut -d $'\\t' -f1 file", "tr -d $'\\r' < in > out", "git commit -m $'title\\n\\nbody'",
+    "grep -c $'\\t' file", "$PY -m pytest -k $'a'",
+]
+
+
+@pytest.mark.parametrize("name", list(R3_BLOCKED))
+def test_r3_unit_each_shape_is_flagged(name):
+    assert merge_gate.hidden_git_verb(R3_BLOCKED[name]), R3_BLOCKED[name]
+
+
+@pytest.mark.parametrize("command", R3_BENIGN)
+def test_r3_unit_the_false_positives_and_the_corpus_are_not_flagged(command):
+    assert not merge_gate.hidden_git_verb(command), command
+
+
+@pytest.mark.parametrize("name", list(R3_BLOCKED))
+@pytest.mark.parametrize("tag", ["[admin]", "[auto]"])
+def test_r3_the_gate_blocks_each_shape(gate, tmp_path, name, tag):
+    fx = gate(kanban(done=("T900",)))
+    auto_verified(fx)
+    path = admin_session(tmp_path, fx, request="merge and push T900 " + tag)
+    text = reason(R3_BLOCKED[name], fx.wt, path)
+    assert text is not None and "cannot push/merge" in text, (name, text)
+
+
+@pytest.mark.parametrize("name", list(R3_BLOCKED))
+def test_r3_with_no_tag_nothing_changes(gate, tmp_path, name):
+    fx = gate(kanban(done=("T900",)))
+    path = transcript(tmp_path, [human("thanks", AFTER)])
+    assert reason(R3_BLOCKED[name], fx.wt, path) is None, name
+
+
+@pytest.mark.parametrize("command", R3_BENIGN)
+@pytest.mark.parametrize("tag", ["[admin]", "[auto]"])
+def test_r3_the_benign_corpus_stays_allowed_in_auto_mode(gate, tmp_path, command, tag):
+    fx = gate(kanban(done=("T900",)))
+    path = transcript(tmp_path, [human("go " + tag, AFTER)])
+    assert reason(command, fx.main, path) is None, command
+
+
+def test_r3_a_variable_set_in_the_same_command_to_git_is_not_a_false_positive_fix():
+    """`$g push` with `g=git` in the command stays a doubt, an unset `$g` is data (`$DOCKER push img`)."""
+    assert merge_gate.hidden_git_verb(f"g=git; $g push origin {B}")
+    assert not merge_gate.hidden_git_verb(f"$g push origin {B}")
