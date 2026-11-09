@@ -46,7 +46,6 @@ ALSO_HIDDEN = {
     "ansi-c-quote": "echo $'<<EOF'\n{push}\nEOF",
     "brace-default": "echo ${{x:-<<EOF}}\n{push}\nEOF",
     "quote-after-escaped-quote": 'echo "a\\"" "<<EOF"\n{push}\nEOF',
-    "comment-after-space-then-quote": "echo ok # it's\n{push}\n# <<EOF\nEOF",
 }
 ALL_HIDDEN = {**HIDDEN, **ALSO_HIDDEN}
 
@@ -64,6 +63,8 @@ REAL = {
     "hash-inside-word": "echo a#b <<EOF\n{push}\nEOF",
     "subshell": "(cat <<EOF\n{push}\nEOF\n)",
     "after-ansi-c-escaped-quote": "echo $'\\'' > f <<EOF\n{push}\nEOF",
+    # goes red when comment skipping is off: the `'` in the comment would leave a quote open
+    "after-a-comment-with-a-quote": "echo ok # it's\ncat <<EOF\n{push}\nEOF",
     "in-substitution": "echo $(cat <<EOF\n{push}\nEOF\n)",
     "in-substitution-quoted-tag": "x=$(cat <<'EOF'\n{push}\nEOF\n); echo done",
     "in-backtick": "echo `cat <<EOF\n{push}\nEOF\n`",
@@ -233,6 +234,13 @@ def test_ac3_the_corpus_differs_only_on_the_hidden_shapes(name):
     command = shape(HIDDEN[name], FORCE)
     assert old_strip(command) != command, "the oracle must show the old bug"
     assert strip_heredoc_bodies(command) == command
+
+
+@pytest.mark.parametrize("name", sorted(ALSO_HIDDEN))
+def test_ac3_every_other_hidden_shape_is_stripped_by_the_old_function(name):
+    """LR-0003: a test that the new scanner keeps the text can only go red if the old one stripped it."""
+    command = shape(ALSO_HIDDEN[name], FORCE)
+    assert old_strip(command) != command, name
 
 
 def test_ac3_non_strings_and_heredoc_free_text_pass_through():
@@ -475,3 +483,82 @@ def test_premise_the_shell_runs_what_an_unquoted_heredoc_body_holds(
     command = shape(DOUBT[name])
     assert pushed_by(shell, command, tmp_path), f"{shell} did not run the push of {name}"
     assert PUSH in strip_heredoc_bodies(command), f"{name}: the scanner hid a push {shell} runs"
+
+
+CANARY = 'echo CAN""ARY'  # prints `CANARY`; the command text never holds that word
+
+
+def canary_ran(shell, command, tmp_path):
+    """True when `shell -c command`, run in an empty throwaway dir with no stdin, printed the canary."""
+    done = subprocess.run([shell, "-c", command], cwd=str(tmp_path), env=ENV, capture_output=True,
+                          text=True, timeout=10, stdin=subprocess.DEVNULL)
+    return "CANARY" in done.stdout
+
+
+# ── Fix round (Stage 4): shapes the first scanner still hid ──────────────────────────────────────
+# Each runs `{push}` in a real shell and, before the fix round, lost it to the strip. The value says
+# which shells run it (checked on bash 5.3.9 and zsh 5.9); a shell not listed may abort first.
+BYPASS = {
+    # R0: a heredoc inside `<(…)` / `>(…)`: its body holds a `)` and a `<<B` line, then the real `)`.
+    "r0-process-substitution": ("true <(cat <<A\n)\ncat <<B\nA\n)\n{push}\nB", ("bash", "zsh")),
+    "r0-output-process-substitution": ("true >(cat <<A\n)\ncat <<B\nA\n)\n{push}\nB", ("bash", "zsh")),
+    # P0-1: the shell reads the whole word, quotes removed, as the tag.
+    "tag-quoted-in-the-middle": ('cat <<E"O"F\nx\nEOF\n{push}\nE', ("bash", "zsh")),
+    "tag-backslash-in-the-middle": ("cat <<E\\OF\nx\nEOF\n{push}\nE", ("bash", "zsh")),
+    "tag-single-quoted-in-the-middle": ("cat <<E'O'F\nx\nEOF\n{push}\nE", ("bash", "zsh")),
+    "tag-with-a-quoted-suffix": ('cat <<EOF"x"\nEOFx\n{push}\nEOF', ("bash", "zsh")),
+    "tag-quoted-then-a-suffix": ('cat <<"EOF"x\nEOFx\n{push}\nEOF', ("bash", "zsh")),
+    "tag-that-is-not-a-word": ("cat <<1\ncat <<B\n1\n{push}\nB", ("bash", "zsh")),
+    # P0-2: the heredoc inside `$(…)` ends at a line that starts with the tag and closes the `$(`.
+    "context-closes-on-the-tag-line": ("echo $(cat <<EOF\nx\nEOF) ; {push} ; (cat <<EOF\nx\nEOF\n)", ("bash",)),
+    "context-closes-on-the-tag-line-with-a-word": (
+        "echo $(cat <<EOF\nx\nEOF x) ; {push} ; (cat <<EOF\nx\nEOF\n)", ("bash",)),
+    "context-closes-on-a-case-line": (
+        "echo $(cat <<EOF\nx\nEOF2case x in x) ; {push} ; (cat <<EOF\nx\nEOF\n)", ("bash",)),
+    "context-closes-on-a-tag-with-a-suffix": (
+        "echo $(cat <<EOF\nx\nEOFx) ; {push} ; (cat <<EOF\nx\nEOF\n)", ("bash",)),
+    # P0-3: `$[…]` and a subscript are arithmetic, so `<<` is a shift.
+    "dollar-bracket-arithmetic": ("echo $[1<<n]\n{push}\nn", ("bash", "zsh")),
+    "array-subscript-arithmetic": ("a[1<<n]=3\n{push}\nn", ("bash",)),
+    # P0-4: an array literal is not a subshell: its `<<EOF` line is a syntax error in bash.
+    "array-literal": ("x=(cat <<EOF\n{push}\nEOF\n)", ("bash",)),
+    "array-literal-append": ("x+=(cat <<EOF\n{push}\nEOF\n)", ("bash",)),
+}
+
+
+@pytest.mark.parametrize("name", sorted(BYPASS))
+def test_fix_round_the_scanner_keeps_the_push(name):
+    command = shape(BYPASS[name][0], FORCE)
+    assert FORCE in strip_heredoc_bodies(command), f"{name}: the scanner hid a push"
+
+
+@pytest.mark.parametrize("name", sorted(BYPASS))
+@pytest.mark.parametrize("mode", ["none", "auto", "admin"])
+def test_fix_round_the_gate_blocks_the_force_push(gate, tmp_path, name, mode):
+    command = shape(BYPASS[name][0], FORCE)
+    if mode == "admin":
+        fx = gate(kanban(ready=("T900",)))
+        auto_verified(fx)
+        text = reason(command, fx.wt, session(tmp_path, fx, "do it [admin]"))
+    elif mode == "auto":
+        fx = gate(kanban(done=("T900",)))
+        text = reason(command, fx.main, transcript(tmp_path, [human("go [auto]", -60)]))
+    else:
+        fx = gate(kanban(in_progress=("T900",)))
+        text = reason(command, fx.main, transcript(tmp_path, [human("thanks", -60)]))
+    assert text is not None, f"{mode}, {name}: the gate ALLOWED the hidden force push"
+
+
+@pytest.mark.skipif(not SHELLS, reason="no bash or zsh")
+@pytest.mark.parametrize("shell", SHELLS)
+@pytest.mark.parametrize("name", sorted(BYPASS))
+def test_fix_round_premise_the_shell_runs_the_push_and_the_scanner_keeps_it(tmp_path, shell, name):
+    """The push is an `echo` canary in a throwaway dir (never a real push): `echo CAN""ARY` prints
+    `CANARY`, and the text of the command never holds that word."""
+    template, runs_in = BYPASS[name]
+    command = template.format(push=CANARY)
+    ran = canary_ran(shell, command, tmp_path)
+    if shell in runs_in:
+        assert ran, f"{shell} did not run the canary of {name}"
+    if ran:
+        assert CANARY in strip_heredoc_bodies(command), f"{name}: the scanner hid a line {shell} runs"
