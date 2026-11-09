@@ -13,10 +13,9 @@ T211: git's global options between `git` and the verb (`git -C <dir> push`, `git
 `git --no-pager pull`, an unknown `--x`) do not hide it, and `git -c alias.<x>=… <x>` (or
 `--config-env alias.<x>=…`) is gated as a merge. Known limit, by design: an alias set in a git
 config file, or through the `GIT_CONFIG_*` environment variables, is out of reach of a static
-check of the command text — outside an `[admin]` request this hook does not read git config (T295:
-for an `[admin]` merge or push it reads the repo/worktree config, the hooks and the attributes,
-but never to find an alias). Shell aliases and functions, scripts that call git, and
-`gh pr merge` are out of scope too.
+check of the command text — this hook never reads git config to find an alias (it reads config
+only for the push checks and, for an `[admin]` merge or push, for the T295 repo rule). Shell
+aliases and functions, scripts that call git, and `gh pr merge` are out of scope too.
 
 T232: the project comes from `lib/project_root.py`, and from a plugin the hook stands down in a
 non-kit project. Inside one, input it cannot read is a block: it cannot tell the call is not a push.
