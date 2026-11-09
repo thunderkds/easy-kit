@@ -854,6 +854,10 @@ R3_BLOCKED = {
     "z-backtick-quote": f"echo `echo '` ; git push origin {B} ; echo `echo '`",
     "z-backtick-quote-var": f"echo `echo '` ; g${{E}}it push origin {B}",
     "z-ansi-quote-var": f"echo $'\\'' ; g${{E}}it push origin {B} #'",
+    "z-ansi-alias-verb": f"git $'pp' origin {B}",
+    "z-ansi-c-string": "bash -c $'echo hi'",
+    "z-glob-head-alias": f"gi? pp origin {B}",
+    "z-dashed-odd-chars": f"'git-pu\\x73h' origin {B}",
     # a dashed command after `find -exec` is a command
     "f-find-exec": f"find . -exec git-push origin {B} \\;",
     # a variable the command sets to a git word, an alias through the environment
