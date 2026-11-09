@@ -88,6 +88,19 @@ The optional `Waived` line is for the user only: a filled one (`user YYYY-MM-DD 
 
 ---
 
+## CLI Effort Table
+
+> Filled at Stage 1. Same shape as the CLI Model Table: one row per CLI, one column per Complexity
+> level. A cell is `low`, `medium`, `high`, `xhigh` or `max`. `craft-spawn-prompt` passes it as the
+> spawn's effort. An empty cell means: pass no effort. It is not a STOP.
+
+| CLI | Run command | C0 | C1 | C2 | C3 |
+|---|---|---|---|---|---|
+| claude | `claude` | low | low | medium | high |
+| [cli] | [run command] | | | | |
+
+---
+
 ## Tasks
 
 | ID | Title | Status | Assigned Agent | Complexity | Risk | Priority |
