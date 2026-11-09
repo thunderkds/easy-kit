@@ -623,13 +623,51 @@ Known limits:
   want merged.
 - For the gate, only an entry marked as typed by a human is a request: an entry with no origin, or a
   sub-agent's prompt, neither ends an `[auto]` request nor carries `[admin]`.
-- **The deny lists in item 2 are not complete (gate hunt, 2026-11-08, open).** A quoted `<<EOF` marker
-  (`echo "<<EOF"`, `echo '<<EOF'`, `# <<EOF`) hides the lines after it from the gate, in every mode. Repo
-  config the lists miss (`merge.<d>.driver`, `filter.<f>.smudge`, `filter.<f>.clean`, `diff.<d>.textconv`,
+- **The deny lists in item 2 are not complete (gate hunt, 2026-11-08, open).** Repo config the lists miss (`merge.<d>.driver`, `filter.<f>.smudge`, `filter.<f>.clean`, `diff.<d>.textconv`,
   `diff.external`, `gpg.program`, `core.editor`, `credential.helper` set to a path, `http.proxy`) and the
   hooks `post-index-change` and `pre-auto-gc` can run code during an allowed merge or push; a merge driver
   can also make `main` differ from the checked tree. Treat
   `[admin]` as a guard against accidents, not against a hostile repo or a hostile agent.
+- The gate treats a heredoc body as data only when it can prove the body is data (T294, an allowlist).
+  Everything before the `<<` and on its header line must be plain: words, `; & | < >`, and balanced
+  quoted strings with no `$`, backtick or backslash in them. The text before the header holds no `$`,
+  backslash, backtick, bracket, brace, `#` or `&>`, and no whitespace but space, tab and newline. The
+  header is `<<` or `<<-`, then a plain-word tag, then a space, a newline or one of `; & | < >`. The
+  terminator is an exact line. An unquoted tag whose body holds `$`, a backtick or a backslash is not
+  stripped, because the shell expands it. The one nested form is the commit form
+  `git commit -m "$(cat <<'EOF'` newline … `EOF` newline `)"` (also after `gh pr create --body`), with a
+  quoted tag, and only as the value of an option: the word before it is `-m`, `-F`, `-b`, `-t` (also in a
+  cluster such as `-am`), `--message`, `--msg`, `--body`, `--title`, `--notes`, `--description`, `--file`,
+  `--body-file` or `--notes-file`, then a space or `=`. After `)"` the line is empty, or holds a space, a tab
+  or `;` and then tokens that do not start with `|`, `$`, a backtick or `<` and name no shell word. So
+  `"$(cat <<'EOF'` … `)" push origin main` (the substitution is the command word), `git "$(cat <<'EOF'` …
+  (the subcommand), `x="$(cat …)"` and `echo "$(cat …)" | sh` keep their text. A header line that ends in
+  `|`, `|&`, `&&` or `||` keeps its text too (the next line is the other side of the pipe). A glob character
+  `*` or `?` before the header keeps the text (`/bin/ba?h <<'EOF'` is `bash`). A quoted span behind a data command such as `echo` is kept when it holds `$(` or a backtick, because the substitution runs (`echo "$(git push)"`). Any other `<<` keeps the text after it as command text, in every mode, and ends all
+  further stripping in that command: `echo "<<EOF"` followed by `git push --force origin main` is
+  blocked. A heredoc that feeds a shell or an interpreter keeps its body as command text, because the
+  shell runs it: `bash`, `sh`, `zsh`, `dash`, `ash`, `rbash`, `busybox`, `ksh`, `mksh`, `pdksh`, `csh`,
+  `tcsh`, `fish`, `source`, `eval`, `ssh`, `xargs`, `perl`, `node`, `nodejs`, `ruby`, `php`, `lua`, `awk`,
+  `gawk`, `ed`, `ex`, `tclsh`, `make`, `expect`, `parallel`, `at`, a `/proc/…` path (`/proc/self/exe` is
+  the shell itself) and `env -S…`, anywhere on the header line or before it. When the scan cannot tell, it keeps the text. The
+  cost is over-blocking: a push named in the body of a heredoc written as `cd "$WT" && cat > f <<'EOF'`
+  (a `$VAR` in the prefix), `echo $(pwd) > f <<EOF`, `(cat <<EOF` (a subshell), `cat &> f <<EOF`, a
+  command after `#`, or a heredoc inside `$(…)`, a backtick or `<(…)` (other than the commit form) is
+  blocked like a push. Write the body to a file with a plain header, or put `git push` out of the body.
+  Still not handled: `eval "…"`, `bash -c '…'` and an interpreter argument stay visible as quoted text
+  (which the gate reads under its own quoted-span rule), and a body that an interpreter runs
+  (`python3 - <<'EOF'` with `os.system("git push")` inside) is data to this scan, as before. These shapes
+  are accepted limits, found by the third adversarial review (T294 round 4), and the scan does not
+  follow them: a script file written by a heredoc and run later (`cat > r.sh <<'EOF'` … `EOF` newline
+  `sh r.sh`); a heredoc on a file descriptor that a later shell reads (`exec 3<<EOF` … `EOF` newline
+  `bash <&3`, `exec 0<<'EOF'`); a fifo; `read -r l; eval "$l"`; a renamed shell (`ln -s /bin/bash b2`, then
+  `./b2 <<'EOF'`); `python3 -` and `python -`. A substitution that builds the command word or the subcommand (`"$(cat <<'EOF'` `git` … `)" push origin main`,
+  `git "$(cat <<'EOF'` `push` … `)" --force origin main`) keeps its text in the scan, but the gate does not see a
+  verb that a substitution builds: that is the hidden-verb limit above, the same as without a heredoc. A header followed on the NEXT command by a shell word
+  (`cat <<EOF &` newline `bash`) is also a limit. Not tested: macOS bash 3.2 and bash older than 5.2 may
+  close a `$(…)` early on a `)` inside the body of a nested heredoc (suspected, not confirmed). The seeded
+  fuzz `.claude/hooks/tests/test_heredoc_fuzz.py` compares the scan with bash and zsh: a line it shows a
+  shell running and the scan hiding is a bug.
 - The run record the gate trusts is a file in the trace anchors' directory
   (`.claude/hooks/lib/verify_record.py`), the same trust root as for `/verify`.
 - Repo config the gate does not read, such as a `core.hooksPath` hook run by `git commit`, and a model
