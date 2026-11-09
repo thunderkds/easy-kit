@@ -17,11 +17,9 @@ handled the same way, with the same two rules copied deliberately:
 * **Replaced with a space, never deleted.** Deleting a span can glue the two
   words either side of it into a token that was never in the command — the exact
   way a data-stripping fix turns into a spurious invocation.
-* **Not a shell parser** (Simplicity First). Header recognition and terminator
-  matching only. The header scan tracks quotes, `#` comments, backslashes and
-  `$(…)`-style nesting so it reads a `<<WORD` only where the shell does (T294);
-  it is not a tokenizer, and a doubt keeps the text. A real tokenizer is the
-  rabbit hole this file exists to avoid.
+* **Not a shell parser** (Simplicity First). An allowlist (T294, three review rounds): a body is
+  stripped only when the header and all text before it are plain, so the shell can read the header
+  in no other way. A real tokenizer is the rabbit hole this file exists to avoid.
 
 **Fail-closed direction.** Everything here can only ever cause the caller to see
 *less* command text, so every uncertainty resolves toward stripping *less*:
@@ -30,17 +28,22 @@ handled the same way, with the same two rules copied deliberately:
   removed. Anything after the terminator is still command text and is still
   scanned — that is what keeps ``cat > f <<'E' … E`` followed by ``; git push``
   a blocked push rather than a way to smuggle one past the gate.
-* A `<<WORD` inside quotes, after a `#` comment, after a backslash, inside
-  `${…}`, `((…))`, `$[…]`, `[…]`, `<(…)`, `>(…)` or an array literal `x=(…)`, or
-  as part of a `<<<` here-string is **not a header** (T294). Reading it as one hid the lines after it: ``echo "<<EOF"``
-  then ``git push --force origin main`` then ``EOF`` lost its push to the strip.
-  Directly inside `$(…)`, a backtick or a subshell it is a header (the kit's
-  commit form ``git commit -m "$(cat <<'EOF' … EOF)"``), but only when the
-  terminator line is followed by that context's closer and no body line starts
-  with the tag. A tag that is not a plain word (`<<E"O"F`) is in doubt. A body after an
-  *unquoted* tag that holds ``$(`` or a backtick is not data either: the shell
-  runs it. Any `<<` the scan will not read, where the shell might, ends all
-  stripping in that command (it does not just skip that `<<`).
+* **Plain means:** the text before `<<` holds words, `; & | < >`, space, tab, newline and balanced
+  simple quoted atoms (single quotes, or double quotes with no `$`, backtick or backslash inside).
+  Any other quote, a backslash, a backtick, `$`, a bracket, `#`, `&>` or another whitespace
+  character makes it not plain. The header is `<<` or `<<-`, spaces or tabs, and a plain-word tag.
+  The rest of the header line is a character whitelist plus balanced simple atoms.
+* **One nested form:** ``"$(cat <<'TAG'`` newline … ``TAG`` followed at once by newline ``)"`` — the
+  kit's commit form ``git commit -m "$(cat <<'EOF' … EOF)"``. A body line that starts with the tag
+  makes it a doubt.
+* **The `break` rule:** any other `<<` the scan will not read ends ALL stripping in that command. It
+  does not just skip that `<<`: a later `<<` may only look real because the shell read this one
+  differently (``echo "<<EOF"`` then ``git push --force origin main`` then ``EOF``).
+* **A shell consumer keeps the text.** A header that feeds `bash`, `sh`, `zsh`, `source`, `eval` or
+  `ssh` (also after a pipe) is not data: the shell runs the body. A body after an *unquoted* tag that
+  holds `$`, a backtick or a backslash is not data either: the shell expands or joins it.
+* **A doubt keeps the text.** The cost is that unusual real headers (`$(cat <<EOF`, a subshell, a
+  variable before the header) over-block, which is recoverable. A bypass is not.
 * An **unterminated** heredoc is left entirely alone. A shell would consume the
   rest of the input as body, so stripping it would arguably be accurate — but
   being wrong in that direction hides a real invocation, while being wrong in
