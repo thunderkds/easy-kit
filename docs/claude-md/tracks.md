@@ -614,15 +614,22 @@ Known limits:
   `timeout 20 git "push"`, `git send-pack`) and `git merge --message <branch>` are not caught. Treat
   `[admin]` as a guard against accidents, not against a hostile repo or a hostile agent.
 - The gate treats a heredoc body as data only after a `<<WORD` that the shell reads as a heredoc (T294):
-  not inside quotes, not after an unquoted `#`, not after a backslash, not inside `${…}`, `((…))` or
-  `<(…)`, and not a `<<<` here-string. Any other `<<WORD` keeps the lines after it as command text, in
-  every mode, so `echo "<<EOF"` followed by `git push --force origin main` is blocked. A heredoc directly
-  inside `$(…)`, a backtick or a subshell counts too (the kit's commit form
-  `git commit -m "$(cat <<'EOF' … EOF)"` keeps its body as data), but only when the terminator line is
-  followed by the closer of that context, and, inside a backtick, when the body holds no backtick. A body
-  after an unquoted tag (`<<EOF`, not `<<'EOF'`) that holds `$(` or a backtick is command text, because
-  the shell runs those. When the scanner cannot tell, it keeps the text, and an unclear case ends all
-  further stripping in that command.
+  not inside quotes, not after an unquoted `#`, not after a backslash, not inside `${…}`, `((…))`,
+  `$[…]`, `[…]`, `<(…)`, `>(…)` or an array literal `x=(…)`, and not a `<<<` here-string. Any other
+  `<<WORD` keeps the lines after it as command text, in every mode, so `echo "<<EOF"` followed by
+  `git push --force origin main` is blocked. A heredoc directly inside `$(…)`, a backtick or a subshell
+  counts too (the kit's commit form `git commit -m "$(cat <<'EOF' … EOF)"` keeps its body as data), but
+  only when the terminator line is followed by the closer of that context, no body line starts with the
+  tag, and, inside a backtick, the body holds no backtick. A body after an unquoted tag (`<<EOF`, not
+  `<<'EOF'`) that holds `$(` or a backtick is command text, because the shell runs those. The tag must be
+  a plain word followed by a space, a newline or one of `; & | ( ) < >`: a partly quoted or suffixed tag
+  (`<<E"O"F`, `<<EOF"x"`) is read by the shell as another word, so the scanner does not guess. When the
+  scanner meets a `<<` that it will not read, in a place where the shell might read it, it ends all
+  further stripping in that command. Still not handled: a heredoc written inside `eval "…"`,
+  `bash -c '…'` or an interpreter argument is not read as a heredoc (its text stays visible, the safe
+  side), and nothing here reads a shell option such as zsh's `setopt` that changes how `<<` is read. The
+  seeded fuzz `.claude/hooks/tests/test_heredoc_fuzz.py` compares the scanner with bash and zsh; a line
+  that fuzz shows a shell running and the scanner hiding is a bug.
 - The run record the gate trusts is a file in the trace anchors' directory
   (`.claude/hooks/lib/verify_record.py`), the same trust root as for `/verify`.
 - Repo config the gate does not read, such as a `core.hooksPath` hook run by `git commit`, and a model
