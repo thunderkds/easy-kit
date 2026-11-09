@@ -221,10 +221,29 @@ def test_ac2_user_global_config_stays_trusted_and_unread(gate, tmp_path, monkeyp
     assert reason(BRANCH_MERGE, fx.main, path) is None
 
 
-def test_ac2_an_unreadable_config_blocks(gate, tmp_path, monkeypatch):
+def stub_config_list(monkeypatch, answer):
+    """Replace only `git config --list …` (the gate's config read); every other git call is real,
+    so `_common_dir` and the rest still work and the config-read branch is the one reached (F5)."""
+    real = merge_gate._git
+
+    def fake(directory, *args):
+        if args[:2] == ("config", "--list"):
+            return answer(["git", "-C", directory, *args])
+        return real(directory, *args)
+    monkeypatch.setattr(merge_gate, "_git", fake)
+
+
+@pytest.mark.parametrize("answer", [
+    lambda argv: None,
+    lambda argv: subprocess.CompletedProcess(argv, 128, "", "fatal: bad config"),
+    lambda argv: subprocess.CompletedProcess(argv, 0, "local\0core.bare\nfalse\0local\0", ""),
+], ids=["no-answer", "returncode-128", "odd-fields"])
+def test_ac2_an_unreadable_config_blocks(gate, tmp_path, monkeypatch, answer):
     fx, path = merge_ready(gate, tmp_path)
-    monkeypatch.setattr(merge_gate, "_git", lambda *a, **k: None)
-    assert reason(BRANCH_MERGE, fx.main, path) is not None
+    assert reason(BRANCH_MERGE, fx.main, path) is None  # control
+    stub_config_list(monkeypatch, answer)
+    text = reason(BRANCH_MERGE, fx.main, path)
+    assert text is not None and "cannot read the repository config" in text, text
 
 
 # ── AC 3 — hooks: any executable file that is not `.sample` blocks ──────────────────────────
@@ -522,3 +541,277 @@ def test_ac7_the_known_limit_keeps_only_what_is_still_open():
     for fixed in ("`merge.<d>.driver`", "`filter.<f>.smudge`", "`diff.external`", "`gpg.program`",
                   "`post-index-change`", "`pre-auto-gc`", "`credential.helper` set to a path"):
         assert fixed not in limits, f"{fixed} is fixed by T295 and must leave the limit"
+
+
+# ── Stage 4 fix round (F2-F6, `tasks/TASK_REVIEW_T295.md`) ──────────────────────────────────
+# Every test here asks the gate only: it passes the command text to the hook and runs nothing.
+# The git facts it leans on are read-only (`git check-attr`, `git config`, `os.lstat`).
+TASK_PUSH = PUSH + " origin feat/t900-x"
+
+
+def origin_bare(fx):
+    return os.path.join(fx.root, "origin.git")
+
+
+# F2a — a remote with more than one `url` sends a push to every one of them.
+@pytest.mark.parametrize("remote", ["origin", "upstream"])
+def test_f2a_a_remote_with_a_second_url_blocks(gate, tmp_path, remote):
+    fx, path = merge_ready(gate, tmp_path)
+    other = os.path.join(fx.root, "other.git")
+    git(fx.root, "init", "-q", "--bare", other)
+    if remote != "origin":
+        git(fx.main, "config", f"remote.{remote}.url", "https://example.com/a.git")
+    assert reason(TASK_PUSH, fx.wt, path) is None  # control: one URL each
+    git(fx.main, "config", "--add", f"remote.{remote}.url", other)
+    for cmd, cwd in ((TASK_PUSH, fx.wt), (BRANCH_MERGE, fx.main)):
+        text = reason(cmd, cwd, path)
+        assert text is not None and f"remote.{remote}.url" in text and "more than once" in text, text
+
+
+# F2b — a local push target runs its own hooks; `updateInstead` runs its checkout's filters.
+@pytest.mark.parametrize("hook", ["post-receive", "pre-receive", "update", "push-to-checkout"])
+def test_f2b_a_local_push_target_with_an_executable_hook_blocks(gate, tmp_path, hook):
+    fx, path = merge_ready(gate, tmp_path)
+    assert reason(TASK_PUSH, fx.wt, path) is None  # control: the bare origin has only samples
+    target = os.path.join(origin_bare(fx), "hooks", hook)
+    write(target, "#!/bin/sh\nexit 0\n")
+    os.chmod(target, 0o755)
+    text = reason(TASK_PUSH, fx.wt, path)
+    assert text is not None and "push target" in text and hook in text, text
+
+
+def test_f2b_a_file_url_target_with_an_executable_hook_blocks(gate, tmp_path):
+    fx, path = merge_ready(gate, tmp_path)
+    git(fx.main, "remote", "set-url", "origin", "file://" + origin_bare(fx))
+    assert reason(TASK_PUSH, fx.wt, path) is None  # control
+    plant = os.path.join(origin_bare(fx), "hooks", "post-receive")
+    write(plant, "#!/bin/sh\nexit 0\n")
+    os.chmod(plant, 0o755)
+    text = reason(TASK_PUSH, fx.wt, path)
+    assert text is not None and "post-receive" in text, text
+
+
+def test_f2b_the_target_hooks_path_honours_its_core_hookspath(gate, tmp_path):
+    fx, path = merge_ready(gate, tmp_path)
+    other = os.path.join(fx.root, "target-hooks")
+    write(os.path.join(other, "post-receive"), "#!/bin/sh\nexit 0\n")
+    os.chmod(os.path.join(other, "post-receive"), 0o755)
+    assert reason(TASK_PUSH, fx.wt, path) is None  # control: the directory is not used yet
+    git(origin_bare(fx), "config", "core.hooksPath", other)
+    text = reason(TASK_PUSH, fx.wt, path)
+    assert text is not None and "post-receive" in text, text
+
+
+def test_f2b_a_relative_url_is_resolved_from_the_worktree_top_not_the_cwd(gate, tmp_path):
+    fx, _ = merge_ready(gate, tmp_path)
+    # the request names T900: from a subdirectory the gate's guide lookup (`git log -- tasks/`) is
+    # relative to the cwd and finds no guide, a gate behaviour outside this test
+    path = session(tmp_path, fx, "do T900 [admin]")
+    sub = os.path.join(fx.wt, "deep", "er")
+    os.makedirs(sub)
+    git(fx.main, "remote", "set-url", "origin", os.path.relpath(origin_bare(fx), fx.wt))
+    # resolved from `sub` the path does not exist (a refusal); from the worktree top it is the bare repo
+    assert reason(TASK_PUSH, sub, path) is None
+    plant = os.path.join(origin_bare(fx), "hooks", "post-receive")
+    write(plant, "#!/bin/sh\nexit 0\n")
+    os.chmod(plant, 0o755)
+    text = reason(TASK_PUSH, sub, path)
+    assert text is not None and "post-receive" in text, text
+
+
+def test_f2b_a_target_with_update_instead_blocks(gate, tmp_path):
+    fx, path = merge_ready(gate, tmp_path)
+    git(origin_bare(fx), "config", "receive.denyCurrentBranch", "updateInstead")
+    text = reason(TASK_PUSH, fx.wt, path)
+    assert text is not None and "updateInstead" in text, text
+
+
+@pytest.mark.parametrize("url", ["https://example.com/team/repo.git", "git@github.com:team/repo.git",
+                                 "ssh://git@example.com/repo.git"], ids=["https", "scp", "ssh"])
+def test_f2b_a_network_origin_is_not_scanned(gate, tmp_path, url):
+    """Control (no false positive): only a local path or `file://` target is read."""
+    fx, path = merge_ready(gate, tmp_path)
+    git(fx.main, "remote", "set-url", "origin", url)
+    assert reason(TASK_PUSH, fx.wt, path) is None
+
+
+@pytest.mark.parametrize("legacy", ["remotes/origin", "branches/origin"])
+def test_f2b_a_legacy_remotes_or_branches_file_blocks(gate, tmp_path, legacy):
+    fx, path = merge_ready(gate, tmp_path)
+    write(os.path.join(common_dir(fx.main), legacy), "URL: /elsewhere\n")
+    for cmd, cwd in ((TASK_PUSH, fx.wt), (BRANCH_MERGE, fx.main)):
+        text = reason(cmd, cwd, path)
+        assert text is not None and legacy.split("/")[0] in text, text
+
+
+# F3 — the attributes rule reads lines the way git does. Each form is first checked with git
+# itself (`git check-attr`, read-only): `sets` says whether git gives a file a driver or filter.
+ATTRIBUTE_FORMS = [
+    (b'"*"merge=evil\n', "f.txt", True), (b'"f.txt"filter=x\n', "f.txt", True),
+    (b'"*.c"diff=x\n', "a.c", True), (b'"\\"a\\""merge=x\n', '"a"', True),
+    (b"\xc2\xa0# merge=x\n", " #", True), (b"\x0b# merge=x\n", "\x0b#", True),
+    (b"*\x0b# merge=evil\n", "f\x0b#", True), (b"[attr]foo merge=evil\n* foo\n", "f.txt", True),
+    (b"*\x0bmerge=evil\n", "f.txt", False), (b"* -merge=evil\n", "f.txt", False),
+    (b"* !merge=evil\n", "f.txt", False), (b"  \t\r# merge=x\n", "f.txt", False),
+]
+
+
+@pytest.mark.parametrize("raw,probe,sets", ATTRIBUTE_FORMS, ids=[repr(f[0])[2:-3] for f in ATTRIBUTE_FORMS])
+def test_f3_an_attributes_line_blocks_exactly_when_git_sets_a_driver(gate, tmp_path, raw, probe, sets):
+    fx, path = merge_ready(gate, tmp_path)
+    with open(os.path.join(fx.main, ".gitattributes"), "wb") as handle:
+        handle.write(raw)
+    seen = subprocess.run(["git", "check-attr", "merge", "filter", "diff", "--", probe], cwd=fx.main,
+                          capture_output=True, text=True, check=True).stdout
+    values = [line.rsplit(": ", 1)[1] for line in seen.splitlines()]
+    assert any(v not in ("unspecified", "unset") for v in values) is sets, seen  # git's own reading
+    text = reason(BRANCH_MERGE, fx.main, path)
+    if sets:
+        assert text is not None and "attributes" in text, text
+    else:
+        assert text is None, text
+
+
+def test_f3_a_macro_line_holding_merge_blocks_even_without_a_blank(gate, tmp_path):
+    """Stricter than git: any `[attr]` macro line holding `merge=`, `filter=` or `diff=` refuses."""
+    fx, path = merge_ready(gate, tmp_path)
+    write(os.path.join(fx.main, ".gitattributes"), "[attr]foo\x0bmerge=evil\n")
+    text = reason(BRANCH_MERGE, fx.main, path)
+    assert text is not None and "attributes" in text, text
+
+
+# F4 — a FIFO named `.gitattributes` is never opened (the old code hung on it).
+class Hang(BaseException):
+    """Raised by the alarm; a BaseException so the gate's own `except Exception` cannot swallow it."""
+
+
+@pytest.mark.parametrize("where", ["worktree", "info", "symlink"])
+def test_f4_a_fifo_attributes_file_is_refused_without_hanging(gate, tmp_path, where):
+    import signal
+    fx, path = merge_ready(gate, tmp_path)
+    fifo = {"worktree": os.path.join(fx.main, ".gitattributes"),
+            "info": os.path.join(common_dir(fx.main), "info", "attributes"),
+            "symlink": os.path.join(fx.root, "a-fifo")}[where]
+    os.makedirs(os.path.dirname(fifo), exist_ok=True)
+    os.mkfifo(fifo)
+    if where == "symlink":
+        os.symlink(fifo, os.path.join(fx.main, ".gitattributes"))
+    assert not os.path.isfile(fifo) and os.path.exists(fifo)  # os.lstat: a FIFO, not a file
+
+    def hang(*_):
+        raise Hang("the gate hung on the FIFO")
+    old = signal.signal(signal.SIGALRM, hang)
+    signal.alarm(10)
+    try:
+        text = reason(BRANCH_MERGE, fx.main, path)
+    finally:
+        signal.alarm(0)
+        signal.signal(signal.SIGALRM, old)
+    assert text is not None and "not a regular file" in text, text
+
+
+def test_f4_the_attributes_walk_has_a_deadline(gate, tmp_path, monkeypatch):
+    fx, path = merge_ready(gate, tmp_path)
+    monkeypatch.setattr(merge_gate, "ADMIN_ATTRIBUTES_WALK_S", -1)
+    text = reason(BRANCH_MERGE, fx.main, path)
+    assert text is not None and "took longer" in text, text
+
+
+# F5 — each "cannot read" branch is reached by a test.
+def test_f5_an_attributes_file_over_1_mb_blocks(gate, tmp_path):
+    fx, path = merge_ready(gate, tmp_path)
+    write(os.path.join(fx.main, ".gitattributes"), "# x\n" * ((1 << 20) // 4 + 1))
+    text = reason(BRANCH_MERGE, fx.main, path)
+    assert text is not None and "too large" in text, text
+
+
+@pytest.mark.skipif(os.geteuid() == 0, reason="root reads any directory")
+def test_f5_a_directory_the_attributes_walk_cannot_read_blocks(gate, tmp_path):
+    fx, path = merge_ready(gate, tmp_path)
+    closed = os.path.join(fx.main, "closed")
+    os.makedirs(closed)
+    os.chmod(closed, 0)
+    try:
+        text = reason(BRANCH_MERGE, fx.main, path)
+    finally:
+        os.chmod(closed, 0o755)
+    assert text is not None and "cannot read the attributes of the repository" in text, text
+
+
+@pytest.mark.skipif(os.geteuid() == 0, reason="root reads any file")
+def test_f5_an_attributes_file_that_cannot_be_opened_blocks(gate, tmp_path):
+    fx, path = merge_ready(gate, tmp_path)
+    target = os.path.join(fx.main, ".gitattributes")
+    write(target, "* text\n")
+    os.chmod(target, 0)
+    try:
+        text = reason(BRANCH_MERGE, fx.main, path)
+    finally:
+        os.chmod(target, 0o644)
+    assert text is not None and "cannot read the attributes file" in text, text
+
+
+# F6a — the two boolean keys hold a boolean.
+@pytest.mark.parametrize("key", ["core.symlinks", "extensions.worktreeConfig"])
+def test_f6a_a_boolean_key_with_another_value_blocks(gate, tmp_path, key):
+    fx, path = merge_ready(gate, tmp_path)
+    for value in ("true", "false", "yes", "off", "1", "0"):
+        git(fx.main, "config", key, value)
+        assert reason(BRANCH_MERGE, fx.main, path) is None, (key, value)
+    git(fx.main, "config", key, "/bin/evil")
+    # git itself dies on a bad boolean here, so the gate refuses before it reads the value; the
+    # value check is the second line, shown by a direct call
+    assert reason(BRANCH_MERGE, fx.main, path) is not None
+    shape = merge_gate._config_key_shape(key)
+    assert merge_gate._config_value_ok(shape, "/bin/evil") is False
+    assert merge_gate._config_value_ok(shape, "On") is True
+
+
+# F6b — a push to a real remote other than origin is refused (fails when the origin-only rule goes).
+def test_f6b_a_push_to_another_configured_remote_blocks(gate, tmp_path):
+    fx, path = merge_ready(gate, tmp_path)
+    git(fx.main, "config", "remote.upstream.url", "https://example.com/team/repo.git")
+    assert reason(TASK_PUSH, fx.wt, path) is None  # control
+    text = reason(PUSH + " upstream feat/t900-x", fx.wt, path)
+    assert text is not None and "plain push" in text, text
+    git(fx.wt, "config", "branch.feat/t900-x.remote", "upstream")
+    assert reason(PUSH, fx.wt, path) is not None
+
+
+# F6c — a repo shaped like the project's own stays allowed.
+def test_f6c_a_repo_shaped_like_the_project_keeps_its_admin_push(gate, tmp_path):
+    fx, path = merge_ready(gate, tmp_path)
+    for args in (("remote.github.url", "git@github.com:team/repo.git"),
+                 ("remote.github.fetch", "+refs/heads/*:refs/remotes/github/*"),
+                 ("branch.main.remote", "github"), ("branch.main.merge", "refs/heads/main"),
+                 ("--add", "branch.main.vscode-merge-base", "origin/main"),
+                 ("--add", "branch.main.vscode-merge-base", "github/main"), ("pull.rebase", "true"),
+                 ("branch.v2.remote", "origin"), ("branch.v2.merge", "refs/heads/v2"),
+                 ("branch.v2.vscode-merge-base", "origin/v2")):
+        git(fx.main, "config", *args)
+    assert reason(TASK_PUSH, fx.wt, path) is None
+    assert reason(BRANCH_MERGE, fx.main, path) is None
+
+
+# F6d — text an attacker controls is escaped and cut short in a refusal.
+def test_f6d_a_hook_file_name_is_escaped_and_cut_short(gate, tmp_path):
+    fx, path = merge_ready(gate, tmp_path)
+    name = "evil`\nname" + "x" * 200  # under the 255-byte file name limit
+    plant_hook(fx.main, name)
+    text = reason(BRANCH_MERGE, fx.main, path)
+    assert text is not None and "evil'\\nname" in text, text
+    assert "evil`\n" not in text and "x" * 150 not in text, text
+
+
+def test_f6d_a_config_key_is_escaped_and_cut_short(gate, tmp_path):
+    fx, path = merge_ready(gate, tmp_path)
+    git(fx.main, "config", "merge.a`b" + "y" * 300 + ".driver", "/bin/true")
+    text = reason(BRANCH_MERGE, fx.main, path)
+    assert text is not None and "merge.a'b" in text and "y" * 200 not in text, text
+
+
+def test_f6d_an_attributes_path_is_escaped(gate, tmp_path):
+    fx, path = merge_ready(gate, tmp_path)
+    write(os.path.join(fx.main, "sub\nevil", ".gitattributes"), "* merge=x\n")
+    text = reason(BRANCH_MERGE, fx.main, path)
+    assert text is not None and "sub\\nevil" in text and "sub\nevil" not in text, text
