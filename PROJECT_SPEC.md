@@ -138,12 +138,25 @@ The supervisor repo (`per-agentic-claude`) is a general framework. A `MANIFEST` 
 
 > Filled at Stage 1. One row per authenticated CLI, one column per Complexity level. At spawn
 > time, `craft-spawn-prompt` looks the task's Complexity Level up in the row for the CLI that will
-> run it and reports `<cli> · <Cn> → <model>`. No row for the CLI, or an empty cell → STOP and ask
+> run it and reports `<cli> · <Cn> → <model> · effort <level|none>`. No row for the CLI, or an empty cell → STOP and ask
 > the user; never fall back to another CLI's model, never invent one.
 
 | CLI | Run command | C0 | C1 | C2 | C3 |
 |---|---|---|---|---|---|
 | claude | `claude` | haiku | sonnet | sonnet or opus | opus |
+| codex | `codex` | | | | |
+
+---
+
+## CLI Effort Table
+
+> Filled at Stage 1. Same shape as the CLI Model Table: one row per CLI, one column per Complexity
+> level. A cell is `low`, `medium`, `high`, `xhigh` or `max`. `craft-spawn-prompt` passes it as the
+> spawn's effort. An empty cell means: pass no effort. It is not a STOP.
+
+| CLI | Run command | C0 | C1 | C2 | C3 |
+|---|---|---|---|---|---|
+| claude | `claude` | low | low | medium | high |
 | codex | `codex` | | | | |
 
 ---

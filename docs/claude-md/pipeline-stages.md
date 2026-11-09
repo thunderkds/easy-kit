@@ -82,10 +82,12 @@ Guide the user through this checklist step by step. Auto mode: the Supervisor do
    in `PROJECT_SPEC.md` (from `templates/PROJECT_SPEC_template.md`): one row per CLI, one column
    per level. Example: "Claude: claude — C0 haiku, C1 sonnet, C2 sonnet/opus, C3 opus | Codex: codex
    — [ask the user; never guess a Codex/Gemini model name]". A CLI with no row, or an empty cell for
-   a level, means `craft-spawn-prompt` will STOP and ask rather than pick a model for it. In auto mode
-   the Supervisor reads the table instead of asking; with no row or an empty cell it spawns on the CLI that
-   runs this session, with the model this session runs as, logged `SAFER OPTION` with the review flag, and
-   never invents another CLI's model name.
+   a level, means `craft-spawn-prompt` will STOP and ask rather than pick a model for it. Also ask for
+   the effort at each level (`low`, `medium`, `high`, `xhigh` or `max`) and record it as the
+   `## CLI Effort Table`, same shape, beside the model table. An empty effort cell means no effort is
+   passed; it is not a STOP. In auto mode the Supervisor reads both tables instead of asking; with no
+   row or an empty model cell it spawns on the CLI that runs this session, with the model this session
+   runs as, logged `SAFER OPTION` with the review flag, and never invents another CLI's model name.
 
    *(Optional)* For non-trivial codebases, a structural code-graph approach — building a dependency graph of the code — can auto-compute hub/centrality (→ Risk, Stage 2) and a change's code-dependency blast radius (→ review scope, Stage 4). It's optional: if absent, those signals stay manual judgment. See the same note in `CLAUDE_LEGACY.md`.
 
