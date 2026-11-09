@@ -1695,9 +1695,10 @@ def admin_refusal(command, cwd, transcript_path, admin):
                     i += 2 if tokens[i] in GIT_OPTION_ARGS else 1
                 writes += _git_verb(tokens) not in ADMIN_READ_ONLY_GIT
         # Round 3 (N1): a chained `git add`/`commit`/`reset`/… runs after this check and could change
-        # what the push publishes, so the command holds exactly one git write: its merge or push.
+        # what the push publishes, so the command holds exactly one git command: its merge or push.
+        # T295: `ADMIN_READ_ONLY_GIT` is empty, so a chained `git status`/`show`/`diff`/`log` counts too.
         if writes != 1:
-            return ("an `[admin]` command holds exactly one git merge or push, and no other git write "
+            return ("an `[admin]` command holds exactly one git merge or push, and no other git command "
                     "(run the others in their own command)")
         actions = _git_actions(command, cwd)
         if not actions:
