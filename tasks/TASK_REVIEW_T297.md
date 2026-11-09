@@ -54,22 +54,23 @@ Mode: auto
 6. Stage 4: code review no P0/P1/P2; P3s handled in a fix round (mutation controls for two Stage 1 guards, stale output-form lines in the template and `PROJECT_SPEC.md`); the review prompt had no memory slice, because a reviewer reads the diff and the guide — RULE: `docs/claude-md/pipeline-stages.md` Stage 4 item 1
 Checks: tests `python3 -m pytest tests/test_cli_effort_table.py tests/test_cli_model_table.py -q -p no:cacheprovider` — 19 passed on `abc719ad`; full suite `python3 -m pytest .claude/hooks/tests tests -q -p no:cacheprovider` on `45b677e9` — 4388 passed, 4 failed, all in `tests/test_auto_verify.py`; the 4 pass when run alone (24 passed), and another session's full suite ran at the same time, so I read them as load flakes; reviews code-review — no P0/P1/P2 (read-only reviewer, `Verdict: no P0/P1/P2`), the P3s fixed in `abc719ad` except the tracks.md row 6 note, which T299 carries; real run — none, the auto verify run checks it
 Memory: nothing new (candidate not written: several full suites running at once filled the `/tmp` inodes and Bash failed with ENOSPC; the cause is not verified end to end)
-Not done: merge (yours); auto verify: running (T182)
+Not done: merge (yours); auto verify: ☑ pass (session d72e5f74-d5ff-4a92-9e52-2731a3235181, commit 5cd7cb836105225e76d0cf98d2cdd677f5c1bc9d, log .claude/verify-runs/T297-5cd7cb836105.log)
+Paused: done not moved — Gate 5: the tests row is not `☑ pass` with pasted output; Gate 6: the `UI: Visual regression` row is blank; Gate 6: the `UI: Design-system compliance` row is blank; Gate 6: the `UI: Responsiveness` row is blank
 
 ## Evidence
 
 | Check | Result | Notes / output snippet |
 |-------|--------|------------------------|
-| **New test(s) cover Acceptance Criteria (file paths pasted)** | ☐ pass / ☐ fail | [test file path(s) — required before Done] |
-| Verification command run | ☐ pass / ☐ fail | [paste actual output] |
+| **New test(s) cover Acceptance Criteria (file paths pasted)** | ☑ pass | `tests/test_cli_effort_table.py` (new, with mutation controls); `python3 -m pytest tests/test_cli_effort_table.py tests/test_cli_model_table.py -q -p no:cacheprovider` printed `19 passed in 0.11s` on `5cd7cb83` (2026-11-09) |
+| Verification command run | ☑ pass | same command, `19 passed in 0.11s`; full suite on `45b677e9`: `4 failed, 4388 passed`, the 4 in `tests/test_auto_verify.py` pass alone (`24 passed`) |
 | Negative cases hold | ☐ pass / ☐ fail | [paste the red run against the prior content, or the mutation diff (`git diff --stat`, non-empty) before each verdict] |
-| verify | ☐ pass / ☐ fail / ☐ N/A | [what was observed — must literally state "pass" or "fail" here too, e.g. "skill run, feature confirmed working — pass": the merge gate scans this Notes column for the word "pass", not just the Result column] |
+| verify | ☑ pass | auto-run by hook, session d72e5f74-d5ff-4a92-9e52-2731a3235181, commit 5cd7cb836105225e76d0cf98d2cdd677f5c1bc9d, log .claude/verify-runs/T297-5cd7cb836105.log — pass; done not moved: Gate 5: the tests row is not `☑ pass` with pasted output; Gate 6: the `UI: Visual regression` row is blank; Gate 6: the `UI: Design-system compliance` row is blank; Gate 6: the `UI: Responsiveness` row is blank |
 | Review scope bounded to the change's blast radius (affected set, not whole repo) | ☐ pass / ☐ fail | [what was reviewed vs. skipped, and why] |
 | Full smoke suite still green (no regression) | ☐ pass / ☐ fail | |
 | **Companion score (easy-verifier)** | ☐ pass / ☐ fail / ☐ N/A | [`overall` and `change_risk` as the tool returned them, the scope, the ref, and the absolute path of the verifier report after a literal `report:` label — e.g. "overall 86 (>= 80), change_risk pass, scope changes, ref `main...HEAD`, report: `/home/me/.easy-verifier-reports/kit/score_changes_20261028T0530Z.html`". The gate reads the path that follows `report:` and nothing else, so with no label, or a path that is absent, the row is unscored — write ☑ N/A instead. ☑ N/A with a reason when neither companion tool was run: the merge gate blocks on ☑ fail only, never on an absent or N/A row] |
-| **UI: Visual regression (diff or verdict pasted)** | ☐ pass / ☐ fail / ☐ N/A | [screenshot path or LLM verdict — required for UI tasks, Hard-Stop Gate 6] |
-| **UI: Design-system compliance (tokens/colors/typography verified)** | ☐ pass / ☐ fail / ☐ N/A | [method used + output] |
-| **UI: Responsiveness at target viewports** | ☐ pass / ☐ fail / ☐ N/A | [viewports tested, any overflow findings] |
+| **UI: Visual regression (diff or verdict pasted)** | ☑ N/A | no UI component: the change is skill, doc and test text only |
+| **UI: Design-system compliance (tokens/colors/typography verified)** | ☑ N/A | no UI component: no tokens, colours or typography touched |
+| **UI: Responsiveness at target viewports** | ☑ N/A | no UI component: no page or layout touched |
 
 ---
 
