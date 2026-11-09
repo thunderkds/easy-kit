@@ -47,16 +47,52 @@ Not done: merge (yours); <auto verify: running (T182) | auto verify: <result> | 
 
 | Check | Result | Notes / output snippet |
 |-------|--------|------------------------|
-| **New test(s) cover Acceptance Criteria (file paths pasted)** | ☐ pass / ☐ fail | [test file path(s) — required before Done] |
-| Verification command run | ☐ pass / ☐ fail | [paste actual output] |
-| Negative cases hold | ☐ pass / ☐ fail | [paste the red run against the prior content, or the mutation diff (`git diff --stat`, non-empty) before each verdict] |
+| **New test(s) cover Acceptance Criteria (file paths pasted)** | ☑ pass | `.claude/hooks/tests/test_gate_hidden_verbs.py` (rows 1, 2, 3, 5, 6, 7, 8) and `.claude/hooks/tests/test_slot2b_brace_glob.py` (rows 4, 5, 6); `merge_gate_guard.py` and `test_merge_gate_guard.py` (row 8, `T296` in `AUTHORISED_TASKS`). Run against the unchanged hooks they gave 114 failed (see Demonstration); now `414 passed in 5.76s`. |
+| Verification command run | ☑ pass | `python3 -m pytest .claude/hooks/tests -q -k "admin or merge_gate or slot or task_context or hidden"` -> `1147 passed, 1690 deselected in 28.33s`. `python3 -m pytest .claude/hooks/tests tests -q -p no:cacheprovider` -> `4797 passed, 25 subtests passed in 332.50s (0:05:32)` (2026-11-09, HEAD `7503935d`). |
+| Negative cases hold | ☑ pass | Red run against the prior content: 114 failed, 268 passed (Demonstration). Mutation controls (19), each one byte change in `pre_bash_block_unsafe_merge.py` or `lib/task_context.py` (`git diff --stat` non-empty), run on the two new test files (414 tests), restored after each; every one turned tests red. The three the guide names: M1 `hidden_git_verb` returns False: `103 failed, 311 passed`; M2 `--message` out of `MERGE_OPTIONS_WITH_ARG`: `6 failed, 408 passed`; M3 brace refusal out of slot 2b: `7 failed, 407 passed`. Diffs and the rest are under the table. |
 | verify | ☐ pass / ☐ fail / ☐ N/A | [what was observed — must literally state "pass" or "fail" here too, e.g. "skill run, feature confirmed working — pass": the merge gate scans this Notes column for the word "pass", not just the Result column] |
-| Review scope bounded to the change's blast radius (affected set, not whole repo) | ☐ pass / ☐ fail | [what was reviewed vs. skipped, and why] |
-| Full smoke suite still green (no regression) | ☐ pass / ☐ fail | |
-| **Companion score (easy-verifier)** | ☐ pass / ☐ fail / ☐ N/A | [`overall` and `change_risk` as the tool returned them, the scope, the ref, and the absolute path of the verifier report after a literal `report:` label — e.g. "overall 86 (>= 80), change_risk pass, scope changes, ref `main...HEAD`, report: `/home/me/.easy-verifier-reports/kit/score_changes_20261028T0530Z.html`". The gate reads the path that follows `report:` and nothing else, so with no label, or a path that is absent, the row is unscored — write ☑ N/A instead. ☑ N/A with a reason when neither companion tool was run: the merge gate blocks on ☑ fail only, never on an absent or N/A row] |
-| **UI: Visual regression (diff or verdict pasted)** | ☐ pass / ☐ fail / ☐ N/A | [screenshot path or LLM verdict — required for UI tasks, Hard-Stop Gate 6] |
-| **UI: Design-system compliance (tokens/colors/typography verified)** | ☐ pass / ☐ fail / ☐ N/A | [method used + output] |
-| **UI: Responsiveness at target viewports** | ☐ pass / ☐ fail / ☐ N/A | [viewports tested, any overflow findings] |
+| Review scope bounded to the change's blast radius (affected set, not whole repo) | ☑ pass | Reviewed: the two hook files and the five test files named in the guide, `docs/claude-md/tracks.md` (`### Admin tag`, Known limits, slot 2b rules). Dependents of `invokes_test_runner` and slot 2b ran in the full suite. Stale-text grep (LR-0005) for `quote inside the word`, `Cheap hidden verbs`, `merge --message <branch>`, `find -exec git`, `cannot tell which branch` over the repo: only history (`TASK_REVIEW_T284`, the hunt, guides) and the new tests remain. Not reviewed: the heredoc scanner (T294) and the repo config and hook allowlist (T295), out of scope. Not run by this agent: `code-review` and `security-review` skills (Stage 4, the Supervisor). |
+| Full smoke suite still green (no regression) | ☑ pass | `4797 passed, 25 subtests passed in 332.50s (0:05:32)`. The pin tests the guide names ran in it: `test_admin_tag.py` (T284), `test_stop_attribution_t287.py`, `test_merge_gate_t210.py`, `test_merge_gate_guard.py`, the tracks.md text pins, `test_agent_guide_dedup.py`, `test_vital_slice.py`, the site pins and the memory budget tests. |
+| **Companion score (easy-verifier)** | ☑ N/A | Neither companion tool was run for this task; the guide does not require it. |
+| **UI: Visual regression (diff or verdict pasted)** | ☑ N/A | Hook code and docs only; no UI component. |
+| **UI: Design-system compliance (tokens/colors/typography verified)** | ☑ N/A | Hook code and docs only; no UI component. |
+| **UI: Responsiveness at target viewports** | ☑ N/A | Hook code and docs only; no UI component. |
+
+**Mutation controls** (each applied to the worktree, tests run, file restored with the original bytes; run 2026-11-09):
+
+```
+M1  .claude/hooks/pre_bash_block_unsafe_merge.py  | 1 +
++    return False     (first line of the body of hidden_git_verb, before `text = strip_heredoc_bodies(command)`)
+    -> 103 failed, 311 passed
+M2  .claude/hooks/pre_bash_block_unsafe_merge.py  | 2 +-
+-MERGE_OPTIONS_WITH_ARG = frozenset({"-m", "--message", "-F", "--file", ...
++MERGE_OPTIONS_WITH_ARG = frozenset({"-m", "-F", "--file", ...
+    -> 6 failed, 408 passed
+M3  .claude/hooks/lib/task_context.py  | 2 +-
+-    if "{" in command or "}" in command or _unquoted_glob(command):
++    if _unquoted_glob(command):
+    -> 7 failed, 407 passed
+M4  glob refusal out (`or _unquoted_glob(command)` removed)            -> 5 failed, 409 passed
+M5  `send-pack` out of PUBLISH_VERBS                                    -> 5 failed, 409 passed
+M6  `_own_origin_refusal` returns None at once                          -> 1 failed, 413 passed
+M7  slot 2b `_git_verb_allowed` check removed                           -> 5 failed, 409 passed
+M8  backslash + newline joined with a space again                       -> 2 failed, 412 passed
+M9  `invokes_test_runner` back to QUOTED_SPAN_PATTERN                   -> 14 failed, 400 passed
+M10 `--cleanup` out of MERGE_OPTIONS_WITH_ARG                           -> 2 failed, 412 passed
+M11 `--file` out of MERGE_OPTIONS_WITH_ARG                              -> 3 failed, 411 passed
+M12 `timeout` out of SHELL_WRAPPERS                                     -> 1 failed, 413 passed
+M13 the verb refusal reason back to "cannot tell which branch"         -> 3 failed, 411 passed
+M14 abbreviated long option (`--mess`) rule off                         -> 3 failed, 411 passed
+M15 short-option run rule (`-qm <x>`) off                               -> 18 failed, 396 passed
+M16 nonliteral command word (`$g push`) rule off                        -> 10 failed, 404 passed
+M17 `bash -c '...'` recursion off                                       -> 5 failed, 409 passed
+M18 depth limit off                                                     -> 1 failed, 413 passed
+M19 PLAIN_VERB check off                                                -> 26 failed, 388 passed
+```
+The first agent run also reached a wrapper-assignment mutation (its M23, pinned by commit `4faf490a`).
+Mutation script (outside the repo): `/tmp/claude-1000/-home-hungnguyenhuu-workspace-pets-personal-agentic-claude/53a340c2-ba9d-4416-b11e-5082d9905521/scratchpad/mutate.py`.
+
+**Follow-ups and notes** (cut list, not built): `-S`/`--gpg-sign` and `--log` take an optional attached value only, so they never take the next word (git's own rule; pinned by `(["-S", B], [B])`). `git submodule foreach` and `git rebase --exec` stay unseen and are named in Known limits. The stray root file `corpus_old.json` (a capture artifact, referenced by no test) was removed.
 
 ---
 
@@ -118,9 +154,48 @@ $ python3 -m pytest .claude/hooks/tests/test_gate_hidden_verbs.py .claude/hooks/
   push/merge forms, no-tag behaviour, quoted globs and plain runs still filed, the old corpus answers
 ```
 
-**AFTER**: [same command, post-change] OR [verbatim excerpt of the new content]
+**BEFORE note (resume)**: the capture above was taken by the first agent run on 2026-11-08 against
+base commit `bc5ccc34`, before any implementation commit; it is kept as it is. The Supervisor
+scratchpad script `capture_t296.py` is gone, so the AFTER run below uses a scratch script of the same
+shape (the repo's `gate` fixture, the real `main()`, a throwaway repo with a bare remote `../origin.git`,
+`HOME` and git config isolated), kept outside the repo.
 
-**DELTA**: [one sentence — what a user can now do that they could not before]
+**AFTER** (2026-11-09, HEAD `7503935d`; same 11 forms, gate verdict per mode, then the same command
+line run for real in `bash -c` and `zsh -c` in the throwaway worktree: first with no gate (control),
+then only if the `[admin]` gate allowed it; "landed" means `refs/heads/feat/t900-x` exists on the bare
+remote afterwards):
 
-**WITNESS**: [who ran it and when — derived from `memory/event-trace/Txxx.jsonl`, never the
-implementing agent alone]
+```
+2026-11-09T02:28:34Z  'v=push; git $v origin feat/t900-x'
+    gate: none=ALLOWED [auto]=BLOCKED [admin]=BLOCKED   control (no gate) landed: bash=True zsh=True   with gate [admin] landed: bash=False zsh=False
+2026-11-09T02:28:34Z  'g=git; $g push origin feat/t900-x'
+    gate: none=ALLOWED [auto]=BLOCKED [admin]=BLOCKED   control (no gate) landed: bash=True zsh=True   with gate [admin] landed: bash=False zsh=False
+2026-11-09T02:28:34Z  'v=pu; git ${v}sh origin feat/t900-x'
+    gate: none=ALLOWED [auto]=BLOCKED [admin]=BLOCKED   control (no gate) landed: bash=True zsh=True   with gate [admin] landed: bash=False zsh=False
+2026-11-09T02:28:34Z  'git {p..p}ush origin feat/t900-x'
+    gate: none=ALLOWED [auto]=BLOCKED [admin]=BLOCKED   control (no gate) landed: bash=True zsh=True   with gate [admin] landed: bash=False zsh=False
+2026-11-09T02:28:34Z  "git $'push' origin feat/t900-x"
+    gate: none=ALLOWED [auto]=BLOCKED [admin]=BLOCKED   control (no gate) landed: bash=True zsh=True   with gate [admin] landed: bash=False zsh=False
+2026-11-09T02:28:34Z  "$'git' push origin feat/t900-x"
+    gate: none=ALLOWED [auto]=BLOCKED [admin]=BLOCKED   control (no gate) landed: bash=True zsh=True   with gate [admin] landed: bash=False zsh=False
+2026-11-09T02:28:34Z  'env -i git "push" origin feat/t900-x'
+    gate: none=ALLOWED [auto]=BLOCKED [admin]=BLOCKED   control (no gate) landed: bash=True zsh=True   with gate [admin] landed: bash=False zsh=False
+2026-11-09T02:28:35Z  'timeout 20 git "push" origin feat/t900-x'
+    gate: none=ALLOWED [auto]=BLOCKED [admin]=BLOCKED   control (no gate) landed: bash=True zsh=True   with gate [admin] landed: bash=False zsh=False
+2026-11-09T02:28:35Z  'nice git "push" origin feat/t900-x'
+    gate: none=ALLOWED [auto]=BLOCKED [admin]=BLOCKED   control (no gate) landed: bash=True zsh=True   with gate [admin] landed: bash=False zsh=False
+2026-11-09T02:28:35Z  'bash -c \'git "push" origin feat/t900-x\''
+    gate: none=ALLOWED [auto]=BLOCKED [admin]=BLOCKED   control (no gate) landed: bash=True zsh=True   with gate [admin] landed: bash=False zsh=False
+2026-11-09T02:28:35Z  'git send-pack ../origin.git feat/t900-x'
+    gate: none=ALLOWED [auto]=BLOCKED [admin]=BLOCKED   control (no gate) landed: bash=True zsh=True   with gate [admin] landed: bash=False zsh=False
+```
+
+Tests that were red now pass (2026-11-09): `python3 -m pytest .claude/hooks/tests/test_gate_hidden_verbs.py .claude/hooks/tests/test_slot2b_brace_glob.py -q -p no:cacheprovider` -> `414 passed in 5.76s`.
+With no tag the 11 forms stay ALLOWED on purpose: the hidden-verb check is an auto-mode rule
+(`hidden_git_verb`, requirement (a) says "under `[auto]` and `[admin]`"). The guide's AC 1 phrase "still
+blocked with no tag" does not match that requirement text or the gate's design; the tests pin "no tag, no
+change" (`test_row1_with_no_tag_the_hidden_forms_behave_as_before`). The Supervisor may decide otherwise.
+
+**DELTA**: Under `[auto]` and `[admin]` the gate now refuses all 11 hidden-verb forms that used to push for real, a `git merge` option value is no longer read as the branch, and slot 2b no longer files a call whose brace or glob reaches outside the worktree.
+
+**WITNESS**: `memory/event-trace/T296.jsonl` (hash-chained, written by the trace hook, not by the agent): the first run's spawn at 2026-11-08T15:19:03Z, this resume's Bash calls on 2026-11-09 (the 19 mutation runs, the full suite and the AFTER capture, last record 2026-11-09T02:28:36Z). The Supervisor confirms it from that file at Stage 4.
