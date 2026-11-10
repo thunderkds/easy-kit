@@ -1,5 +1,5 @@
 # PROJECT_KANBAN.md
-**Last updated**: 2026-11-09
+**Last updated**: 2026-11-10
 
 > Compact task board. Full context lives in `PROJECT_SPEC.md`. Update this file whenever a task status changes.
 
@@ -98,6 +98,8 @@
 
 
 ### Ready for Review
+- [ ] **T305** — Plugin hooks do nothing when `setup.sh` already wired the same hook | common-infrastructure | C2 | Risk: Medium | P2 | Registered 2026-11-10, user: "yes, do as your recommend" (both installs ran every gate twice) | Guide: `tasks/TASK_GUIDE_T305.md` | Started 2026-11-10: branch `fix/t305-plugin-hook-guard`, worktree `../wt-t305` | Stage 4 2026-11-10: code-review P0 0, P1 0 (2 P3); security-review no findings; record `tasks/TASK_REVIEW_T305.md` | Ready for Review 2026-11-10: 3 implementer commits + review record on `fix/t305-plugin-hook-guard`
+- [ ] **T304** — The docs layout puts `general-agent-template.md` in `templates/`, not `agents/` | Supervisor | C0 | Risk: Low | P3 | Registered 2026-11-10, user: "yes, do both" (follow-up named in T303) | Started 2026-11-10: branch `fix/t304-docs-agents-row`, worktree `../wt-t304` | Track: minimal | Record: tasks/MINIMAL_LOG.md
 
 
 ### Done
