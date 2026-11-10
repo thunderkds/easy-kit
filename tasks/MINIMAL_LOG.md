@@ -22,11 +22,11 @@ Mode: auto
 - Suite: `python -m pytest .claude/hooks/tests tests -q -p no:cacheprovider` — `2 failed, 6914 passed, 6 skipped`; both failures are `test_heredoc_quoted_marker.py::test_round4_premise_…[d-busybox-ash-*]`, which fail the same way on `main` because `busybox` is not installed on this machine. Python 3.14 here has no pytest, so the runs used a scratch venv with pytest 9.2.0.
 - Real run: `python3 -m http.server 8793` in `site/`, then `curl http://127.0.0.1:8793/docs.html` — `HTTP 200`, and the page holds `<summary>Model and effort per spawn</summary>`, `a call once a sub-agent run`, `refuse when the repo config` and `tasks/<wbr>attempts.tsv`.
 - Simplify: skipped: no changed lines outside tests and docs.
-- verify: ☐ blocked — auto-run by hook, session aa7c054f-9735-40ab-a723-0eee1d1a78d8, commit fdd55c297350ffffc7f50518526cb25727fffddd, log .claude/verify-runs/T303-fdd55c297350.log (SKIP, and git does not show a change of docs-only files)
+- verify: ☑ pass — auto-run by hook, session 1a59ddd0-87b2-4f1d-92ed-e318fa9b34c2, commit bd9a0acb20b72cc738906083069b06e591006978, log .claude/verify-runs/T303-bd9a0acb20b7.log
 **Files:** `site/docs.html`, `tests/test_t303_docs_recent_changes.py`, `tests/test_site_story.py`, `tasks/MINIMAL_LOG.md`, `PROJECT_KANBAN.md`
 **Memory:** nothing new (candidate not written: this machine's Python 3.14 has no pytest, so test runs need a venv; an environment fact, not a kit rule)
-**Not done:** merge waits for the auto verify pass (`[admin]`); follow-ups: the repository layout row for `agents/` still says it holds `general-agent-template.md`, which lives in `templates/` (pre-existing); T297 still sits in Ready for Review although it was merged on 2026-11-09.
-
+**Not done:** merge (admin: after the auto verify pass); auto verify: ☑ pass (session 1a59ddd0-87b2-4f1d-92ed-e318fa9b34c2, commit bd9a0acb20b7, log .claude/verify-runs/T303-bd9a0acb20b7.log); follow-ups: the repository layout row for `agents/` still says it holds `general-agent-template.md`, which lives in `templates/` (pre-existing); T297 still sits in Ready for Review although it was merged on 2026-11-09.
+Paused: done not moved — report incomplete: auto verify slot
 
 ## T302 — The docs page says how Stage 4 treats a security finding · minimal
 **Asked:** "Just wanna make sure if it is documented, or not, let check and update"
