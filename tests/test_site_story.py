@@ -568,9 +568,15 @@ CHANGED_BY_T290 = {
 }
 
 
+# T303: the step limit counts per sub-agent run since T285, not per task.
+CHANGED_BY_T303 = {
+    "292e447cf011312d": "the pre_agent_step_limit.py hooks row counts per sub-agent run, not per task (T285, T303)",
+}
+
+
 def test_every_paragraph_item_cell_and_definition_of_the_old_page_is_on_docs():
     now = set(sentence_hashes(docs_html()))
-    missing = [(h, t) for h, t in _baseline()["sentences"] if h not in now and h not in CHANGED_BY_T239 and h not in CHANGED_BY_T240 and h not in CHANGED_BY_T245 and h not in CHANGED_BY_T251 and h not in CHANGED_BY_T256 and h not in CHANGED_BY_T261 and h not in CHANGED_BY_T284 and h not in CHANGED_BY_T290]
+    missing = [(h, t) for h, t in _baseline()["sentences"] if h not in now and h not in CHANGED_BY_T239 and h not in CHANGED_BY_T240 and h not in CHANGED_BY_T245 and h not in CHANGED_BY_T251 and h not in CHANGED_BY_T256 and h not in CHANGED_BY_T261 and h not in CHANGED_BY_T284 and h not in CHANGED_BY_T290 and h not in CHANGED_BY_T303]
     assert not missing, f"{len(missing)} text(s) lost from docs.html: {missing[:5]}"
 
 

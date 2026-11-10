@@ -98,6 +98,7 @@
 
 
 ### Ready for Review
+- [ ] **T303** — The docs page says what T285, T288, T295 and T297–T299 changed (effort fold-out, step-limit row, `[admin]` config refusal, `tasks/attempts.tsv`) | Supervisor | C1 | Risk: Low | P2 | Registered 2026-11-10 [admin], user: "let check all the change, and make sure all of them avail from the docs and the index" | Branch `feat/t303-docs-recent-changes`, worktree `../wt-t303` | Track: minimal | Record: tasks/MINIMAL_LOG.md
 - [ ] **T297** — A `## CLI Effort Table` beside the CLI Model Table | common-infrastructure | C1 | Risk: Low | P2 | Guide: `tasks/TASK_GUIDE_T297.md` | Registered 2026-11-09 [auto], user: "yes, let create plan and start parallel [auto]" (plan doc `easy-kit — update plan (base)`) | Started 2026-11-09: worktree `../wt-t297`, branch `feat/t297-effort-table` | Ready for Review 2026-11-09 [auto]: head `5cd7cb83`, report `tasks/TASK_REVIEW_T297.md` on the branch (committed there); full suite run, failures are load flakes that pass alone; auto verify not yet run
 
 
