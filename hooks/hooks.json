@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/.claude/hooks/post_write_register_task.py\""
+            "command": "grep -qsF '$CLAUDE_PROJECT_DIR\\\"/.claude/hooks/post_write_register_task.py' \"$CLAUDE_PROJECT_DIR/.claude/settings.json\" || python3 \"${CLAUDE_PLUGIN_ROOT}/.claude/hooks/post_write_register_task.py\""
           }
         ]
       },
@@ -15,7 +15,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/.claude/hooks/post_agent_move_to_review.py\""
+            "command": "grep -qsF '$CLAUDE_PROJECT_DIR\\\"/.claude/hooks/post_agent_move_to_review.py' \"$CLAUDE_PROJECT_DIR/.claude/settings.json\" || python3 \"${CLAUDE_PLUGIN_ROOT}/.claude/hooks/post_agent_move_to_review.py\""
           }
         ]
       },
@@ -24,7 +24,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/.claude/hooks/post_bash_memory_update.py\""
+            "command": "grep -qsF '$CLAUDE_PROJECT_DIR\\\"/.claude/hooks/post_bash_memory_update.py' \"$CLAUDE_PROJECT_DIR/.claude/settings.json\" || python3 \"${CLAUDE_PLUGIN_ROOT}/.claude/hooks/post_bash_memory_update.py\""
           }
         ]
       },
@@ -33,7 +33,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/.claude/hooks/post_tool_trace.py\""
+            "command": "grep -qsF '$CLAUDE_PROJECT_DIR\\\"/.claude/hooks/post_tool_trace.py' \"$CLAUDE_PROJECT_DIR/.claude/settings.json\" || python3 \"${CLAUDE_PLUGIN_ROOT}/.claude/hooks/post_tool_trace.py\""
           }
         ]
       }
@@ -44,7 +44,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/.claude/hooks/pre_agent_validate_guide.py\""
+            "command": "grep -qsF '$CLAUDE_PROJECT_DIR\\\"/.claude/hooks/pre_agent_validate_guide.py' \"$CLAUDE_PROJECT_DIR/.claude/settings.json\" || python3 \"${CLAUDE_PLUGIN_ROOT}/.claude/hooks/pre_agent_validate_guide.py\""
           }
         ]
       },
@@ -53,7 +53,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/.claude/hooks/pre_bash_block_unsafe_merge.py\""
+            "command": "grep -qsF '$CLAUDE_PROJECT_DIR\\\"/.claude/hooks/pre_bash_block_unsafe_merge.py' \"$CLAUDE_PROJECT_DIR/.claude/settings.json\" || python3 \"${CLAUDE_PLUGIN_ROOT}/.claude/hooks/pre_bash_block_unsafe_merge.py\""
           }
         ]
       },
@@ -62,7 +62,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/.claude/hooks/pre_tool_sensitive_path.py\""
+            "command": "grep -qsF '$CLAUDE_PROJECT_DIR\\\"/.claude/hooks/pre_tool_sensitive_path.py' \"$CLAUDE_PROJECT_DIR/.claude/settings.json\" || python3 \"${CLAUDE_PLUGIN_ROOT}/.claude/hooks/pre_tool_sensitive_path.py\""
           }
         ]
       },
@@ -71,7 +71,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/.claude/hooks/pre_tool_locked_oracle.py\""
+            "command": "grep -qsF '$CLAUDE_PROJECT_DIR\\\"/.claude/hooks/pre_tool_locked_oracle.py' \"$CLAUDE_PROJECT_DIR/.claude/settings.json\" || python3 \"${CLAUDE_PLUGIN_ROOT}/.claude/hooks/pre_tool_locked_oracle.py\""
           }
         ]
       },
@@ -80,7 +80,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/.claude/hooks/pre_agent_step_limit.py\""
+            "command": "grep -qsF '$CLAUDE_PROJECT_DIR\\\"/.claude/hooks/pre_agent_step_limit.py' \"$CLAUDE_PROJECT_DIR/.claude/settings.json\" || python3 \"${CLAUDE_PLUGIN_ROOT}/.claude/hooks/pre_agent_step_limit.py\""
           }
         ]
       }
@@ -90,7 +90,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/.claude/hooks/stop_review_reminder.py\""
+            "command": "grep -qsF '$CLAUDE_PROJECT_DIR\\\"/.claude/hooks/stop_review_reminder.py' \"$CLAUDE_PROJECT_DIR/.claude/settings.json\" || python3 \"${CLAUDE_PLUGIN_ROOT}/.claude/hooks/stop_review_reminder.py\""
           }
         ]
       },
@@ -98,7 +98,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/.claude/hooks/stop_auto_mode_check.py\""
+            "command": "grep -qsF '$CLAUDE_PROJECT_DIR\\\"/.claude/hooks/stop_auto_mode_check.py' \"$CLAUDE_PROJECT_DIR/.claude/settings.json\" || python3 \"${CLAUDE_PLUGIN_ROOT}/.claude/hooks/stop_auto_mode_check.py\""
           }
         ]
       },
@@ -106,7 +106,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/.claude/hooks/stop_auto_verify.py\""
+            "command": "grep -qsF '$CLAUDE_PROJECT_DIR\\\"/.claude/hooks/stop_auto_verify.py' \"$CLAUDE_PROJECT_DIR/.claude/settings.json\" || python3 \"${CLAUDE_PLUGIN_ROOT}/.claude/hooks/stop_auto_verify.py\""
           }
         ]
       }
