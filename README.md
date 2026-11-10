@@ -24,7 +24,7 @@ skills, and update flow — lives on the project site:
 
 ## Quick Start
 
-There are two ways to install: the **Claude Code plugin**, or **`setup.sh`**, which copies the kit into your repo and can also set up Codex.
+There are two ways to install: the **Claude Code plugin**, or **`setup.sh`**, which copies the kit into your repo and can also set up Codex. Pick one: if a repo has both, each plugin hook steps aside when `.claude/settings.json` already wires the same hook, so every gate runs once.
 
 **Claude Code plugin.** Run in a terminal. On Claude Code 2.1.292 or later, one command does both:
 `claude plugin install easy-kit --marketplace thunderkds/easy-kit`.

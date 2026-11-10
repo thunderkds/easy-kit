@@ -47,12 +47,12 @@ Not done: merge (yours); <auto verify: running (T182) | auto verify: <result> | 
 
 | Check | Result | Notes / output snippet |
 |-------|--------|------------------------|
-| **New test(s) cover Acceptance Criteria (file paths pasted)** | ☐ pass / ☐ fail | [test file path(s) — required before Done] |
-| Verification command run | ☐ pass / ☐ fail | [paste actual output] |
-| Negative cases hold | ☐ pass / ☐ fail | [paste the red run against the prior content, or the mutation diff (`git diff --stat`, non-empty) before each verdict] |
+| **New test(s) cover Acceptance Criteria (file paths pasted)** | ☑ pass | `tests/test_plugin_double_install.py` (AC1-6: 12 skip cases, 12 run-unchanged, 12 permission-only, 12 init-copy, per-script, name-prefix, unset dir, mutant, identical files). Red run before the change: `13 failed, 40 passed`. Green: `173 passed in 5.19s` for the 3 files of the Verification Command. |
+| Verification command run | ☑ pass | 2026-11-10 10:54:21 UTC: pytest `173 passed in 5.19s` (scratch venv, system python has no pytest); `sh tests/test_update.sh` -> `38 passed, 0 failed`; `claude plugin validate .` -> `Validation passed with warnings` (same as BEFORE). |
+| Negative cases hold | ☑ pass | Guard stripped from `hooks/hooks.json` by sed (`git diff --stat`: `hooks/hooks.json 24 ++++----`): `14 failed, 39 passed` (12 AC1 cases, per-script, identical-files). File restored. |
 | verify | ☐ pass / ☐ fail / ☐ N/A | [what was observed — must literally state "pass" or "fail" here too, e.g. "skill run, feature confirmed working — pass": the merge gate scans this Notes column for the word "pass", not just the Result column] |
 | Review scope bounded to the change's blast radius (affected set, not whole repo) | ☐ pass / ☐ fail | [what was reviewed vs. skipped, and why] |
-| Full smoke suite still green (no regression) | ☐ pass / ☐ fail | |
+| Full smoke suite still green (no regression) | ☑ pass | `pytest tests/ .claude/hooks/tests -q`: `2 failed, 6967 passed, 6 skipped`; the 2 failures are `test_heredoc_quoted_marker.py ... d-busybox-ash-bash/zsh` and fail the same on a clean stash (busybox-ash not installed). One README cap test (`test_companion_setup.py`, 75 lines) caught a 2-line README edit; the README line was merged into an existing line. |
 | **Companion score (easy-verifier)** | ☐ pass / ☐ fail / ☐ N/A | [`overall` and `change_risk` as the tool returned them, the scope, the ref, and the absolute path of the verifier report after a literal `report:` label — e.g. "overall 86 (>= 80), change_risk pass, scope changes, ref `main...HEAD`, report: `/home/me/.easy-verifier-reports/kit/score_changes_20261028T0530Z.html`". The gate reads the path that follows `report:` and nothing else, so with no label, or a path that is absent, the row is unscored — write ☑ N/A instead. ☑ N/A with a reason when neither companion tool was run: the merge gate blocks on ☑ fail only, never on an absent or N/A row] |
 | **UI: Visual regression (diff or verdict pasted)** | ☐ pass / ☐ fail / ☐ N/A | [screenshot path or LLM verdict — required for UI tasks, Hard-Stop Gate 6] |
 | **UI: Design-system compliance (tokens/colors/typography verified)** | ☐ pass / ☐ fail / ☐ N/A | [method used + output] |
@@ -85,7 +85,22 @@ Current command of the Stop hook `stop_auto_verify.py` in `hooks/hooks.json` (no
 python3 "${CLAUDE_PLUGIN_ROOT}/.claude/hooks/stop_auto_verify.py"
 ```
 
-**AFTER**: [same command, post-change] OR [verbatim excerpt of the new content]
+**AFTER** (2026-11-10 10:54:21 UTC):
+
+```
+$ python3 -m pytest tests/test_plugin_package.py tests/test_hooks_from_plugin.py tests/test_plugin_double_install.py -q
+173 passed in 5.19s
+$ sh tests/test_update.sh | tail -2
+----- summary: 38 passed, 0 failed -----
+$ claude plugin validate . | tail -2
+✔ Validation passed with warnings
+```
+
+Stop hook command now:
+
+```
+grep -qsF '$CLAUDE_PROJECT_DIR\"/.claude/hooks/stop_auto_verify.py' "$CLAUDE_PROJECT_DIR/.claude/settings.json" || python3 "${CLAUDE_PLUGIN_ROOT}/.claude/hooks/stop_auto_verify.py"
+```
 
 **DELTA**: [one sentence — what a user can now do that they could not before]
 
