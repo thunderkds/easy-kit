@@ -67,8 +67,23 @@ Not done: merge (yours); <auto verify: running (T182) | auto verify: <result> | 
 > **before any implementation commit exists**; if it does not (docs, templates, skill-instruction
 > text), BEFORE is the **verbatim prior content** of what changed — a quoted excerpt, not a command.
 
-**BEFORE**: [pasted timestamped command output showing the thing absent/failing, captured before the
-first implementation commit] OR [verbatim excerpt of the prior content, for non-executable changes]
+**BEFORE** (captured 2026-11-10 10:53:28 UTC, before any implementation commit; pytest from a scratch venv because the system python has no pytest):
+
+```
+$ python3 -m pytest tests/test_plugin_package.py tests/test_hooks_from_plugin.py tests/test_plugin_double_install.py -q
+ERROR: file or directory not found: tests/test_plugin_double_install.py
+no tests ran in 0.00s
+$ sh tests/test_update.sh | tail -2
+----- summary: 38 passed, 0 failed -----
+$ claude plugin validate . | tail -2
+✔ Validation passed with warnings
+```
+
+Current command of the Stop hook `stop_auto_verify.py` in `hooks/hooks.json` (no guard, so it runs even when `.claude/settings.json` already wires it):
+
+```
+python3 "${CLAUDE_PLUGIN_ROOT}/.claude/hooks/stop_auto_verify.py"
+```
 
 **AFTER**: [same command, post-change] OR [verbatim excerpt of the new content]
 
