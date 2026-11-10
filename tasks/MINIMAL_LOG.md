@@ -23,6 +23,7 @@ Mode: auto
 - Real run: `python3 -m http.server 8793` in `site/`, then `curl http://127.0.0.1:8793/docs.html` — `HTTP 200`, and the page holds `<summary>Model and effort per spawn</summary>`, `a call once a sub-agent run`, `refuse when the repo config` and `tasks/<wbr>attempts.tsv`.
 - Simplify: skipped: no changed lines outside tests and docs.
 **Files:** `site/docs.html`, `tests/test_t303_docs_recent_changes.py`, `tests/test_site_story.py`, `tasks/MINIMAL_LOG.md`, `PROJECT_KANBAN.md`
+**Memory:** nothing new (candidate not written: this machine's Python 3.14 has no pytest, so test runs need a venv; an environment fact, not a kit rule)
 **Not done:** merge waits for the auto verify pass (`[admin]`); follow-ups: the repository layout row for `agents/` still says it holds `general-agent-template.md`, which lives in `templates/` (pre-existing); T297 still sits in Ready for Review although it was merged on 2026-11-09.
 
 
