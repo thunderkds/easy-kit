@@ -464,6 +464,7 @@
   With <code>[admin]</code> instead, the run is the same, and the Supervisor may also merge and push the task's own branch, and then push <code>main</code>, only after its auto verify passed.
   A task that changes only docs, task files, memory or tests has no runtime surface: when the run answers <code>skip</code>, the hook checks the changed paths in git and records a pass, so you need not type <code>/verify</code>. One path outside that list keeps the result <code>blocked</code>.
   A force push or a push of any other branch stays blocked, and <code>ship</code> stays with you.
+  The <code>[admin]</code> merge and push also refuse when the repo config holds a key that can run code or reach another host, such as a merge driver, a filter or <code>core.hooksPath</code>; the refusal names the key.
 </p></details>
 </section>
 
@@ -1863,6 +1864,22 @@ curl -fsSL https://raw.githubusercontent.com/$GITHUB_USERNAME/easy-kit/main/setu
   <p>Base template inherited by all four roles above. Contains the universal Base Rules, engineering principles, and output requirements that are not restated per role. It has no <code>subagent_type</code> of its own and is never spawned directly.</p>
 </div>
 </details>
+<details class="more">
+<summary>Model and effort per spawn</summary>
+<p>
+  At Stage 1 you list each CLI and the model it spawns at each Complexity level (C0–C3) in the
+  <code>## CLI Model Table</code> of <code>PROJECT_SPEC.md</code>, and the effort at each level
+  (<code>low</code>, <code>medium</code>, <code>high</code>, <code>xhigh</code> or <code>max</code>) in the
+  <code>## CLI Effort Table</code> beside it. <code>craft-spawn-prompt</code> reads both and recommends the
+  model and the effort for each spawn. An empty model cell makes it stop and ask; an empty effort cell
+  passes no effort.
+</p>
+<p>
+  When a task moves up to the extended track, or <code>verify</code> returns <code>fail</code>, the
+  Supervisor first raises the effort of the next spawn by one step, before it changes the model or splits
+  the task. It never lowers effort on its own.
+</p>
+</details>
 </section>
 
 <section id="skills">
@@ -1997,7 +2014,7 @@ curl -fsSL https://raw.githubusercontent.com/$GITHUB_USERNAME/easy-kit/main/setu
 <tr><td data-label="Event">PreToolUse</td><td data-label="Matcher"><code>Bash</code></td><td data-label="Script"><code>pre_<wbr>bash_<wbr>block_<wbr>unsafe_<wbr>merge.py</code></td><td data-label="Behavior"><span class="tag tag-block">blocks</span> git push/merge if pipeline gates are unsatisfied</td></tr>
 <tr><td data-label="Event">PreToolUse</td><td data-label="Matcher"><code>Edit|<wbr>Write|<wbr>Bash</code></td><td data-label="Script"><code>pre_<wbr>tool_<wbr>sensitive_<wbr>path.py</code></td><td data-label="Behavior"><span class="tag tag-block">asks</span> you to confirm before a call touches a path listed in <code>.claude/<wbr>sensitive-<wbr>paths.txt</code> — unless the active task's guide predicted that exact path <details><summary>What the list covers</summary><p><code>.env*</code>, secrets, production configs, infra.</p></details></td></tr>
 <tr><td data-label="Event">PreToolUse</td><td data-label="Matcher"><code>Edit|<wbr>Write|<wbr>MultiEdit|<wbr>NotebookEdit</code></td><td data-label="Script"><code>pre_<wbr>tool_<wbr>locked_<wbr>oracle.py</code></td><td data-label="Behavior"><span class="tag tag-block">blocks</span> a sub-agent other than <code>qa-expert</code> from editing a test that a task guide locks, while the task is being built</td></tr>
-<tr><td data-label="Event">PreToolUse</td><td data-label="Matcher"><code>.*</code></td><td data-label="Script"><code>pre_<wbr>agent_<wbr>step_<wbr>limit.py</code></td><td data-label="Behavior"><span class="tag tag-block">blocks</span> a task's tool call once it exceeds the step limit (default <strong>90</strong>) — self-clearing on the very next call</td></tr>
+<tr><td data-label="Event">PreToolUse</td><td data-label="Matcher"><code>.*</code></td><td data-label="Script"><code>pre_<wbr>agent_<wbr>step_<wbr>limit.py</code></td><td data-label="Behavior"><span class="tag tag-block">blocks</span> a call once a sub-agent run, or the main thread, exceeds the step limit (default <strong>90</strong>) — self-clearing on the very next call</td></tr>
 <tr><td data-label="Event">PostToolUse</td><td data-label="Matcher"><code>Write</code></td><td data-label="Script"><code>post_<wbr>write_<wbr>register_<wbr>task.py</code></td><td data-label="Behavior"><span class="tag tag-advise">advises</span> — auto-registers new TASK_GUIDE files on the board</td></tr>
 <tr><td data-label="Event">PostToolUse</td><td data-label="Matcher"><code>Agent</code></td><td data-label="Script"><code>post_<wbr>agent_<wbr>move_<wbr>to_<wbr>review.py</code></td><td data-label="Behavior"><span class="tag tag-inert">inert</span> — <strong>does not move anything and does not touch any step counter</strong>; it only prints a reminder to move the row by hand <details><summary>Why by hand</summary><p>The reminder is for the Supervisor. The hand move is deliberate, after two past defects made the automatic move actively harmful.</p></details></td></tr>
 <tr><td data-label="Event">PostToolUse</td><td data-label="Matcher"><code>Bash</code></td><td data-label="Script"><code>post_<wbr>bash_<wbr>memory_<wbr>update.py</code></td><td data-label="Behavior"><span class="tag tag-advise">advises</span> — prompts a diff-driven memory-update pass after git push/merge/pull</td></tr>
@@ -2127,6 +2144,7 @@ curl -fsSL https://raw.githubusercontent.com/$GITHUB_USERNAME/easy-kit/main/setu
 <tr><td data-label="Path"><code>CLAUDE.md</code></td><td data-label="What it contains">Holds only the import <code>@AGENTS.md</code></td></tr>
 <tr><td data-label="Path"><code>.cursor/<wbr>rules/<wbr>agent-<wbr>base.mdc</code></td><td data-label="What it contains">Provider adapter for Cursor — see Providers below</td></tr>
 <tr><td data-label="Path"><code>tasks/</code></td><td data-label="What it contains">Task guides generated at Stage 2 (per project)</td></tr>
+<tr><td data-label="Path"><code>tasks/<wbr>attempts.tsv</code></td><td data-label="What it contains">Append-only log of blocked and stopped runs, built from the event trace after each merge</td></tr>
 <tr><td data-label="Path"><code>templates/</code></td><td data-label="What it contains">Blank templates for PRD, PROJECT_SPEC, task board, TASK_GUIDE, and more</td></tr>
 <tr><td data-label="Path"><code>packs/</code></td><td data-label="What it contains">Optional domain packs — each adds agents + skills for a specific project type</td></tr>
 <tr><td data-label="Path"><code>memory/</code></td><td data-label="What it contains">Two-tier hot/cold memory files (per project) — see Memory System below</td></tr>

@@ -5,6 +5,29 @@
 > this template and deletes the example comment. The same block is the Supervisor's final chat message.
 
 
+## T303 — The docs page says what T285, T288, T295 and T297–T299 changed · minimal
+Mode: auto
+**Asked:** "let check all the change, and make sure all of them avail from the docs and the index" — then "yes, let go, good to start the prallel also [admin]"
+**Decisions:**
+1. Track minimal — RULE: `docs/claude-md/tracks.md` `## Track rule` (C1, Risk Low, one docs page plus tests, no new UI component, no user data).
+2. Audited T280–T302 against `site/index.html` and `site/docs.html`. Already on the site: T280, T282, T283, T284, T289, T290, T301/T302. Internal only, no page text owed: T286, T291–T294, T296, T300 — FACT: their KANBAN titles name hook internals or a measurement.
+3. `site/index.html` unchanged: its counts still match the repo (37 skills, 4 roles, 6 packs, 12 hooks of which 6 block), and no skill was added since T280 — FACT: `ls skills`, `.claude/settings.json`, the docs hooks table.
+4. T297–T299 go in a new collapsed fold-out "Model and effort per spawn" in `#agent-roles`, not a visible lead — RULE: `tests/test_site_visual_first.py` 150 visible words per section (T302 precedent).
+5. T285: the step-limit hooks row now says each sub-agent run, or the main thread, counts; trimmed to 23 words for the 25-word cell cap (`tests/test_site_content.py::test_visible_table_cells_are_short`); its old baseline hash is listed in `CHANGED_BY_T303` in `tests/test_site_story.py`, the same pattern as T284 and T290.
+6. T295: one sentence at the end of the `[admin]` close-out paragraph; T288: one `tasks/attempts.tsv` row in the repository layout table — FACT: `docs/claude-md/tracks.md` item 2, `docs/claude-md/memory-write-protocol.md` line 20.
+7. Wording of the fold-out title and the new sentences — taste, not a rule. ⚠ decided for you — please review
+**Checked:**
+- New test `tests/test_t303_docs_recent_changes.py` — before the change `5 failed, 1 passed`; after it `6 passed`; four mutation controls change bytes and turn each guard red.
+- Site pin tests (`test_site_content.py`, `test_site_visual_first.py`, `test_site_story.py`, `test_docs_t151.py`, `test_docs_match_installer.py`, `test_t278_self_review_docs.py`, `test_t302_docs_security_rules.py`, the new test): `240 passed`.
+- Suite: `python -m pytest .claude/hooks/tests tests -q -p no:cacheprovider` — `2 failed, 6914 passed, 6 skipped`; both failures are `test_heredoc_quoted_marker.py::test_round4_premise_…[d-busybox-ash-*]`, which fail the same way on `main` because `busybox` is not installed on this machine. Python 3.14 here has no pytest, so the runs used a scratch venv with pytest 9.2.0.
+- Real run: `python3 -m http.server 8793` in `site/`, then `curl http://127.0.0.1:8793/docs.html` — `HTTP 200`, and the page holds `<summary>Model and effort per spawn</summary>`, `a call once a sub-agent run`, `refuse when the repo config` and `tasks/<wbr>attempts.tsv`.
+- Simplify: skipped: no changed lines outside tests and docs.
+- verify: ☑ pass — auto-run by hook, session 1a59ddd0-87b2-4f1d-92ed-e318fa9b34c2, commit bd9a0acb20b72cc738906083069b06e591006978, log .claude/verify-runs/T303-bd9a0acb20b7.log
+**Files:** `site/docs.html`, `tests/test_t303_docs_recent_changes.py`, `tests/test_site_story.py`, `tasks/MINIMAL_LOG.md`, `PROJECT_KANBAN.md`
+**Memory:** nothing new (candidate not written: this machine's Python 3.14 has no pytest, so test runs need a venv; an environment fact, not a kit rule)
+**Not done:** merge (admin: after the auto verify pass); auto verify: ☑ pass (session 1a59ddd0-87b2-4f1d-92ed-e318fa9b34c2, commit bd9a0acb20b7, log .claude/verify-runs/T303-bd9a0acb20b7.log); follow-ups: the repository layout row for `agents/` still says it holds `general-agent-template.md`, which lives in `templates/` (pre-existing); T297 still sits in Ready for Review although it was merged on 2026-11-09.
+Paused: done not moved — report incomplete: auto verify slot
+
 ## T302 — The docs page says how Stage 4 treats a security finding · minimal
 **Asked:** "Just wanna make sure if it is documented, or not, let check and update"
 **Decisions:**
