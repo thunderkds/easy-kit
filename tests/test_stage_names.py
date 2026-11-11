@@ -207,6 +207,11 @@ T299_ROW6_NEW = (T299_ROW6_OLD + " Also read the `## CLI Effort Table`: an empty
                  "passed, not a stop.")
 
 
+T306_ROW18_OLD = "a blocked run falls back to `/verify (yours)`."
+T306_ROW18_NEW = ("a blocked run falls back to `/verify (yours)` (with `[admin]`, after its one retry: "
+                  "`### Admin tag`).")
+
+
 def test_ac4_each_auto_mode_row_keeps_its_rule_and_its_log_label():
     now, base = _stop_table(_read("docs/claude-md/tracks.md")), _stop_table(_at_base("docs/claude-md/tracks.md"))
     assert len(base) == 21, "the base table must have 21 rows (anti-vacuity)"
@@ -221,6 +226,11 @@ def test_ac4_each_auto_mode_row_keeps_its_rule_and_its_log_label():
         if a[0] == "19":  # T284 (AC 9): one clause names the `[admin]` exception; nothing else changes
             assert b[2].count(T284_ROW19_OLD) == 1, "row 19: the base text no longer holds T284's anchor"
             assert a[2] == b[2].replace(T284_ROW19_OLD, T284_ROW19_NEW), f"row {a[0]}: the rule changed"
+            continue
+        if a[0] == "18":  # T306: one clause points at the `[admin]` retry; nothing else changes
+            assert b[2].count(T306_ROW18_OLD) == 1, "row 18: the base text no longer holds T306's anchor"
+            assert a[2] == b[2].replace(T306_ROW18_OLD, T306_ROW18_NEW), f"row {a[0]}: the rule changed"
+            assert a[3] == b[3], f"row {a[0]}: the log label changed"
             continue
         assert a[2] == b[2], f"row {a[0]}: the rule changed"
         assert a[3] == b[3], f"row {a[0]}: the log label changed"
