@@ -236,7 +236,7 @@ is logged `RULE`, `FACT` or `SAFER OPTION`, not `DEBATED`. At Risk Medium or Hig
 | 16 | Stage 4 pull moment 3 (board mode `online`): "review against the new version?" | Review against the new version. | `RULE` |
 | 17 | Stage 4 item 7: a finding whose fix needs a choice | Debate. | `DEBATED` ⚠ |
 | 18 | Stage 5 item 1: `/verify` (never in the Supervisor's own session) | The Supervisor starts the headless auto verify run (T182; every task since T203) with `python3 .claude/hooks/stop_auto_verify.py --start <ID>`, and writes its own real-run check under `Checks:` as `auto-checked, not /verify`. The `verify` Evidence row stays unchecked until that run fills it from a real `/verify`, or the user does: a blocked run falls back to `/verify (yours)` (with `[admin]`, after its one retry: `### Admin tag`). | `Checks:` / `Not done:` |
-| 19 | Stage 5 items 3–6: memory update, merge, Done, `ship` | Memory update: the Supervisor runs the diff-driven pass before it stops, and writes the `Memory:` line. Done: after an auto verify pass, the hook moves the row (`### Auto close-out`). Merge, push and `ship`: never in auto mode, except the merge and push that `[admin]` allows (`### Admin tag`). The task waits in Ready for Review until the hook moves it. | `Memory:` / `Closed:` / `Not done:` |
+| 19 | Stage 5 items 3–6: memory update, merge, Done, `ship` | Memory update: the Supervisor runs the diff-driven pass before it stops, and writes the `Memory:` line. Done: after an auto verify pass, the hook moves the row (`### Auto close-out`). Merge, push and `ship`: never in auto mode, except the merge and push that `[admin]` allows (`### Admin tag`). With `[admin]`, the Supervisor also runs `ship` after the merge, as a plan only, never a deploy. The task waits in Ready for Review until the hook moves it. | `Memory:` / `Closed:` / `Not done:` |
 | 20 | `AGENTS.md` self-monitoring: "want me to compact before continuing?" | Do not ask. Near the session's context or usage limit, stop at a clean point (see Edge cases). | `Paused:` |
 | 21 | Minimal track: an unclear request (its one stop) | By `### Debate size by Risk`. At Risk Low (the minimal track's own level) the Supervisor decides the reading and logs why. | `RULE` / `SAFER OPTION` ⚠ |
 
@@ -535,9 +535,9 @@ With `[auto]`, these stay the user's:
 - push;
 - `ship`.
 
-With `[admin]`, the Supervisor may also do the first two, only as `### Admin tag` says. `ship` stays the
-user's with both tags. The memory pass and the move to Done are automatic: see `### Final report`
-(`Memory:`) and `### Auto close-out`.
+With `[admin]`, the Supervisor may also merge and push, only as `### Admin tag` says; a pull stays the
+user's. With `[admin]`, it also runs `ship`, as a plan only, never a deploy. The memory pass and the move
+to Done are automatic: see `### Final report` (`Memory:`) and `### Auto close-out`.
 
 ### Admin tag
 
@@ -546,7 +546,46 @@ runs in auto mode, exactly as with `[auto]`: the same report, the same `Mode: au
 `[Admin]`, `[ADMIN]`, `[administrator]` and a bare word *admin* are not the tag. `[auto][admin]` is one
 admin request.
 
-The tag adds one thing: the Supervisor may merge the task branch and push it, after the auto verify run
+**The whole pipeline (T307).** With `[admin]`, one request runs the task from Stage 0 to Stage 5 with no
+question to you, except at project start. The Supervisor makes every decision and gives every approval
+itself. Plain `[auto]` is unchanged: rows 1–4, row 19 and `### Never in auto mode` read as before for it.
+
+Project start: under `[admin]`, Stage 0 step Requirements asks you its questions only on a new project.
+A new project is one whose `PROJECT_SPEC.md` `## Readiness` has no `Approved by: user <date>` line and no
+filled `Waived:` line (`user YYYY-MM-DD — reason`); an empty line or a placeholder counts as not filled.
+A project with either line filled counts as approved: no question goes to you, and rows 1–4 of
+`### Every user stop and its auto rule` run on their auto rules. The Supervisor reads this from
+`## Readiness` only, and never guesses it.
+The Supervisor never writes `Approved by` itself, with either tag: on a new project the line waits for
+your explicit confirmation of the Project Context Document.
+
+Domain first: the Supervisor decides from the business domain of the project. Under `[admin]`, a
+decision cites `PRD.md`, the `PROJECT_SPEC.md` glossary and `docs/legacy/` (when that folder exists)
+first, before code and the kit's own docs (`skills/resolve-question/SKILL.md`). Only when they do not
+settle the question does it go on to code, the rows of `### Every user stop and its auto rule` and a
+Debate.
+
+Decisions and approvals the Supervisor gives itself under `[admin]`: rows 2–4, 7–13, 15, 17 and 21 of
+`### Every user stop and its auto rule`, the Requirement Fidelity Gate, the agent team, the
+task breakdown, the direction, a `tdd` plan and the fix choice of a finding. Each one is made by its
+row's auto rule and `### Debate size by Risk`, and logged `RULE`, `FACT`, `SAFER OPTION` or `DEBATED` in
+the final report.
+
+The Supervisor never ends such a decision with "your decision" or "please approve": it decides, logs
+the line and goes on. A skill's own "ask the user" text yields to the row named in its `[admin]` pointer.
+
+Stops: the Supervisor stops only for the `### Stops that stay` list, and it says so in one line after
+the track line: `[admin]: I stop only for the stops that stay`.
+The only hand-backs left under `[admin]` are the `### Stops that stay` list, `Approved by` on a new
+project, the settings changes of row 5, a `git pull`, and the second `blocked` verify (T306).
+
+`ship`: after the merge and the push of `main`, the Supervisor runs `Skill({ skill: "ship" })` and
+writes its plan, as a plan only. It never runs a deploy command, and never tags or publishes a release:
+`ship` is a planner, not a deployer. It runs `ship` only for a task in Done (Hard-Stop Gate 5); when the
+hook left `Paused: done not moved`, it skips `ship` and says why. A missing `Deployment target` gives
+`TODO: confirm with operator` in the plan (`ship`'s own rule): that is not a stop.
+
+**Merge and push.** The Supervisor may merge the task branch and push it, after the auto verify run
 passed. The merge gate, `.claude/hooks/pre_bash_block_unsafe_merge.py`, reads the tag at the time of the
 command, from this session's transcript. It allows a `git merge` or `git push` only when all of these hold:
 
@@ -648,8 +687,7 @@ unlocks the merge, as item 4 says: the Supervisor never edits a `pass` row, neve
 anything but the unwritten state, and never runs the skill itself. With `[auto]` alone there is no retry:
 a `blocked` run leaves `/verify (yours)` in the `Not done:` line.
 
-The gate's other checks then still run, as for every merge. `ship` stays the user's with `[admin]` too.
-With `[auto]` alone, the same gate blocks every merge, push and pull while that request is the latest
+The gate's other checks then still run, as for every merge. With `[auto]` alone, the same gate blocks every merge, push and pull while that request is the latest
 one. A `git rebase` is not part of this rule. A session with no readable transcript has no known request,
 so this rule does not apply and the gate works as before.
 

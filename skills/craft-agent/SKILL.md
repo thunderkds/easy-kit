@@ -25,7 +25,7 @@ Require `PROJECT_SPEC.md` (or `PRD.md`) to exist and be locked. If missing or no
 Cross-check the requirement against the base team (Common-Infrastructure-Agent, Backend-Implementer, Frontend-Implementer, QA-Automation-Agent) and every existing `agents/*.md` filename:
 - If a role is already covered by the base team or an existing agent file, reuse that name — do not draft a near-duplicate.
 - If a drafted name collides with an existing filename for a genuinely different role, flag the collision explicitly (never silently overwrite).
-- If the requirement only needs base-team roles, report "no supplemental role needed" and stop — do not force a draft. The Supervisor then asks nothing in the Agent team step of Stage 1 and goes on with the base team; it asks the user to approve the team only when this skill proposes a role.
+- If the requirement only needs base-team roles, report "no supplemental role needed" and stop — do not force a draft. The Supervisor then asks nothing in the Agent team step of Stage 1 and goes on with the base team; it asks the user to approve the team only when this skill proposes a role. Under `[admin]`, it does not ask: it decides by `docs/claude-md/tracks.md` row 11.
 - If the role set is unbounded or unclear, ask one clarifying question. Do not fabricate roles.
 
 #### 3. Draft each Agent Draft

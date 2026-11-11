@@ -61,6 +61,6 @@ Generate a `BRAINSTORMING_LOG.md` (use `templates/BRAINSTORMING_LOG_template.md`
 - Provide a list of "Next Actions" for the Supervisor to incorporate into Stage 2 (Planning).
 
 ### Communication Protocol
-- **To Supervisor**: Report when the `BRAINSTORMING_LOG.md` is ready for user review. Do not advance until the user has selected a "Path."
+- **To Supervisor**: Report when the `BRAINSTORMING_LOG.md` is ready for user review. Do not advance until the user has selected a "Path." Under `[admin]`, do not wait: decide by `docs/claude-md/tracks.md` row 4.
 - **To Implementers**: Provide the "Edge Case Checklist" to be included in each `TASK_GUIDE_Txxx.md`.
 - **Default Notification**: "Brainstorming completed for [Task ID]. Explored 3 paths; identified N critical edge cases. Recommended path: [Summary]."

@@ -99,7 +99,8 @@ file's indentation, and that no value is removed.
 
 Ask no question. Run only Step 1 and the dry run of `high-security`. Write nothing. In the final
 report, under `Not done:`, put: `settings-setup: recommend high-security (dry run below), not
-written — yours to approve`, then the dry-run lines.
+written — yours to approve`, then the dry-run lines. Under `[admin]` too: decide by
+`docs/claude-md/tracks.md` row 5; writing the settings stays yours.
 
 ### Done when
 

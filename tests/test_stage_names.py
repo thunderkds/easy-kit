@@ -200,6 +200,9 @@ def _stop_table(text):
 T284_ROW19_OLD = "Merge, push and `ship`: never in auto mode."
 T284_ROW19_NEW = ("Merge, push and `ship`: never in auto mode, except the merge and push that `[admin]` "
                   "allows (`### Admin tag`).")
+# T307 (AC 3): one sentence after T284's clause runs `ship` with `[admin]`, as a plan only.
+T307_ROW19_ADD = (" With `[admin]`, the Supervisor also runs `ship` after the merge, as a plan only, never a "
+                  "deploy.")
 
 
 T299_ROW6_OLD = "No row or an empty cell: row 14."
@@ -223,9 +226,10 @@ def test_ac4_each_auto_mode_row_keeps_its_rule_and_its_log_label():
             assert a[2] == b[2].replace(T299_ROW6_OLD, T299_ROW6_NEW), f"row {a[0]}: the rule changed"
             assert a[3] == b[3], f"row {a[0]}: the log label changed"
             continue
-        if a[0] == "19":  # T284 (AC 9): one clause names the `[admin]` exception; nothing else changes
+        if a[0] == "19":  # T284 (AC 9) + T307 (AC 3): the `[admin]` exception and `ship` as a plan only
             assert b[2].count(T284_ROW19_OLD) == 1, "row 19: the base text no longer holds T284's anchor"
-            assert a[2] == b[2].replace(T284_ROW19_OLD, T284_ROW19_NEW), f"row {a[0]}: the rule changed"
+            assert a[2] == b[2].replace(T284_ROW19_OLD, T284_ROW19_NEW + T307_ROW19_ADD), \
+                f"row {a[0]}: the rule changed"
             continue
         if a[0] == "18":  # T306: one clause points at the `[admin]` retry; nothing else changes
             assert b[2].count(T306_ROW18_OLD) == 1, "row 18: the base text no longer holds T306's anchor"
