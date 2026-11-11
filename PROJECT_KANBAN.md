@@ -8,7 +8,6 @@
 ## Board
 
 ### Todo
-- [ ] **T309** — the ordinary merge gate stops accepting a hand-typed `☑ pass` verify row with no proof (`verify_row_passes` counts any non-hook row with "pass" in Notes; `### Known limits` says it does not); repoint the two pins | common-infrastructure | C2 | Risk: High | P1 | Depends on: T308 (merged 4b61607) | Guide: `tasks/TASK_GUIDE_T309.md` | Registered 2026-11-11, user: "register it" (found by `qa-expert` in the T308 oracle) | Oracle by `qa-expert` first
 - [ ] **T300** — Measure the effort table: 6 C0/C1 tasks on the current table and on a strong-model-at-low-effort table with `scripts/token_meter.py` (cost) and the `verify` results (pass rate); keep the proposed model cells only if cost is lower and no pass is lost, else record a DDR and stop | common-infrastructure | C2 | Risk: Medium | P2 | Depends on: T297, T298 | Registered 2026-11-09 [auto] from the plan doc `easy-kit — update plan (base)`; not started in auto mode: it spends real tokens on 6 real tasks per arm and needs the user's go-ahead; guide at pickup
 - [ ] **T254** — Hook tests clear `CLAUDE_AUTO_VERIFY_RUN`: `stop_auto_mode_check.py` `main()` exits at once when it is set (true inside every headless auto verify run), and the test env helpers (`gate_env` in `.claude/hooks/tests/test_t250_session_ownership.py`, `_run` in `test_stop_auto_mode_check.py`, `test_t252_marked_ownership.py`) pass it through, so the block tests fail for an unrelated reason when the suite runs inside a verify session; drop it from the test env | common-infrastructure | C0 | Risk: Low | P2 | Registered 2026-11-04 from T252 auto verify (`.claude/verify-runs/T252-dfb2c1edb8e3.log`)
 - [ ] **T253** — Update `[o]verwrite`: a failed backup does not stop the run (`lib/harness-update.sh:263-271` records `backup_failed` and goes on), so later paths are installed too; the T119 abort text says only that paths before it were installed — make the Update summary say what was and was not replaced | common-infrastructure | C0 | Risk: Low | P2 | Depends on: T119 | Registered 2026-11-04 from T119 auto verify (`.claude/verify-runs/T119-3432bdfb576c.log`)
@@ -89,6 +88,7 @@
 
 
 ### In Progress
+- [ ] **T309** — the ordinary merge gate stops accepting a hand-typed `☑ pass` verify row with no proof (`verify_row_passes` counts any non-hook row with "pass" in Notes; `### Known limits` says it does not); repoint the two pins | common-infrastructure | C2 | Risk: High | P1 | Depends on: T308 (merged 4b61607) | Guide: `tasks/TASK_GUIDE_T309.md` | Registered 2026-11-11, user: "register it" (found by `qa-expert` in the T308 oracle) | Oracle by `qa-expert` first | Started 2026-11-11: branch `fix/t309-hand-typed-pass-row`, worktree `../wt-t309`
 
 
 
