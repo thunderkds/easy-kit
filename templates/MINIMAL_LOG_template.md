@@ -56,5 +56,5 @@ Paused: <only when a stop that stays paused the task: which one, and why>
 - Simplify: <N kept, M undone, or "skipped: under 20 lines"> — <one line per kept edit>
 **Files:** `<path>`, `<path>`
 **Memory:** <each entry the memory pass wrote, as `file — entry` | nothing new>
-**Not done:** merge (yours); <auto verify: running (T182) | auto verify: <result> | /verify (yours)>
+**Not done:** merge (yours); <auto verify: running (T182) | auto verify: <result> | /verify (yours), with [admin] only after the one retry also ended blocked>
 -->
