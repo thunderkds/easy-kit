@@ -155,7 +155,7 @@ Risk: the gate is the one place where a wrong answer is silent and repo-wide (it
 ## Completion Checklist
 
 - [ ] Oracle written by `qa-expert`, red
-- [ ] Implementation done
+- [x] Implementation done
 - [ ] `code-review` run
 - [ ] `security-review` run (High risk; it changes a merge gate)
 - [ ] Tests written AND pass — output pasted into `tasks/TASK_REVIEW_T308.md` (Hard-Stop Gate 5)

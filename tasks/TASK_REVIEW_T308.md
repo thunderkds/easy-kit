@@ -47,12 +47,12 @@ Not done: merge (yours); <auto verify: running (T182) | auto verify: <result> | 
 
 | Check | Result | Notes / output snippet |
 |-------|--------|------------------------|
-| **New test(s) cover Acceptance Criteria (file paths pasted)** | ☐ pass / ☐ fail | [test file path(s) — required before Done] |
-| Verification command run | ☐ pass / ☐ fail | [paste actual output] |
-| Negative cases hold | ☐ pass / ☐ fail | [paste the red run against the prior content, or the mutation diff (`git diff --stat`, non-empty) before each verdict] |
+| **New test(s) cover Acceptance Criteria (file paths pasted)** | ☑ pass | `.claude/hooks/tests/test_t308_user_verify_extended.py` (locked oracle by qa-expert, commit c2c1252; not edited). At HEAD `c34f2a2`, 2026-11-11T14:37:20Z: `python -m pytest .claude/hooks/tests/test_t308_user_verify_extended.py -q -p no:cacheprovider` → `36 passed in 9.26s` (was `9 failed, 27 passed` at BEFORE). |
+| Verification command run | ☑ pass | Oracle as above: `36 passed in 9.26s`. Pin tests (pre-flight list in the guide) at HEAD `c34f2a2`: `test_merge_gate_guard.py`, `test_stop_auto_mode_check.py::test_merge_gate_is_untouched`, `tests/test_auto_mode.py::test_ac4_merge_gate_file_is_unchanged`, the oracle, `test_t250_session_ownership.py`, `test_admin_tag.py`, `test_verify_row_fill_detection.py`, `test_merge_gate_t095.py`, `test_merge_gate_t210.py`, `test_guide_sections.py`, `tests/test_auto_mode.py`, `tests/test_t306_admin_retry_blocked.py`, `tests/test_stage_names.py`, `tests/test_auto_verify.py`, `test_agent_guide_dedup.py` → `1017 passed in 129.21s`. One pin repointed: `test_merge_gate_guard.py::test_the_allowlist_names_the_tasks_that_own_rules_in_the_gate` now expects `"T308"` at the end of `AUTHORISED_TASKS` (the file's documented record for a task that changes the gate); no assertion weakened. |
+| Negative cases hold | ☑ pass | Oracle AC 3 (no transcript, short hash, other code, entry before the code, entry after the row's commit — review file and inline guide, other task ID, no human origin, four non-`USER_LINE` Notes shapes) and AC 4 (unwritten row, user-shaped row with no proof, hook row with no record, minimal track unchanged) all block with `T900 (no evidence row)`; the oracle's own time-blind mutation turns green only with the bound. Extra mutation (implementer): `report_rel=_evidence_rel(...)` and `report_rel=row_rel` replaced by `report_rel=MINIMAL_LOG_REL`; `git diff --stat` → `.claude/hooks/pre_bash_block_unsafe_merge.py | 93 ++++++++++++++++++++++++----` (non-empty) → oracle `9 failed, 27 passed`; restored → `36 passed in 5.29s`. |
 | verify | ☐ pass / ☐ fail / ☐ N/A | [what was observed — must literally state "pass" or "fail" here too, e.g. "skill run, feature confirmed working — pass": the merge gate scans this Notes column for the word "pass", not just the Result column] |
 | Review scope bounded to the change's blast radius (affected set, not whole repo) | ☐ pass / ☐ fail | [what was reviewed vs. skipped, and why] |
-| Full smoke suite still green (no regression) | ☐ pass / ☐ fail | |
+| Full smoke suite still green (no regression) | ☑ pass | 2026-11-11T14:37:16Z, HEAD `c34f2a2`: `python -m pytest .claude/hooks/tests/ tests/ -q -p no:cacheprovider` → `2 failed, 7037 passed, 6 skipped, 25 subtests passed in 411.17s (0:06:51)`. The 2 failures are the known busybox cases: `test_heredoc_quoted_marker.py::test_round4_premise_the_shell_runs_the_push_and_the_scanner_keeps_it[d-busybox-ash-bash]` and `[d-busybox-ash-zsh]`. (The first run, before the commit, also failed the 3 gate-owner guard tests because the gate change was uncommitted and T308 was not on the allowlist; fixed by the commit and the allowlist entry.) |
 | **Companion score (easy-verifier)** | ☐ pass / ☐ fail / ☐ N/A | [`overall` and `change_risk` as the tool returned them, the scope, the ref, and the absolute path of the verifier report after a literal `report:` label — e.g. "overall 86 (>= 80), change_risk pass, scope changes, ref `main...HEAD`, report: `/home/me/.easy-verifier-reports/kit/score_changes_20261028T0530Z.html`". The gate reads the path that follows `report:` and nothing else, so with no label, or a path that is absent, the row is unscored — write ☑ N/A instead. ☑ N/A with a reason when neither companion tool was run: the merge gate blocks on ☑ fail only, never on an absent or N/A row] |
 | **UI: Visual regression (diff or verdict pasted)** | ☐ pass / ☐ fail / ☐ N/A | [screenshot path or LLM verdict — required for UI tasks, Hard-Stop Gate 6] |
 | **UI: Design-system compliance (tokens/colors/typography verified)** | ☐ pass / ☐ fail / ☐ N/A | [method used + output] |
@@ -88,9 +88,15 @@ FAILED .claude/hooks/tests/test_t308_user_verify_extended.py::test_mutation_a_ti
 Each AC 1/AC 2 failure is the gate's block `Tasks in Ready for Review missing Stage 5 verify evidence ... T900 (no evidence row)`
 for a `| verify | ☑ pass | /verify by the user, session <sid>, commit <sha> |` row with a valid transcript entry.
 
-**AFTER**: [same command, post-change] OR [verbatim excerpt of the new content]
+**AFTER**: 2026-11-11T14:37:20Z, HEAD `c34f2a2a1c3ba67b2f5111676a3e50adb1fe55da`:
 
-**DELTA**: [one sentence — what a user can now do that they could not before]
+```
+$ python -m pytest .claude/hooks/tests/test_t308_user_verify_extended.py -q -p no:cacheprovider
+....................................                                     [100%]
+36 passed in 9.26s
+```
+
+**DELTA**: On an extended-track task whose auto verify run ended `blocked`, the user can now type `/verify <ID>` and record `| verify | ☑ pass | /verify by the user, session <id>, commit <sha> |`. The merge gate accepts that row with the same transcript proof as the minimal track.
 
 **WITNESS**: [who ran it and when — derived from `memory/event-trace/Txxx.jsonl`, never the
 implementing agent alone]
