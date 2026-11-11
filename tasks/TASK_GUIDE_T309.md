@@ -68,7 +68,13 @@ The hole, in `.claude/hooks/pre_bash_block_unsafe_merge.py`: `VERIFY_ROW_PATTERN
 
 ## Evaluation & Acceptance
 
-The oracle is written first by `qa-expert` (spawn it before the implementer). The implementer may not edit it. No `Locked oracle` line yet: the Supervisor names the file after `qa-expert` writes it.
+**Locked oracle**: `.claude/hooks/tests/test_t309_hand_typed_pass_row.py` (written first by `qa-expert`, commit `eb85f72`, red: 18 failed, 25 passed). The implementer may not edit it. Keep the block text `T900 (no evidence row)`.
+
+**Fixture fallout found by `qa-expert` (the real size of AC 5)**: with the one-line prototype fix (`if hook_only and AUTO_ROW_TAG not in notes:` becomes `if AUTO_ROW_TAG not in notes:`), these existing tests fail because their base fixture is a hand-typed pass row: `test_merge_gate_t095.py` (4 tests, `REVIEW_WITH_FILLED_VERIFY_ROW`), `test_verify_row_fill_detection.py` (`FILLED_CHECKED_BOX_ROW`; `test_ac3_all_four_real_filled_shapes_are_filled`, `test_ac3_trap_checked_pass_with_unchecked_na_shape`, `test_ac6_old_vs_new_pattern_over_real_corpus_differs_only_on_placeholders`: these are row-shape tests and keep their meaning, so they need a hook-row variant, not a flip), `test_merge_gate_t210.py` (`MANUAL_PASS`, 12 tests), `test_merge_gate_t211.py` (imports `MANUAL_PASS`, 10 tests), `test_merge_gate_companion_rows.py` (`REVIEW_HEADER` and lines ~621, ~660; about 34 tests), `test_guide_sections.py` (`FILLED_EVIDENCE_TABLE` and rows ~625, ~837, ~852; 5 tests), `test_admin_tag.py` (`test_sc3_a_hand_typed_pass_row_is_not_an_auto_verify`: its control line ~275 asserts the normal gate allows `MANUAL_PASS`), `tests/test_auto_mode.py` (`test_ac4_control_a_real_verify_row_passes`). Rule for the repoint: a test whose point is something other than the row (worktree evidence, push narrowing, octopus, companion rows, guide sections) keeps its meaning by swapping its fixture row for a hook-written pass with a real run record (a shared helper, modelled on `_hook_row` in `test_t308_user_verify_extended.py` / `test_t309_hand_typed_pass_row.py`); a test whose point IS that a hand-typed row counts flips to expect a block and names T309 in a comment. Never delete a test, never loosen an assertion, never edit the gate to spare a fixture.
+
+**Gate-owner allowlist**: `tests/test_auto_mode.py::test_ac4_merge_gate_file_is_unchanged` needs `T309` in `AUTHORISED_TASKS` in `.claude/hooks/tests/merge_gate_guard.py` (with its rule line) and the pin in `test_merge_gate_guard.py`, as T308 did. The Supervisor signs this line off (this guide; user: "register it", 2026-11-11), and tells the user at merge.
+
+**Rows that would now fail** (qa-expert's scan): none of the Ready for Review tasks; 128 task files hold a hand-typed pass row (121 Done, 7 not on the board: T083, T084, T087, T135, T183, T185, T187), and the gate reads none of them (`main()` reads only `### Ready for Review` IDs; the one Done read, `[admin]`'s `committed_verify_row(..., hook_only=True)`, already ignores hand-typed rows).
 
 ### Success Criteria (observable, pass/fail)
 
@@ -124,7 +130,7 @@ Risk: this tightens a merge gate that real tasks pass through today. Before the 
 |------|--------|
 | `.claude/hooks/pre_bash_block_unsafe_merge.py` | `verify_row_passes`: a hand-typed row is not a pass |
 | `.claude/hooks/tests/test_t309_hand_typed_pass_row.py` | new, written by `qa-expert` |
-| `.claude/hooks/tests/test_verify_row_fill_detection.py`, `.claude/hooks/tests/test_merge_gate_t095.py` | repoint the two pins (AC 5) |
+| the tests listed under "Fixture fallout" above, `.claude/hooks/tests/merge_gate_guard.py`, `.claude/hooks/tests/test_merge_gate_guard.py` | repoint the fixtures and pins (AC 5); `AUTHORISED_TASKS` gains `T309` |
 | `docs/claude-md/tracks.md`, other docs | only where a grep hit says a hand-typed pass row is accepted (AC 4) |
 | `PROJECT_SPEC.md:102` (glossary "Auto verify"), `templates/TASK_REVIEW_template.md` (`verify` row placeholder: Notes "must literally state pass") | found at T308 Stage 4: the glossary is stale since T250; the placeholder reads as a conflict with the user-row shape. Fix both here, with the gate change |
 | Pre-existing pin tests | grep `.claude/hooks/tests/` and `tests/` for `verify_row_passes`, `has_filled_verify_row`, `committed_verify_row`, `VERIFY_ROW_PATTERN` and each edited doc string; always `test_agent_guide_dedup.py`, `test_vital_slice.py`, the memory budget tests |
