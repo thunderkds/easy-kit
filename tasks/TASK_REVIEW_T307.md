@@ -67,8 +67,67 @@ Not done: merge (yours); <auto verify: running (T182) | auto verify: <result> | 
 > **before any implementation commit exists**; if it does not (docs, templates, skill-instruction
 > text), BEFORE is the **verbatim prior content** of what changed — a quoted excerpt, not a command.
 
-**BEFORE**: [pasted timestamped command output showing the thing absent/failing, captured before the
-first implementation commit] OR [verbatim excerpt of the prior content, for non-executable changes]
+**BEFORE**: verbatim prior content, captured 2026-11-11T12:23:46Z at `d63ef09` (the oracle commit; no
+implementation commit yet). Oracle run at that commit: `64 failed, 23 passed` (qa-expert, commit d63ef09).
+
+`docs/claude-md/tracks.md` `### Admin tag` (the two paragraphs this task changes):
+
+> The tag adds one thing: the Supervisor may merge the task branch and push it, after the auto verify run
+> passed. The merge gate, `.claude/hooks/pre_bash_block_unsafe_merge.py`, reads the tag at the time of the
+> command, from this session's transcript. It allows a `git merge` or `git push` only when all of these hold:
+
+> The gate's other checks then still run, as for every merge. `ship` stays the user's with `[admin]` too.
+> With `[auto]` alone, the same gate blocks every merge, push and pull while that request is the latest
+> one. A `git rebase` is not part of this rule. A session with no readable transcript has no known request,
+> so this rule does not apply and the gate works as before.
+
+(No `### Admin tag` text names Stage 0, `## Readiness`, `docs/legacy/`, the self-given approvals or the
+hand-backs.)
+
+`### Every user stop and its auto rule` row 19:
+
+> | 19 | Stage 5 items 3–6: memory update, merge, Done, `ship` | Memory update: the Supervisor runs the diff-driven pass before it stops, and writes the `Memory:` line. Done: after an auto verify pass, the hook moves the row (`### Auto close-out`). Merge, push and `ship`: never in auto mode, except the merge and push that `[admin]` allows (`### Admin tag`). The task waits in Ready for Review until the hook moves it. | `Memory:` / `Closed:` / `Not done:` |
+
+`### Never in auto mode`:
+
+> With `[auto]`, these stay the user's:
+>
+> - merge;
+> - pull;
+> - push;
+> - `ship`.
+>
+> With `[admin]`, the Supervisor may also do the first two, only as `### Admin tag` says. `ship` stays the
+> user's with both tags. The memory pass and the move to Done are automatic: see `### Final report`
+> (`Memory:`) and `### Auto close-out`.
+
+`AGENTS.md` `## Tracks` (the clause):
+
+> The tag `[admin]` runs the same auto mode and also lets the Supervisor merge and push the task's own branch, then push `main` after that merge, only after its auto verify run passed (`### Admin tag`): the Supervisor starts that run itself, waits, and on `blocked` or `fail` merges nothing; `ship` stays the user's.
+
+Skill stop text (no `[admin]` pointer in any of them):
+
+> `skills/grill-with-docs/SKILL.md:47`: If the decision **also clears all three ADR criteria**, flag it **ADR-eligible** and ask the user whether to escalate to a full ADR (`templates/ADR_template.md`, `docs/adr/NNNN-title.md`) instead — a DDR is **never silently auto-upgraded** to an ADR.
+>
+> `skills/grill-with-docs/SKILL.md:29`: - Notify: "Requirement grilling complete. N FRs validated, M open questions resolved, K items flagged for user. PRD gate: PASS / FAIL."
+>
+> `skills/brainstorming/SKILL.md:64`: - **To Supervisor**: Report when the `BRAINSTORMING_LOG.md` is ready for user review. Do not advance until the user has selected a "Path."
+>
+> `skills/to-issues/SKILL.md:13`: - **Ask vs. Guess**: Quiz the user on granularity and dependencies until they approve before generating guides.
+>
+> `skills/craft-agent/SKILL.md:28`: - If the requirement only needs base-team roles, report "no supplemental role needed" and stop — do not force a draft. The Supervisor then asks nothing in the Agent team step of Stage 1 and goes on with the base team; it asks the user to approve the team only when this skill proposes a role.
+>
+> `skills/settings-setup/SKILL.md:98-102`: ### Auto mode (`[auto]`/`[admin]`) / Ask no question. Run only Step 1 and the dry run of `high-security`. Write nothing. In the final report, under `Not done:`, put: `settings-setup: recommend high-security (dry run below), not written — yours to approve`, then the dry-run lines.
+
+`skills/resolve-question/SKILL.md` (8183 bytes; no `docs/legacy/`, no `[admin]` Citation order):
+
+> `:10-11`: The user talks only to you: every HITL message goes through your chat.
+>
+> `:97-98`: The HITL message carries the question, each Scanner's finding, and the decision needed. Never answer from memory in its place.
+
+`site/docs.html:466` (stale reference found by the Edge Case grep):
+
+> A force push or a push of any other branch stays blocked, and <code>ship</code> stays with you.
 
 **AFTER**: [same command, post-change] OR [verbatim excerpt of the new content]
 
