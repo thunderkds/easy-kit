@@ -119,7 +119,7 @@ Risk: this tightens a merge gate that real tasks pass through today. Before the 
 - [ ] A row with both a hook tag and a user line: either counts, as in T308.
 - [ ] `☑ pass / ☐ N/A` (filled, "pass" in Result only) keeps the same answer as today for the shape checks.
 - [ ] A review file that still carries an old hand-typed row on a task already in Done: not read by the gate; confirm.
-- [ ] Pin-test pre-flight: fill `Pre-existing pin tests` before work starts
+- [x] Pin-test pre-flight: fill `Pre-existing pin tests` before work starts (filled late: see the row; the grep missed 4 files the full suite found)
 - [ ] Stale references: grep for "hand-typed", "typed by hand", "FILLED_CHECKED_BOX_ROW", "REVIEW_WITH_FILLED_VERIFY_ROW", "verify skill run" in `docs/claude-md/`, `site/`, `README`, `agents/`, `skills/`, `templates/`, `.claude/hooks/tests/`, `tests/`
 
 ---
@@ -133,7 +133,7 @@ Risk: this tightens a merge gate that real tasks pass through today. Before the 
 | the tests listed under "Fixture fallout" above, `.claude/hooks/tests/merge_gate_guard.py`, `.claude/hooks/tests/test_merge_gate_guard.py` | repoint the fixtures and pins (AC 5); `AUTHORISED_TASKS` gains `T309` |
 | `docs/claude-md/tracks.md`, other docs | only where a grep hit says a hand-typed pass row is accepted (AC 4) |
 | `PROJECT_SPEC.md:102` (glossary "Auto verify"), `templates/TASK_REVIEW_template.md` (`verify` row placeholder: Notes "must literally state pass") | found at T308 Stage 4: the glossary is stale since T250; the placeholder reads as a conflict with the user-row shape. Fix both here, with the gate change |
-| Pre-existing pin tests | grep `.claude/hooks/tests/` and `tests/` for `verify_row_passes`, `has_filled_verify_row`, `committed_verify_row`, `VERIFY_ROW_PATTERN` and each edited doc string; always `test_agent_guide_dedup.py`, `test_vital_slice.py`, the memory budget tests |
+| Pre-existing pin tests | grep `.claude/hooks/tests/` and `tests/` for `verify_row_passes`, `has_filled_verify_row`, `committed_verify_row`, `VERIFY_ROW_PATTERN` and each edited doc string; always `test_agent_guide_dedup.py`, `test_vital_slice.py`, the memory budget tests. **Filled (common-infrastructure, 2026-11-11):** gate-function pins: `test_admin_tag.py`, `test_guide_sections.py`, `test_merge_gate_companion_rows.py`, `test_merge_gate_t095.py`, `test_merge_gate_t210.py` (+ `test_merge_gate_t211.py`, imports it), `test_t250_session_ownership.py`, `test_t308_user_verify_extended.py`, `test_verify_row_fill_detection.py`, `tests/test_auto_mode.py`. Found by the full suite, not by the grep: `test_merge_gate_push_scope.py` (30), `test_bugfix_evidence_parity.py` (2), `tests/test_board_id_pattern.py` (1), `test_stop_auto_mode_check.py::test_merge_gate_is_untouched` (allowlist). Template-text pins (`TASK_REVIEW_template.md` verify Notes): `test_guide_sections.py` (moved-rows byte pin, `the merge gate scans this Notes column`), `test_task_guide_template_verify_row.py`, `test_bugfix_evidence_parity.py` (fills the row). Glossary pins (`PROJECT_SPEC.md` `| Auto verify |`): `tests/test_auto_verify.py` `test_ac6_glossary_auto_verify`, `test_t203_ac6_glossary_auto_verify_names_every_task_start_and_off`, and the `only the user can run` scan; the needles are kept. Allowlist: `test_merge_gate_guard.py`, `tests/test_auto_mode.py::test_ac4_merge_gate_file_is_unchanged`. |
 
 ## Files Must NOT Touch
 
@@ -157,7 +157,7 @@ Risk: this tightens a merge gate that real tasks pass through today. Before the 
 
 - [ ] Oracle written by `qa-expert`, red
 - [ ] List of rows that would now fail, reported
-- [ ] Implementation done
+- [x] Implementation done
 - [ ] `code-review` run
 - [ ] `security-review` run (High risk; it changes a merge gate)
 - [ ] Tests written AND pass — output pasted into `tasks/TASK_REVIEW_T309.md` (Hard-Stop Gate 5)

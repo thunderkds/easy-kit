@@ -58,7 +58,7 @@ def code_commit(checkout):
     with the fixed empty root commit (`CODE_SHA`). Files already in it stay untracked."""
     os.makedirs(str(checkout), exist_ok=True)
     if not _is_own_repo(checkout):
-        _git(checkout, "init", "-q")
+        _git(checkout, "init", "-q", "--template=")  # no sample hooks: /tmp is a small tmpfs
         _git(checkout, "commit", "-q", "--allow-empty", "--no-verify", "-m", "fixture: code")
     return _git(checkout, "rev-parse", "HEAD")
 
