@@ -82,6 +82,8 @@ merge_gate = _load_script_hook(
     "pre_bash_block_unsafe_merge",
     os.path.join(HOOKS_DIR, "pre_bash_block_unsafe_merge.py"),
 )
+import hook_verify_row  # noqa: E402  (T309)
+
 validate_guide = _load_by_path(
     "pre_agent_validate_guide", os.path.join(HOOKS_DIR, "pre_agent_validate_guide.py")
 )
@@ -97,10 +99,13 @@ render_mod = _load_by_path(
 # destroyed data).
 # --------------------------------------------------------------------------
 
-FILLED_EVIDENCE_TABLE = """| Check | Result | Notes / output snippet |
+# T309: a hand-typed `verify` pass row no longer counts, so the filled row is the hook's own
+# (`hook_verify_row`). A test that asks the merge gate reads it from `_checkout_tasks`, which
+# commits the code and writes the row's run record.
+FILLED_EVIDENCE_TABLE = f"""| Check | Result | Notes / output snippet |
 |-------|--------|------------------------|
 | **New test(s) cover Acceptance Criteria (file paths pasted)** | pass | tests/test_x.py |
-| verify | ☑ pass | skill run, feature confirmed working — pass |
+{hook_verify_row.HOOK_PASS_ROW}
 | Full smoke suite still green (no regression) | pass | 260 passed |
 """
 
@@ -185,6 +190,17 @@ def _write(tasks_dir, name, text):
     return path
 
 
+def _checkout_tasks(tmp_path, task_id="T900"):
+    """T309: `tmp_path/tasks`, in a checkout (`tmp_path`) whose head commit has the hook's pass
+    record, so `hook_verify_row.HOOK_PASS_ROW` counts there. The gate reads the checkout as the
+    parent of the tasks directory, so a bare `tmp_path` would make pytest's shared base the
+    checkout."""
+    tasks = os.path.join(str(tmp_path), "tasks")
+    os.makedirs(tasks, exist_ok=True)
+    hook_verify_row.prove(merge_gate.ROOT, str(tmp_path), task_id)
+    return tasks
+
+
 # ==========================================================================
 # AC7 (P0) — the merge gate must fail CLOSED when neither source has evidence
 # ==========================================================================
@@ -229,11 +245,12 @@ def test_ac7_unfilled_review_evidence_blocks_merge(tmp_path):
 def test_ac7_unreadable_review_file_blocks_merge(tmp_path):
     """Fail closed for the merge gate — an unreadable file is not evidence,
     and it must not raise either (this hook runs before every Bash call)."""
-    _write(tmp_path, "TASK_GUIDE_T900.md", SPLIT_GUIDE)
-    path = _write(tmp_path, "TASK_REVIEW_T900.md", _review_file(FILLED_EVIDENCE_TABLE))
+    tasks = _checkout_tasks(tmp_path)  # T309: the row would count if the file were readable
+    _write(tasks, "TASK_GUIDE_T900.md", SPLIT_GUIDE)
+    path = _write(tasks, "TASK_REVIEW_T900.md", _review_file(FILLED_EVIDENCE_TABLE))
     os.chmod(path, 0o000)
     try:
-        assert merge_gate.has_filled_verify_row("T900", tasks_dir=str(tmp_path)) is False
+        assert merge_gate.has_filled_verify_row("T900", tasks_dir=tasks) is False
     finally:
         os.chmod(path, 0o644)
 
@@ -264,39 +281,43 @@ def test_ac7_result_column_pass_alone_still_does_not_satisfy_the_gate(tmp_path):
 # ==========================================================================
 
 def test_ac6_filled_verify_row_in_review_file_is_found(tmp_path):
-    _write(tmp_path, "TASK_GUIDE_T900.md", SPLIT_GUIDE)
-    _write(tmp_path, "TASK_REVIEW_T900.md", _review_file(FILLED_EVIDENCE_TABLE))
-    assert merge_gate.has_filled_verify_row("T900", tasks_dir=str(tmp_path)) is True
+    tasks = _checkout_tasks(tmp_path)  # T309
+    _write(tasks, "TASK_GUIDE_T900.md", SPLIT_GUIDE)
+    _write(tasks, "TASK_REVIEW_T900.md", _review_file(FILLED_EVIDENCE_TABLE))
+    assert merge_gate.has_filled_verify_row("T900", tasks_dir=tasks) is True
 
 
 def test_legacy_inline_evidence_still_found(tmp_path):
     """No review file at all — behaviour identical to before T064."""
+    tasks = _checkout_tasks(tmp_path)  # T309
     _write(
-        tmp_path,
+        tasks,
         "TASK_GUIDE_T900.md",
         _legacy_guide(FILLED_EVIDENCE_TABLE, FILLED_DEMONSTRATION),
     )
-    assert merge_gate.has_filled_verify_row("T900", tasks_dir=str(tmp_path)) is True
+    assert merge_gate.has_filled_verify_row("T900", tasks_dir=tasks) is True
 
 
 def test_inline_evidence_wins_over_a_stray_review_file(tmp_path):
     """Order matters: guide first, review second. A legacy guide whose own
     Evidence table is unfilled must NOT be rescued by a stray review file."""
+    tasks = _checkout_tasks(tmp_path)  # T309: the stray review file's row would count alone
     _write(
-        tmp_path,
+        tasks,
         "TASK_GUIDE_T900.md",
         _legacy_guide(UNFILLED_EVIDENCE_TABLE, FILLED_DEMONSTRATION),
     )
-    _write(tmp_path, "TASK_REVIEW_T900.md", _review_file(FILLED_EVIDENCE_TABLE))
-    assert merge_gate.has_filled_verify_row("T900", tasks_dir=str(tmp_path)) is False
+    _write(tasks, "TASK_REVIEW_T900.md", _review_file(FILLED_EVIDENCE_TABLE))
+    assert merge_gate.has_filled_verify_row("T900", tasks_dir=tasks) is False
 
 
 def test_unpadded_task_id_resolves(tmp_path):
     """`T64` and `T064` name the same pair — the two-line path juggling that
     was duplicated at three call sites lives in the resolver now."""
-    _write(tmp_path, "TASK_GUIDE_T64.md", SPLIT_GUIDE.replace("T900", "T64"))
-    _write(tmp_path, "TASK_REVIEW_T64.md", _review_file(FILLED_EVIDENCE_TABLE))
-    assert merge_gate.has_filled_verify_row("T064", tasks_dir=str(tmp_path)) is True
+    tasks = _checkout_tasks(tmp_path, "T064")  # T309: the record names the ID the gate is given
+    _write(tasks, "TASK_GUIDE_T64.md", SPLIT_GUIDE.replace("T900", "T64"))
+    _write(tasks, "TASK_REVIEW_T64.md", _review_file(FILLED_EVIDENCE_TABLE))
+    assert merge_gate.has_filled_verify_row("T064", tasks_dir=tasks) is True
 
 
 # ==========================================================================
@@ -554,6 +575,13 @@ T257_NEGATIVE_CASES_ROW = (
     "or the mutation diff (`git diff --stat`, non-empty) before each verdict] |")
 
 
+T309_VERIFY_ROW = (
+    '| verify | \u2610 pass / \u2610 fail / \u2610 N/A | [leave it: the auto verify hook writes this '
+    'row, with its run record. If you ran /verify yourself, tick pass and make the whole Notes cell '
+    '"/verify by the user, session <id>, commit <sha>" (the full 40-character commit). The merge '
+    'gate counts no other row, even with the word "pass" in it] |')
+
+
 def _baseline_and_current_evidence_rows():
     baseline = _git_show(BASELINE_REF, "templates/TASK_GUIDE_template.md")
     review = _read(os.path.join(TEMPLATES_DIR, "TASK_REVIEW_template.md"))
@@ -562,6 +590,9 @@ def _baseline_and_current_evidence_rows():
     # mutation diff. The row stays pinned byte-for-byte, to its new text.
     old_rows = [T257_NEGATIVE_CASES_ROW if l.startswith("| Negative cases hold |") else l
                 for l in old_rows]
+    # T309 deliberately changed the `verify` row's Notes: the hook writes the row, the user's own
+    # pass is the `/verify by the user` line, and no other row counts. Pinned byte-for-byte too.
+    old_rows = [T309_VERIFY_ROW if l.startswith("| verify |") else l for l in old_rows]
     return (old_rows,
             [l for l in _slice(review, EVIDENCE_SLICE_RE).splitlines() if l.startswith("|")])
 
@@ -621,7 +652,8 @@ def test_ac1_review_templates_verify_row_still_satisfies_the_gate():
     reviewer fills it — same two bugs T026 fixed, same regex."""
     review = _read(os.path.join(TEMPLATES_DIR, "TASK_REVIEW_template.md"))
     assert "| verify | ☐ pass / ☐ fail / ☐ N/A |" in review
-    assert "the merge gate scans this Notes column for the word" in review
+    # T309: the Notes no longer say the gate scans for "pass"; they say no other row counts.
+    assert "The merge gate counts no other row" in review
     filled = "| verify | ☑ pass | skill run, feature confirmed working — pass |"
     assert merge_gate.VERIFY_ROW_PATTERN.search(filled)
 
@@ -725,20 +757,18 @@ def test_ac12_gate_finds_the_verify_row_in_a_real_split_bugfix_pair(tmp_path):
     ]
     assert len(extra_rows) == 3, f"bugfix skeleton no longer offers 3 extra rows: {extra_rows}"
 
+    # T309: the row is filled the way it is filled now — by the hook, with its run record.
+    template_row = next(l for l in review.splitlines() if l.startswith("| verify |"))
     filled = review.replace(
-        "| verify | ☐ pass / ☐ fail / ☐ N/A | [what was observed",
-        "| verify | pass | [what was observed",
-    ).replace(
-        'the merge gate scans this Notes column for the word "pass", not just the Result column]',
-        'the merge gate scans this Notes column for the word "pass" — pass]',
-    )
+        template_row, hook_verify_row.hook_row(hook_verify_row.CODE_SHA, result="pass"))
     filled = filled.replace(
         "| **UI: Responsiveness at target viewports**",
         "\n".join(extra_rows) + "\n| **UI: Responsiveness at target viewports**",
     )
-    _write(tmp_path, "TASK_GUIDE_T900.md", SPLIT_GUIDE)
-    _write(tmp_path, "TASK_REVIEW_T900.md", filled)
-    assert merge_gate.has_filled_verify_row("T900", tasks_dir=str(tmp_path)) is True
+    tasks = _checkout_tasks(tmp_path)  # T309
+    _write(tasks, "TASK_GUIDE_T900.md", SPLIT_GUIDE)
+    _write(tasks, "TASK_REVIEW_T900.md", filled)
+    assert merge_gate.has_filled_verify_row("T900", tasks_dir=tasks) is True
 
 
 def test_ac13_craft_spawn_prompt_targets_the_review_file_by_absolute_path():
@@ -834,11 +864,12 @@ def test_inline_heading_does_not_truncate_a_section(tmp_path):
         "# TASK_REVIEW — T900\n\n## Evidence\n\n"
         "| Check | Result | Notes |\n|---|---|---|\n"
         "| note | pass | pasted output mentioning ## inline |\n"
-        "| verify | ☑ pass | skill run — pass |\n"
+        f"{hook_verify_row.HOOK_PASS_ROW}\n"  # T309: the hook's pass, not a hand-typed one
     )
-    _write(tmp_path, "TASK_GUIDE_T900.md", SPLIT_GUIDE)
-    _write(tmp_path, "TASK_REVIEW_T900.md", review)
-    assert merge_gate.has_filled_verify_row("T900", tasks_dir=str(tmp_path)) is True
+    tasks = _checkout_tasks(tmp_path)
+    _write(tasks, "TASK_GUIDE_T900.md", SPLIT_GUIDE)
+    _write(tasks, "TASK_REVIEW_T900.md", review)
+    assert merge_gate.has_filled_verify_row("T900", tasks_dir=tasks) is True
 
 
 def test_quoted_h2_heading_inside_a_review_file_does_truncate(tmp_path):
@@ -849,11 +880,12 @@ def test_quoted_h2_heading_inside_a_review_file_does_truncate(tmp_path):
         "# TASK_REVIEW — T900\n\n## Evidence\n\n"
         "| Check | Result | Notes |\n|---|---|---|\n"
         "## Demonstration\n\n"
-        "| verify | ☑ pass | skill run — pass |\n"
+        f"{hook_verify_row.HOOK_PASS_ROW}\n"  # T309: a row that counts above the heading
     )
-    _write(tmp_path, "TASK_GUIDE_T900.md", SPLIT_GUIDE)
-    _write(tmp_path, "TASK_REVIEW_T900.md", review)
-    assert merge_gate.has_filled_verify_row("T900", tasks_dir=str(tmp_path)) is False
+    tasks = _checkout_tasks(tmp_path)
+    _write(tasks, "TASK_GUIDE_T900.md", SPLIT_GUIDE)
+    _write(tasks, "TASK_REVIEW_T900.md", review)
+    assert merge_gate.has_filled_verify_row("T900", tasks_dir=tasks) is False
 
 
 def test_resolver_never_raises_on_hostile_input(tmp_path):

@@ -43,6 +43,7 @@ def load_hook_module(path, name):
 
 
 merge_gate = load_hook_module(HOOK_PATH, "pre_bash_block_unsafe_merge_t055")
+import hook_verify_row  # noqa: E402  (T309)
 
 TASK_ID = "T900"
 
@@ -142,6 +143,8 @@ def _run_gate(evidence_table, task_id=TASK_ID, with_trace=True):
     try:
         sandbox.write_kanban(task_id)
         sandbox.write_guide(task_id, evidence_table)
+        # T309: the code commit and run record that make a hook-written row in the table count.
+        hook_verify_row.prove(merge_gate.ROOT, sandbox.root, task_id)
         if with_trace:
             sandbox.write_trace(task_id, [VERIFIED_TRACE_LINE])
 
@@ -175,7 +178,10 @@ def _run_gate(evidence_table, task_id=TASK_ID, with_trace=True):
 # ---------------------------------------------------------------------------
 
 def test_sc1_properly_filled_bugfix_verify_row_is_not_blocked():
-    table = _new_table("pass / fail", "skill run, feature confirmed working — pass")
+    # T309: a properly filled row is the hook's own (Notes and run record); the Result cell keeps
+    # this table's `pass / fail` shape. A hand-typed "— pass" in Notes no longer counts.
+    table = _new_table(*hook_verify_row.hook_cells(hook_verify_row.CODE_SHA,
+                                                   result="pass / fail").split(" | ", 1))
     result = _run_gate(table)
     assert result is None, f"expected gate to allow, got: {result}"
 
@@ -247,14 +253,11 @@ def test_ac7_gate_finds_verify_row_in_real_skeleton_shaped_guide():
         "in the gate's expected shape"
     )
 
-    # Fill the skeleton's checkbox cells the way a reviewer would, then run the
-    # real guide-shaped text (not a synthetic table) through the gate.
+    # Fill the skeleton's verify row the way it is filled now (T309: the hook writes it, with its
+    # run record; a reviewer's hand-typed "pass" no longer counts), then run the real
+    # guide-shaped text (not a synthetic table) through the gate.
+    template_row = next(l for l in skill_text.splitlines() if l.startswith("| verify |"))
     filled = skill_text.replace(
-        "| verify | ☐ pass / ☐ fail / ☐ N/A | [what was observed",
-        "| verify | pass | [what was observed",
-    ).replace(
-        "the merge gate scans this Notes column for the word \"pass\"]",
-        "the merge gate scans this Notes column for the word \"pass\" — pass]",
-    )
+        template_row, hook_verify_row.hook_row(hook_verify_row.CODE_SHA, result="pass"))
     result = _run_gate(filled)
     assert result is None, f"expected gate to allow a filled real-skeleton guide, got: {result}"

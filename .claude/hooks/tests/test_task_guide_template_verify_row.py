@@ -62,7 +62,8 @@ def test_fixed_row_present_in_template_file():
     template = open("templates/TASK_REVIEW_template.md").read()
     assert "| verify | ☐ pass / ☐ fail / ☐ N/A |" in template
     assert "`verify` skill — works in running app" not in template
-    assert "the merge gate scans this Notes column for the word" in template
+    # T309: the Notes no longer say the gate scans for "pass"; they say no other row counts.
+    assert "The merge gate counts no other row" in template
 
     guide_template = open("templates/TASK_GUIDE_template.md").read()
     assert "| verify | ☐ pass / ☐ fail / ☐ N/A |" not in guide_template
