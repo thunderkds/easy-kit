@@ -269,10 +269,13 @@ def test_sc3_admin_without_a_passed_verify_is_blocked_and_says_why(gate, tmp_pat
 
 
 def test_sc3_a_hand_typed_pass_row_is_not_an_auto_verify(gate, tmp_path):
-    """Today's gate accepts this manual row; `[admin]` needs the hook-written one."""
+    """`[admin]` needs the hook-written row; a manual row is not an auto verify."""
     fx = gate(kanban(ready=("T900",)))
     fx.review(result=MANUAL_PASS, commit=True)
-    assert reason(MERGE + " feat/t900-x", fx.main, None) is None  # control: the normal gate
+    # T309: the normal gate no longer accepts a hand-typed pass row either (it used to: this was
+    # the control line `is None`).
+    control = reason(MERGE + " feat/t900-x", fx.main, None)
+    assert control is not None and "T900 (no evidence row)" in control, control
     text = reason(MERGE + " feat/t900-x", fx.main, session(tmp_path, fx, "do it [admin]"))
     assert text is not None and "auto verify" in text, text
 

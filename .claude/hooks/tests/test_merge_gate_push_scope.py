@@ -50,6 +50,7 @@ def load_hook_module(path, name):
 
 
 merge_gate = load_hook_module(HOOK_PATH, "merge_gate_t197")
+import hook_verify_row  # noqa: E402  (T309)
 
 # Spelled in two halves so that this file's own source never reads as a push to the live gate.
 PUSH = "git " + "push"
@@ -76,13 +77,15 @@ NOTHING_PENDING = kanban(todo=("T902",), done=("T900", "T901"))
 
 GUIDE_VACATED = "# TASK_GUIDE - {tid}\n\n### Evidence\n\n> Moved to `tasks/TASK_REVIEW_{tid}.md`.\n"
 
+# T309: a hand-typed `verify` pass row no longer counts, so a verified task's row is the hook's own
+# pass for a commit (`{row}`, from `hook_verify_row`), with its run record (`Gate.review`).
 REVIEW_VERIFIED = """# TASK_REVIEW - {tid}
 
 ## Evidence
 
 | Check | Result | Notes / output snippet |
 |-------|--------|------------------------|
-| verify | ☑ pass | verify skill run, feature confirmed working — pass |
+{row}
 """
 
 COMPANION_FAIL_ROW = "| **Companion score (easy-verifier)** | ☑ fail | overall 62 (< 80) |\n"
@@ -121,14 +124,22 @@ class Gate:
         self.trace = os.path.join(self.root, "main", "memory", "event-trace")
         os.makedirs(self.tasks)
         os.makedirs(self.trace)
+        self.verified, self.extra_review = verified, extra_review or {}
+        # T309: the main checkout's code commit, which its verified rows name.
+        main_sha = hook_verify_row.code_commit(os.path.dirname(self.tasks))
         for tid in ("T900", "T901", "T902", "T9000"):
             self._write(self.tasks, f"TASK_GUIDE_{tid}.md", GUIDE_VACATED.format(tid=tid))
         for tid in verified:
-            review = REVIEW_VERIFIED.format(tid=tid) + (extra_review or {}).get(tid, "")
-            self._write(self.tasks, f"TASK_REVIEW_{tid}.md", review)
+            self._write(self.tasks, f"TASK_REVIEW_{tid}.md", self.review(tid, main_sha))
             self._write(self.trace, f"{tid}.jsonl", PYTEST_TRACE_RECORD + "\n")
         self.kanban = os.path.join(self.root, "PROJECT_KANBAN.md")
         self._write(self.root, "PROJECT_KANBAN.md", board)
+
+    def review(self, tid, sha):
+        """T309: `tid`'s review file with the hook's pass for `sha`; writes the pass record too."""
+        hook_verify_row.write_pass_record(merge_gate.ROOT, sha, tid)
+        return (REVIEW_VERIFIED.format(tid=tid, row=hook_verify_row.hook_row(sha, tid))
+                + self.extra_review.get(tid, ""))
 
     @staticmethod
     def _write(directory, name, text):
@@ -140,8 +151,20 @@ class Gate:
         the repo commits the fixture's `tasks/` — every verified row is on the branch."""
         path = make_repo(os.path.join(self.root, name), branch)
         shutil.copytree(self.tasks, os.path.join(path, "tasks"))
+        # T309: the hook verifies the commit without the rows; then only the review file changes
+        # (`same_code`), as the auto verify flow commits it.
+        for tid in self.verified:
+            os.remove(os.path.join(path, "tasks", f"TASK_REVIEW_{tid}.md"))
         git(path, "add", "-A")
         git(path, "-c", "user.email=t@example.com", "-c", "user.name=t", "commit", "-qm", "tasks")
+        if self.verified:
+            sha = git(path, "rev-parse", "HEAD")
+            for tid in self.verified:
+                self._write(os.path.join(path, "tasks"), f"TASK_REVIEW_{tid}.md",
+                            self.review(tid, sha))
+            git(path, "add", "-A")
+            git(path, "-c", "user.email=t@example.com", "-c", "user.name=t", "commit", "-qm",
+                "verify rows")
         return path
 
 
