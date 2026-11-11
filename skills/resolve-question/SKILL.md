@@ -7,8 +7,7 @@ description: "Resolve a question before anyone guesses. Invoke when the Supervis
 
 You, the Supervisor, turn a confused question into a cited answer or a clear question for the
 user. A sub-agent cannot spawn agents, so it reports `Status: blocked` with
-`Question (if blocked): [fact|choice] <question>` and you run this skill. The user talks only to
-you: every HITL message goes through your chat.
+`Question (if blocked): [fact|choice] <question>` and you run this skill.
 
 Terms (`PROJECT_SPEC.md` glossary): **Citation** = `file:line` plus the quoted text at that line —
 not "evidence", which is the TASK_GUIDE Evidence table. **Fact question** = the repo can answer it
@@ -39,14 +38,16 @@ If you can give a Citation (a `file:line` and its quoted text, opened this sessi
 the question, answer with it, skip the Scanners and go to step 5. A remembered file
 is not a Citation; open it.
 
+With `[admin]`, cite `PRD.md`, the glossary and `docs/legacy/` (if any) first, then code.
+
 Done when: you have a Citation opened this session, or go to step 3.
 
 #### 3. Scan
 
 Start 2 Scanners in one turn (3 for a Medium/High risk task) with `Agent({ subagent_type:
 "Explore", prompt: <template> })`, one starting area each. A Scanner searches its starting area
-first and may follow a lead anywhere in the repo, so 2 Scanners can still cite a fact that lives
-in one place. Identical prompts err together, so the starting areas differ:
+first and may follow a lead anywhere, so 2 Scanners can still cite a fact that lives in one place.
+Identical prompts err together, so the starting areas differ:
 
 - (a) code — `scripts/`, `.claude/hooks/`, `skills/*/scripts/`, tests
 - (b) docs — root `*.md` (`CLAUDE.md`, `AGENTS.md`, `PROJECT_SPEC.md`, `PROJECT_KANBAN.md`, `PRD*.md`,
@@ -94,8 +95,8 @@ Scanner (b): <finding + Citations, or "not found">
 Decision needed: <the one thing the user must decide or confirm>
 ```
 
-The HITL message carries the question, each Scanner's finding, and the decision needed. Never
-answer from memory in its place.
+The HITL message carries the question, each Scanner's finding, and the decision needed.
+Never answer from memory in its place.
 
 Done when: the answer is accepted with opened Citations, or the HITL message is sent and answered.
 

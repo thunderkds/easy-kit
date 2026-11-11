@@ -430,9 +430,14 @@ def test_ac8_admin_tag_states_the_main_push_rule():
         assert needle in body, needle
 
 
-def test_ac8_ship_stays_the_users_under_admin():
+def test_ac8_ship_is_a_plan_only_under_admin():
+    # Repointed by T307 (AC 3): was `test_ac8_ship_stays_the_users_under_admin` ("`ship`[^.]*stays the
+    # user's"). With `[admin]`, the Supervisor now runs `ship` as a plan only and never a deploy.
     m = re.search(r"^### Admin tag[^\n]*\n(.*?)(?=^##+ |\Z)", _auto_mode_section(), re.M | re.S)
-    assert m and re.search(r"`ship`[^.]*stays the user's", _norm(m.group(1))), "ship limit missing"
+    body = _norm(m.group(1)) if m else ""
+    assert "`ship` stays the user's with `[admin]` too" not in body, "old ship limit still there"
+    assert re.search(r"`ship`[^.]*as a plan only", body) and "It never runs a deploy command" in body, \
+        "ship-as-plan-only limit missing"
 
 
 # ── AC 10 — with `[admin]` the Supervisor starts the auto verify run and merges only on a pass ──
