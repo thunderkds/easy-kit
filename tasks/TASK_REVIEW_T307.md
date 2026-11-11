@@ -129,9 +129,37 @@ Skill stop text (no `[admin]` pointer in any of them):
 
 > A force push or a push of any other branch stays blocked, and <code>ship</code> stays with you.
 
-**AFTER**: [same command, post-change] OR [verbatim excerpt of the new content]
+**AFTER**: verbatim new content (commits `cd71296`, `61c0943`, `3212718`, then the pin/site commit).
 
-**DELTA**: [one sentence — what a user can now do that they could not before]
+`docs/claude-md/tracks.md` `### Admin tag` (new, before the merge rules; the lead-in "The tag adds one thing:" became "**Merge and push.** The Supervisor may merge …", and the sentence "`ship` stays the user's with `[admin]` too." was removed):
+
+> **The whole pipeline (T307).** With `[admin]`, one request runs the task from Stage 0 to Stage 5 with no question to you, except at project start. The Supervisor makes every decision and gives every approval itself. Plain `[auto]` is unchanged: rows 1–4, row 19 and `### Never in auto mode` read as before for it.
+>
+> Project start: under `[admin]`, Stage 0 step Requirements asks you its questions only on a new project. A new project is one whose `PROJECT_SPEC.md` `## Readiness` has no `Approved by: user <date>` line and no filled `Waived:` line (`user YYYY-MM-DD — reason`); an empty line or a placeholder counts as not filled. A project with either line filled counts as approved: no question goes to you, and rows 1–4 of `### Every user stop and its auto rule` run on their auto rules. The Supervisor reads this from `## Readiness` only, and never guesses it. The Supervisor never writes `Approved by` itself, with either tag: on a new project the line waits for your explicit confirmation of the Project Context Document.
+>
+> Domain first: the Supervisor decides from the business domain of the project. Under `[admin]`, a decision cites `PRD.md`, the `PROJECT_SPEC.md` glossary and `docs/legacy/` (when that folder exists) first, before code and the kit's own docs (`skills/resolve-question/SKILL.md`). Only when they do not settle the question does it go on to code, the rows of `### Every user stop and its auto rule` and a Debate.
+>
+> Decisions and approvals the Supervisor gives itself under `[admin]`: rows 2–4, 7–13, 15, 17 and 21 of `### Every user stop and its auto rule`, the Requirement Fidelity Gate, the agent team, the task breakdown, the direction, a `tdd` plan and the fix choice of a finding. Each one is made by its row's auto rule and `### Debate size by Risk`, and logged `RULE`, `FACT`, `SAFER OPTION` or `DEBATED` in the final report.
+>
+> The Supervisor never ends such a decision with "your decision" or "please approve": it decides, logs the line and goes on. A skill's own "ask the user" text yields to the row named in its `[admin]` pointer.
+>
+> Stops: the Supervisor stops only for the `### Stops that stay` list, and it says so in one line after the track line: `[admin]: I stop only for the stops that stay`. The only hand-backs left under `[admin]` are the `### Stops that stay` list, `Approved by` on a new project, the settings changes of row 5, a `git pull`, and the second `blocked` verify (T306).
+>
+> `ship`: after the merge and the push of `main`, the Supervisor runs `Skill({ skill: "ship" })` and writes its plan, as a plan only. It never runs a deploy command, and never tags or publishes a release: `ship` is a planner, not a deployer. It runs `ship` only for a task in Done (Hard-Stop Gate 5); when the hook left `Paused: done not moved`, it skips `ship` and says why. A missing `Deployment target` gives `TODO: confirm with operator` in the plan (`ship`'s own rule): that is not a stop.
+
+Row 19 gains one sentence after T284's clause: "With `[admin]`, the Supervisor also runs `ship` after the merge, as a plan only, never a deploy." (`### Stops that stay`, rows 1–4 and the `[auto]` list: byte-identical, pinned by SHA-256.)
+
+`### Never in auto mode` `[admin]` paragraph:
+
+> With `[admin]`, the Supervisor may also merge and push, only as `### Admin tag` says; a pull stays the user's. With `[admin]`, it also runs `ship`, as a plan only, never a deploy. The memory pass and the move to Done are automatic: see `### Final report` (`Memory:`) and `### Auto close-out`.
+
+`AGENTS.md` `## Tracks`: "… and on `blocked` or `fail` merges nothing; `ship` runs (plan only)." (26 bytes, the length of the old clause, so the 21724-byte cap of `tests/test_claude_md_slim.py` holds)
+
+Skill pointers (one each): `grill-with-docs` "Under `[admin]`, flag no item for the user: decide by `docs/claude-md/tracks.md` row 2." and "Under `[admin]`, do not ask: decide by `docs/claude-md/tracks.md` row 3."; `brainstorming` "Under `[admin]`, do not wait: decide by `docs/claude-md/tracks.md` row 4."; `to-issues` "Under `[admin]`, do not quiz the user: decide by `docs/claude-md/tracks.md` row 12."; `craft-agent` "Under `[admin]`, it does not ask: it decides by `docs/claude-md/tracks.md` row 11."; `settings-setup` "Under `[admin]` too: decide by `docs/claude-md/tracks.md` row 5; writing the settings stays yours."; `resolve-question` step 2 "With `[admin]`, cite `PRD.md`, the glossary and `docs/legacy/` (if any) first, then code." (8191 bytes; trimmed: "The user talks only to you: every HITL message goes through your chat." and "in the repo" after "may follow a lead anywhere"; no pinned string touched).
+
+`site/docs.html:466`: "A force push or a push of any other branch stays blocked. With <code>[admin]</code>, <code>ship</code> runs as a plan only, never a deploy."
+
+**DELTA**: With `[admin]`, a busy user's one request now runs the whole pipeline: the Supervisor asks Stage 0 questions only on a new project, decides and approves everything else itself from `PRD.md`, the glossary and `docs/legacy/`, stops only for the `### Stops that stay` list, and writes the `ship` plan (never a deploy); plain `[auto]` is unchanged.
 
 **WITNESS**: [who ran it and when — derived from `memory/event-trace/Txxx.jsonl`, never the
 implementing agent alone]
