@@ -1,4 +1,4 @@
-# TASK_REVIEW — T308: [Short Title]
+# TASK_REVIEW — T308: the merge gate accepts the user's own `/verify <ID>` for an extended-track task
 
 > Sibling of `tasks/TASK_GUIDE_T308.md`. Everything here is **filled by the reviewer at Stage
 > 4/5** — it is deliberately NOT in the guide, because the implementing agent re-reads the guide on
@@ -67,8 +67,26 @@ Not done: merge (yours); <auto verify: running (T182) | auto verify: <result> | 
 > **before any implementation commit exists**; if it does not (docs, templates, skill-instruction
 > text), BEFORE is the **verbatim prior content** of what changed — a quoted excerpt, not a command.
 
-**BEFORE**: [pasted timestamped command output showing the thing absent/failing, captured before the
-first implementation commit] OR [verbatim excerpt of the prior content, for non-executable changes]
+**BEFORE**: captured 2026-11-11T14:23:39Z by common-infrastructure in `/home/thunderkds/workspace/pets/wt-t308`,
+HEAD `c997e09564fcd094b1f16de6843d19ab239dabd7` (the locked oracle, no implementation commit yet):
+
+```
+$ python -m pytest .claude/hooks/tests/test_t308_user_verify_extended.py -q -p no:cacheprovider
+...
+FAILED .claude/hooks/tests/test_t308_user_verify_extended.py::test_ac1_the_users_verify_row_with_the_transcript_entry_passes[working-tree-read]
+FAILED .claude/hooks/tests/test_t308_user_verify_extended.py::test_ac1_the_users_verify_row_with_the_transcript_entry_passes[own-branch]
+FAILED .claude/hooks/tests/test_t308_user_verify_extended.py::test_ac2_a_row_in_the_guides_inline_evidence_passes[working-tree-read]
+FAILED .claude/hooks/tests/test_t308_user_verify_extended.py::test_ac2_a_row_in_the_guides_inline_evidence_passes[own-branch]
+FAILED .claude/hooks/tests/test_t308_user_verify_extended.py::test_ac1_a_row_committed_only_in_the_tasks_worktree_passes
+FAILED .claude/hooks/tests/test_t308_user_verify_extended.py::test_ac1_the_named_session_may_be_another_file_in_the_same_folder
+FAILED .claude/hooks/tests/test_t308_user_verify_extended.py::test_mutation_a_time_blind_copy_lets_an_out_of_window_entry_through[before-code-working-tree]
+FAILED .claude/hooks/tests/test_t308_user_verify_extended.py::test_mutation_a_time_blind_copy_lets_an_out_of_window_entry_through[after-row-working-tree]
+FAILED .claude/hooks/tests/test_t308_user_verify_extended.py::test_mutation_a_time_blind_copy_lets_an_out_of_window_entry_through[before-code-own-branch]
+9 failed, 27 passed in 7.20s
+```
+
+Each AC 1/AC 2 failure is the gate's block `Tasks in Ready for Review missing Stage 5 verify evidence ... T900 (no evidence row)`
+for a `| verify | ☑ pass | /verify by the user, session <sid>, commit <sha> |` row with a valid transcript entry.
 
 **AFTER**: [same command, post-change] OR [verbatim excerpt of the new content]
 
