@@ -67,8 +67,41 @@ Not done: merge (yours); <auto verify: running (T182) | auto verify: <result> | 
 > **before any implementation commit exists**; if it does not (docs, templates, skill-instruction
 > text), BEFORE is the **verbatim prior content** of what changed — a quoted excerpt, not a command.
 
-**BEFORE**: [pasted timestamped command output showing the thing absent/failing, captured before the
-first implementation commit] OR [verbatim excerpt of the prior content, for non-executable changes]
+**BEFORE**: captured 2026-11-11T15:49:09Z at `eedd717` (oracle locked, no implementation commit yet),
+by common-infrastructure in `/home/thunderkds/workspace/pets/wt-t309`:
+
+```
+$ date -u +%Y-%m-%dT%H:%M:%SZ && git rev-parse --short HEAD && python -m pytest .claude/hooks/tests/test_t309_hand_typed_pass_row.py -q -p no:cacheprovider | tail -25
+2026-11-11T15:49:09Z
+eedd717
+E       AssertionError: the real gate must block a hand-typed row: None
+E       assert False
+E        +  where False = blocked(None)
+
+.claude/hooks/tests/test_t309_hand_typed_pass_row.py:354: AssertionError
+=========================== short test summary info ============================
+FAILED .claude/hooks/tests/test_t309_hand_typed_pass_row.py::test_ac1_a_hand_typed_pass_row_in_the_review_file_blocks[ran-verify-myself-working-tree-read]
+FAILED .claude/hooks/tests/test_t309_hand_typed_pass_row.py::test_ac1_a_hand_typed_pass_row_in_the_review_file_blocks[ran-verify-myself-own-branch]
+FAILED .claude/hooks/tests/test_t309_hand_typed_pass_row.py::test_ac1_a_hand_typed_pass_row_in_the_review_file_blocks[confirmed-working-working-tree-read]
+FAILED .claude/hooks/tests/test_t309_hand_typed_pass_row.py::test_ac1_a_hand_typed_pass_row_in_the_review_file_blocks[confirmed-working-own-branch]
+FAILED .claude/hooks/tests/test_t309_hand_typed_pass_row.py::test_ac1_a_hand_typed_pass_row_in_the_review_file_blocks[user-shape-sid-pass-1-working-tree-read]
+FAILED .claude/hooks/tests/test_t309_hand_typed_pass_row.py::test_ac1_a_hand_typed_pass_row_in_the_review_file_blocks[user-shape-sid-pass-1-own-branch]
+FAILED .claude/hooks/tests/test_t309_hand_typed_pass_row.py::test_ac1_a_hand_typed_pass_row_in_the_review_file_blocks[pass-slash-na-working-tree-read]
+FAILED .claude/hooks/tests/test_t309_hand_typed_pass_row.py::test_ac1_a_hand_typed_pass_row_in_the_review_file_blocks[pass-slash-na-own-branch]
+FAILED .claude/hooks/tests/test_t309_hand_typed_pass_row.py::test_ac1_a_hand_typed_pass_row_without_a_transcript_blocks[working-tree-read]
+FAILED .claude/hooks/tests/test_t309_hand_typed_pass_row.py::test_ac1_a_hand_typed_pass_row_without_a_transcript_blocks[own-branch]
+FAILED .claude/hooks/tests/test_t309_hand_typed_pass_row.py::test_ac1_a_hand_typed_pass_row_in_the_guides_inline_evidence_blocks[ran-verify-myself-working-tree-read]
+FAILED .claude/hooks/tests/test_t309_hand_typed_pass_row.py::test_ac1_a_hand_typed_pass_row_in_the_guides_inline_evidence_blocks[ran-verify-myself-own-branch]
+FAILED .claude/hooks/tests/test_t309_hand_typed_pass_row.py::test_ac1_a_hand_typed_pass_row_in_the_guides_inline_evidence_blocks[confirmed-working-working-tree-read]
+FAILED .claude/hooks/tests/test_t309_hand_typed_pass_row.py::test_ac1_a_hand_typed_pass_row_in_the_guides_inline_evidence_blocks[confirmed-working-own-branch]
+FAILED .claude/hooks/tests/test_t309_hand_typed_pass_row.py::test_ac1_a_hand_typed_row_committed_only_in_the_tasks_worktree_blocks
+FAILED .claude/hooks/tests/test_t309_hand_typed_pass_row.py::test_ac1_a_user_shaped_row_with_a_transcript_for_another_session_blocks
+FAILED .claude/hooks/tests/test_t309_hand_typed_pass_row.py::test_mutation_the_old_any_pass_branch_lets_a_hand_typed_row_through[working-tree-read]
+FAILED .claude/hooks/tests/test_t309_hand_typed_pass_row.py::test_mutation_the_old_any_pass_branch_lets_a_hand_typed_row_through[own-branch]
+18 failed, 25 passed in 5.52s
+```
+
+The gate returns `None` (allows the merge) for every hand-typed `☑ pass` row with "pass" in Notes.
 
 **AFTER**: [same command, post-change] OR [verbatim excerpt of the new content]
 
