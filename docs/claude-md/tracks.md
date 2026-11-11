@@ -103,7 +103,7 @@ every push of the task's own branch, while it is there. The branch merges only w
 when the request carried `[admin]` and the auto verify run passed (`### Admin tag`). Stage 5 verify is still mandatory before
 any merge: the Supervisor starts the headless auto verify run and reports its verdict
 (`### Auto verify (Stop hook)`). You may still run `/verify` yourself. You must run it when that run is
-blocked or `CLAUDE_AUTO_VERIFY=off`. Then the Supervisor moves the row to Done and merges. The record's
+blocked (with `[admin]`, after its one retry is blocked too: `### Admin tag`) or `CLAUDE_AUTO_VERIFY=off`. Then the Supervisor moves the row to Done and merges. The record's
 `Not done:` field always names the merge.
 
 ---
@@ -235,7 +235,7 @@ is logged `RULE`, `FACT` or `SAFER OPTION`, not `DEBATED`. At Risk Medium or Hig
 | 15 | Stage 3: a sub-agent reports `Status: blocked` with a `Question:`, or asks to approve its `tdd` plan | `resolve-question`: a Fact question by Citation or Scanners, a Choice question by Debate. The Supervisor approves a `tdd` plan that matches the guide. | `FACT` / `DEBATED` ⚠ / `RULE` |
 | 16 | Stage 4 pull moment 3 (board mode `online`): "review against the new version?" | Review against the new version. | `RULE` |
 | 17 | Stage 4 item 7: a finding whose fix needs a choice | Debate. | `DEBATED` ⚠ |
-| 18 | Stage 5 item 1: `/verify` (never in the Supervisor's own session) | The Supervisor starts the headless auto verify run (T182; every task since T203) with `python3 .claude/hooks/stop_auto_verify.py --start <ID>`, and writes its own real-run check under `Checks:` as `auto-checked, not /verify`. The `verify` Evidence row stays unchecked until that run fills it from a real `/verify`, or the user does: a blocked run falls back to `/verify (yours)`. | `Checks:` / `Not done:` |
+| 18 | Stage 5 item 1: `/verify` (never in the Supervisor's own session) | The Supervisor starts the headless auto verify run (T182; every task since T203) with `python3 .claude/hooks/stop_auto_verify.py --start <ID>`, and writes its own real-run check under `Checks:` as `auto-checked, not /verify`. The `verify` Evidence row stays unchecked until that run fills it from a real `/verify`, or the user does: a blocked run falls back to `/verify (yours)` (with `[admin]`, after its one retry: `### Admin tag`). | `Checks:` / `Not done:` |
 | 19 | Stage 5 items 3–6: memory update, merge, Done, `ship` | Memory update: the Supervisor runs the diff-driven pass before it stops, and writes the `Memory:` line. Done: after an auto verify pass, the hook moves the row (`### Auto close-out`). Merge, push and `ship`: never in auto mode, except the merge and push that `[admin]` allows (`### Admin tag`). The task waits in Ready for Review until the hook moves it. | `Memory:` / `Closed:` / `Not done:` |
 | 20 | `AGENTS.md` self-monitoring: "want me to compact before continuing?" | Do not ask. Near the session's context or usage limit, stop at a clean point (see Edge cases). | `Paused:` |
 | 21 | Minimal track: an unclear request (its one stop) | By `### Debate size by Risk`. At Risk Low (the minimal track's own level) the Supervisor decides the reading and logs why. | `RULE` / `SAFER OPTION` ⚠ |
@@ -279,7 +279,7 @@ the run ends, plus `security-review` at Risk Medium or High, because it is not a
   Supervisor runs before it stops. Name each entry it wrote, or write `Memory: nothing new`. The memory
   writes stay the Supervisor's; no hook writes memory.
 - `Not done: merge (yours)` (with `[admin]`: `Not done: merge (admin: after the auto verify pass)`), plus the `/verify` state: `auto verify: running (T182)`, its result, or
-  `/verify (yours)` when the hook is not installed, its run was blocked, or `CLAUDE_AUTO_VERIFY=off`.
+  `/verify (yours)` when the hook is not installed, its run was blocked (with `[admin]`: after its one retry was blocked too, `### Admin tag`), or `CLAUDE_AUTO_VERIFY=off`.
   When the spawn hook's `⚠ HIGH RISK — project readiness incomplete:` warning fired in the run, the
   same `Not done:` line (never a second one) also names it: `readiness incomplete: <gaps> (yours)` (T223).
 - `Closed:` — written by the hook, never by the Supervisor, when it moves the row to Done
@@ -445,7 +445,7 @@ hash or other code: not a pass. The hook never edits or removes this line, and `
 it. A blocked hook line above it for other code still gets a new run, and that run rewrites only the hook's
 line. After a pass, the same run closes out a task whose report has the `Mode: auto` line (`### Auto close-out`).
 A task without it stays in Ready for Review after its pass, and the Supervisor moves it to Done as before.
-The merge stays yours, unless the request carried `[admin]` (`### Admin tag`). You may still run `/verify` yourself at any time; when the run is blocked, you must.
+The merge stays yours, unless the request carried `[admin]` (`### Admin tag`). You may still run `/verify` yourself at any time; when the run is blocked, you must (with `[admin]`, only after its one retry is blocked too: `### Admin tag`).
 
 **A task with no runtime surface (T289).** A lone SKIP verdict is a pass in one case. The hook, never the
 model, asks git: it lists the files the task's branch changed since it left `main`
@@ -615,11 +615,38 @@ command, from this session's transcript. It allows a `git merge` or `git push` o
    record counts only because the gate repeats the docs-only path check from git.
 
 With `[admin]`, the Supervisor starts the run itself: as soon as the task is at Ready for Review, it runs
-`python3 .claude/hooks/stop_auto_verify.py --start <ID>` and waits for the verdict. It never runs `/verify` in
+`--start <ID>` (the full command is in step 4 below) and waits for the verdict. It never runs `/verify` in
 its own session. Only on a pass does it go on to merge and push, without asking. On `blocked` or
-`fail` it merges nothing and reports why. A task that changes only files with no runtime surface (docs, task
-files, memory, tests: `### Auto verify (Stop hook)`) gets a pass when the run answers `skip`, so it needs no
-typed `/verify`. A `skip` for any other task is `blocked`: its `/verify` then falls back to you.
+`fail` it merges nothing. A `fail` is never retried: the Supervisor reports why and stops. A task that
+changes only files with no runtime surface (docs, task files, memory, tests: `### Auto verify (Stop hook)`)
+gets a pass when the run answers `skip`, so it needs no typed `/verify`. A `skip` for any other task is
+`blocked`: its `/verify` then falls back to you after the one retry below.
+
+**One retry after `blocked` (T306).** `--start` refuses while the result is filled for this code or the
+run's log exists, so the retry resets both first. On the first `blocked` result, the Supervisor re-runs
+the auto verify once, on the same task, in the same `[admin]` request, without asking, in these steps:
+
+1. Reset the hook's `blocked` result to the unwritten state. Extended track: replace the `verify` row of
+   `tasks/TASK_REVIEW_<ID>.md` with the unwritten row of `templates/TASK_REVIEW_template.md`, copied
+   exactly, Notes included: `| verify | ☐ pass / ☐ fail / ☐ N/A |` and the template's bracketed Notes.
+   Minimal track: delete only the hook's `- verify: ☐ blocked` line under `Checked:`; a line you wrote
+   stays (T250).
+2. If the `blocked` result is in a commit, commit the reset on the task branch, that one file alone
+   (precedent: commit `e5c0e26`, T295). A commit that changes only the file holding the result counts as
+   the same code. If the result was never committed, the reset leaves the file as committed: there is
+   nothing to commit.
+3. Delete that run's log, `.claude/verify-runs/<ID>-<commit>.log`, in the main checkout (`<commit>` is the
+   first 12 characters of the commit the blocked run named). Without a new commit, `--start` names the
+   same log and refuses while it exists. After a commit in step 2 the new run gets a new log name, and
+   the delete does no harm.
+4. Run `python3 .claude/hooks/stop_auto_verify.py --start <ID>` again and wait for its verdict.
+
+The retry costs up to `CLAUDE_AUTO_VERIFY_BUDGET_USD` again (default 2). If the second run is also
+`blocked`, the Supervisor stops: it merges nothing, says why in one line and asks you to run
+`/verify <ID>`. It never starts a third run. The final report counts the retry. Only a hook-written pass
+unlocks the merge, as item 4 says: the Supervisor never edits a `pass` row, never writes the reset row as
+anything but the unwritten state, and never runs the skill itself. With `[auto]` alone there is no retry:
+a `blocked` run leaves `/verify (yours)` in the `Not done:` line.
 
 The gate's other checks then still run, as for every merge. `ship` stays the user's with `[admin]` too.
 With `[auto]` alone, the same gate blocks every merge, push and pull while that request is the latest
@@ -775,7 +802,9 @@ Known limits:
   the headless run with `--start <ID>`; it never runs the skill in its own session. The merge gate cannot
   tell who wrote the row, so this rule is doctrine: the Supervisor's own check goes under `Checks:`, never
   in the `verify` row. The one exception the gate can check is an `auto-run by hook` row: it needs the
-  hook's run record (`### Auto verify (Stop hook)`);
+  hook's run record (`### Auto verify (Stop hook)`). For the Supervisor's own edits of the row, the one
+  exception is the reset of a hook-written `blocked` result to the unwritten state, before the one
+  `[admin]` retry (`### Admin tag`);
 - moves a task to Done (only the hook does, `### Auto close-out`);
 - moves a task down a track.
 
