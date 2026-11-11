@@ -280,6 +280,8 @@ the run ends, plus `security-review` at Risk Medium or High, because it is not a
   writes stay the Supervisor's; no hook writes memory.
 - `Not done: merge (yours)` (with `[admin]`: `Not done: merge (admin: after the auto verify pass)`), plus the `/verify` state: `auto verify: running (T182)`, its result, or
   `/verify (yours)` when the hook is not installed, its run was blocked (with `[admin]`: after its one retry was blocked too, `### Admin tag`), or `CLAUDE_AUTO_VERIFY=off`.
+  On the extended track, your pass goes in the `verify` row: Result `☑ pass`, Notes
+  `/verify by the user, session <id>, commit <sha>` (`### Auto verify (Stop hook)`).
   When the spawn hook's `⚠ HIGH RISK — project readiness incomplete:` warning fired in the run, the
   same `Not done:` line (never a second one) also names it: `readiness incomplete: <gaps> (yours)` (T223).
 - `Closed:` — written by the hook, never by the Supervisor, when it moves the row to Done
@@ -436,12 +438,15 @@ merge gate accepts an `auto-run by hook` row — or a minimal-track `verify:` li
 exists for that task and the head commit, and says pass. A hand-typed line in a Decision record counts for
 nothing, except one shape (T250). When the run is blocked and you run `/verify <ID>` yourself on the minimal
 track, its pass goes under `Checked:` as
-`- verify: ☑ pass — /verify by the user, session <id>, commit <sha>`. `<id>` is the session you typed
-`/verify` in, and `<sha>` is the full 40-character commit you verified. The gate does not accept the line on its text alone.
-It accepts the line only when that session's transcript (in the same folder as the merging session's) holds
-your own `/verify <ID>` entry, dated after `<sha>` was committed and before the line was committed, and
-`<sha>` is the same code as the head (only `tasks/MINIMAL_LOG.md` may differ). A missing transcript, a short
-hash or other code: not a pass. The hook never edits or removes this line, and `--start` starts nothing for
+`- verify: ☑ pass — /verify by the user, session <id>, commit <sha>`. On the extended track (T308), its pass
+goes in the Evidence `verify` row: Result `☑ pass`, and Notes `/verify by the user, session <id>, commit <sha>`
+with nothing else in the cell. `<id>` is the session you typed
+`/verify` in, and `<sha>` is the full 40-character commit you verified. The gate does not accept the line or the row on its text alone.
+It accepts it only when that session's transcript (in the same folder as the merging session's) holds
+your own `/verify <ID>` entry, dated after `<sha>` was committed and before the line or the row was committed, and
+`<sha>` is the same code as the head. Only the file that holds the result may differ: `tasks/MINIMAL_LOG.md`,
+or the review file or guide that holds the row. A missing transcript, a short
+hash or other code: not a pass. The gate shows only that you typed `/verify <ID>`, not its verdict (`### Known limits`). The hook never edits or removes this line, and `--start` starts nothing for
 it. A blocked hook line above it for other code still gets a new run, and that run rewrites only the hook's
 line. After a pass, the same run closes out a task whose report has the `Mode: auto` line (`### Auto close-out`).
 A task without it stays in Ready for Review after its pass, and the Supervisor moves it to Done as before.
@@ -930,7 +935,7 @@ Read these before you rely on `[auto]`. T180 left them open, on purpose. T186 re
 - **A hand-typed `☑ pass` in the `verify` row ends the check.** The auto-mode check skips a review file
   whose `verify` row says `☑ pass`, so an agent that types that row ends the run unchecked. The merge
   gate still blocks a hand-typed row at merge: it accepts only a row with an `auto-run by hook` run
-  record.
+  record, or a row with your own `/verify` line and its transcript proof (T308, `### Auto verify (Stop hook)`).
 - **At Risk High, one Debate is enough.** The check forces at least one Debate with 3 Advocates, not
   one Debate per choice. A decision can still hide behind a loosely related cited `RULE:`, as long as one
   other decision is debated. Read the `RULE:` lines of a High risk report yourself.
@@ -951,7 +956,8 @@ Read these before you rely on `[auto]`. T180 left them open, on purpose. T186 re
   security boundary: the merge gate and the auto verify still apply.
 - **An agent can still forge the transcript that proves your `/verify`, in three ways the rules miss.**
   The merge gate reads the proof for the line `- verify: ☑ pass — /verify by the user, session <id>,
-  commit <sha>` from `<id>.jsonl` in the transcripts folder. Since T251, `.claude/settings.json` denies
+  commit <sha>` (and, since T308, for the same Notes in an Evidence `verify` row) from `<id>.jsonl` in the
+  transcripts folder. Since T251, `.claude/settings.json` denies
   agents `Edit(~/.claude/projects/**/*.jsonl)` (the Edit and Write tools) and `Bash(*.claude/projects/*)`
   (any command that names that folder). The Bash rule matches the command text only, so it also refuses
   a command that merely names the folder, for example a `grep` over a repo file that holds the string

@@ -455,12 +455,22 @@ def has_filled_verify_row(task_id, tasks_dir=None):
     line was, and `<sha>` is the same code as the head (`user_line_confirmed`).
     Any other hand-typed line still counts for nothing. Every `verify:` line of
     the record is read, so the user's line may follow a blocked hook line.
+
+    T308 reads the same user shape in an extended-track Evidence `verify` row
+    (`| verify | ☑ pass | /verify by the user, session <sid>, commit <sha> |`),
+    with the same proof; the upper date is the commit that added the row to the
+    file it was read from (the guide or the review file), and only that file may
+    differ from `<sha>`.
     """
     for directory in evidence_search_dirs(tasks_dir):
         checkout = os.path.dirname(os.path.abspath(directory))
+        section = read_guide_section(task_id, "Evidence", directory)
         if verify_row_passes(
-                read_guide_section(task_id, "Evidence", directory),
-                lambda notes, rel: auto_row_confirmed(ROOT, checkout, task_id, notes, rel)):
+                section,
+                lambda notes, rel: auto_row_confirmed(ROOT, checkout, task_id, notes, rel),
+                confirm_user=lambda notes: user_line_confirmed(
+                    checkout, task_id, notes, head_commit(checkout),
+                    report_rel=_evidence_rel(task_id, directory, section))):
             return True
     for directory in evidence_search_dirs(tasks_dir):
         checkout = os.path.dirname(os.path.abspath(directory))
@@ -475,10 +485,63 @@ def has_filled_verify_row(task_id, tasks_dir=None):
     return False
 
 
-def verify_row_passes(section, confirm, hook_only=False):
+def _evidence_rel(task_id, directory, section):
+    """T308: the checkout-relative path of the file in `directory` whose Evidence section is
+    `section` — guide first, review second, the order `read_guide_section` reads in — or None.
+    Never raises."""
+    try:
+        checkout = os.path.dirname(os.path.abspath(directory))
+        normalized = normalize_task_id(task_id, checkout)
+        if not section or not normalized:
+            return None
+        for prefix in (GUIDE_PREFIX, REVIEW_PREFIX):
+            for path in _candidate_paths(directory, prefix, normalized):
+                try:
+                    with open(path, encoding="utf-8") as f:
+                        text = f.read()
+                except OSError:
+                    continue
+                if slice_section(text, "Evidence") == section:
+                    return os.path.relpath(path, checkout).replace(os.sep, "/")
+        return None
+    except Exception:
+        return None
+
+
+def verify_row_passes(section, confirm, hook_only=False, confirm_user=None):
     """True when an Evidence `section` holds a filled `verify` pass row. `confirm(notes, None)`
     decides an `auto-run by hook` row (T182 D5): against which commit is the caller's choice.
-    `hook_only` (T284) counts only such a row: a hand-typed pass row is skipped."""
+    `hook_only` (T284) counts only such a row: a hand-typed pass row is skipped. T308: a
+    `☑ pass` row whose whole Notes cell is the user's `/verify` line (`USER_LINE`) counts when
+    `confirm_user(notes)` proves it; never with `hook_only`."""
+    return (_verify_row_passes(section, confirm, hook_only)
+            or (not hook_only and confirm_user is not None
+                and _user_row_passes(section, confirm_user)))
+
+
+# T308: the user's row. Its Notes hold no word "pass", so `VERIFY_ROW_PATTERN` never matches it.
+# A whole table row: the Check cell is exactly `verify`, the Result cell holds a checked `☑ pass`
+# with no unchecked `☐ pass`, and the Notes cell, stripped, is exactly `USER_LINE`.
+USER_ROW_PATTERN = re.compile(
+    r"^\s*\|\s*verify\s*\|(?P<result>[^|\n]*)\|(?P<notes>[^|\n]*)\|",
+    re.IGNORECASE | re.MULTILINE,
+)
+CHECKED_PASS_PATTERN = re.compile(r"☑\s*pass\b", re.IGNORECASE)
+
+
+def _user_row_passes(section, confirm_user):
+    if not section:
+        return False
+    for match in USER_ROW_PATTERN.finditer(section):
+        result = match.group("result")
+        if not CHECKED_PASS_PATTERN.search(result) or UNCHECKED_PASS_PATTERN.search(result):
+            continue
+        if USER_LINE.match(match.group("notes").strip()) and confirm_user(match.group("notes")):
+            return True
+    return False
+
+
+def _verify_row_passes(section, confirm, hook_only=False):
     if not section:
         return False
     for match in VERIFY_ROW_PATTERN.finditer(section):
@@ -543,26 +606,28 @@ def _commit_time(directory, *args):
     return datetime.fromtimestamp(int(done.stdout.split()[-1]), timezone.utc)
 
 
-def user_line_confirmed(checkout, task_id, notes, head, ref=None):
+def user_line_confirmed(checkout, task_id, notes, head, ref=None, report_rel=MINIMAL_LOG_REL):
     """True when the user `/verify` line `notes` is proven (see above). `ref` is the branch tip
     the line was read from (a committed read: the line must be in its history), or None for a
-    working-tree read. Never raises; any doubt is False."""
+    working-tree read. `report_rel` (T308) is the checkout-relative file the line was read from:
+    `tasks/MINIMAL_LOG.md` for a minimal-track record, the guide or review file for an Evidence
+    row; the upper date and `same_code` read that file only. Never raises; any doubt is False."""
     try:
         match = USER_LINE.match((notes or "").strip())
-        if not match or not TRANSCRIPTS_DIR or not head:
+        if not match or not TRANSCRIPTS_DIR or not head or not report_rel:
             return False
         sid, sha = match.groups()
         after = _commit_time(checkout, "show", "-s", "--format=%ct", f"{sha}^{{commit}}")
         if after is None:
             return False
         before = _commit_time(checkout, "log", "--format=%ct", "-S", notes.strip(),
-                              ref or head, "--", MINIMAL_LOG_REL)
+                              ref or head, "--", report_rel)
         if before is None and ref is not None:
             return False
         transcript = os.path.join(TRANSCRIPTS_DIR, f"{sid}.jsonl")
         if not session_work.verify_typed(transcript, task_id, after, before):
             return False
-        return same_code(checkout, task_id, sha, head, MINIMAL_LOG_REL)
+        return same_code(checkout, task_id, sha, head, report_rel)
     except Exception:
         return False
 
@@ -617,11 +682,15 @@ def committed_verify_row(task_id, branch, directory, hook_only=False):
         def confirm(notes, rel):
             return _auto_row_confirmed_at(directory, task_id, notes, tip, rel)
 
-        sections = (slice_section(show(rel), "Evidence")
+        sections = ((rel, slice_section(show(rel), "Evidence"))
                     for prefix in (GUIDE_PREFIX, REVIEW_PREFIX)
                     for rel in _candidate_paths("tasks", prefix, normalized))
-        if verify_row_passes(next((s for s in sections if s is not None
-                                   and not is_pointer_only(s)), None), confirm, hook_only):
+        row_rel, section = next(((rel, s) for rel, s in sections if s is not None
+                                 and not is_pointer_only(s)), (None, None))
+        user_row = None if hook_only else (
+            lambda notes: user_line_confirmed(directory, task_id, notes, tip, ref=tip,
+                                              report_rel=row_rel))
+        if verify_row_passes(section, confirm, hook_only, user_row):
             return True
         block = record_block(show(MINIMAL_LOG_REL) or "", task_id, skip_comments=True)
         user = None if hook_only else (

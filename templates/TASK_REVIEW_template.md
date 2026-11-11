@@ -28,6 +28,7 @@ After an auto verify pass the hook, never you, adds `Closed: row moved to Done <
 or adds `Paused: done not moved — <reason>`. It moves the row only when this block holds `Mode: auto`, a
 numbered decision, `Checks:`, `Memory:`, the `Not done:` auto verify slot with its result, and `Not done:`
 naming the merge — no `<...>` left (`docs/claude-md/tracks.md` `### Auto close-out`).
+With `/verify (yours)`, your pass goes in the `verify` row below: Result `☑ pass`, Notes `/verify by the user, session <id>, commit <sha>`.
 
 ## Auto decisions
 
