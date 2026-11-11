@@ -67,8 +67,26 @@ Not done: merge (yours); <auto verify: running (T182) | auto verify: <result> | 
 > **before any implementation commit exists**; if it does not (docs, templates, skill-instruction
 > text), BEFORE is the **verbatim prior content** of what changed — a quoted excerpt, not a command.
 
-**BEFORE**: [pasted timestamped command output showing the thing absent/failing, captured before the
-first implementation commit] OR [verbatim excerpt of the prior content, for non-executable changes]
+**BEFORE**: verbatim prior content (docs/templates only), quoted 2026-11-11T11:41Z at `0bc6bcd1d5df`, before the first implementation commit.
+
+`docs/claude-md/tracks.md:617-622` (`### Admin tag`):
+
+> With `[admin]`, the Supervisor starts the run itself: as soon as the task is at Ready for Review, it runs
+> `python3 .claude/hooks/stop_auto_verify.py --start <ID>` and waits for the verdict. It never runs `/verify` in
+> its own session. Only on a pass does it go on to merge and push, without asking. On `blocked` or
+> `fail` it merges nothing and reports why. A task that changes only files with no runtime surface (docs, task
+> files, memory, tests: `### Auto verify (Stop hook)`) gets a pass when the run answers `skip`, so it needs no
+> typed `/verify`. A `skip` for any other task is `blocked`: its `/verify` then falls back to you.
+
+`templates/TASK_REVIEW_template.md:42`:
+
+> `Not done: merge (yours); <auto verify: running (T182) | auto verify: <result> | /verify (yours)>`
+
+`templates/MINIMAL_LOG_template.md:59`:
+
+> `**Not done:** merge (yours); <auto verify: running (T182) | auto verify: <result> | /verify (yours)>`
+
+No retry exists: one `blocked` run sends `/verify` to the user.
 
 **AFTER**: [same command, post-change] OR [verbatim excerpt of the new content]
 
