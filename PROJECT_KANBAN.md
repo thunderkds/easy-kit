@@ -1,5 +1,5 @@
 # PROJECT_KANBAN.md
-**Last updated**: 2026-11-10
+**Last updated**: 2026-11-11
 
 > Compact task board. Full context lives in `PROJECT_SPEC.md`. Update this file whenever a task status changes.
 
@@ -88,6 +88,8 @@
 
 
 ### In Progress
+- [ ] **T307** — `[admin]` runs a task from start to end; it asks only at project start, and stops only for high-impact events | common-infrastructure | C2 | Risk: High | P1 | Started 2026-11-11: branch `feat/t307-admin-end-to-end`, worktree `../wt-t307` | User confirmed the three rule choices: "go ahead, all three choices are fine"; follow-up: "can not make decision, can not approve"
+- [ ] **T308** — the merge gate accepts the user's own `/verify <ID>` for an extended-track task | common-infrastructure | C2 | Risk: High | P1 | Started 2026-11-11: branch `feat/t308-user-verify-extended`, worktree `../wt-t308` | User: "yes, do both" (register T308); oracle by `qa-expert` first
 
 
 
@@ -102,6 +104,7 @@
 
 
 ### Done
+- [x] **T306** — `[admin]` retries a blocked auto verify run once, then asks the user | common-infrastructure | C2 | Risk: High | P1 | Guide: `tasks/TASK_GUIDE_T306.md` | Registered 2026-11-11, user: "yes, retry once then ask me" | Started 2026-11-11: branch `fix/t306-admin-retry-blocked`, worktree `../wt-t306` | Stage 4 2026-11-11: code-review P0 0, P1 0 (1 P3); security-review no findings; record `tasks/TASK_REVIEW_T306.md` | Ready for Review 2026-11-11: implementer commits + oracle + review record on `fix/t306-admin-retry-blocked` | Done 2026-11-11: merged `fbdbd62` (fast-forward) by the user; auto verify run `blocked` (SKIP: the hook counts `docs/claude-md/` and `templates/` as runtime surface); the user ran `/verify T306` in session, mechanism PASS (isolated drive with a stub model); the extended-track gate cannot read that line yet (T308)
 - [x] **T305** — Plugin hooks do nothing when `setup.sh` already wired the same hook | common-infrastructure | C2 | Risk: Medium | P2 | Registered 2026-11-10, user: "yes, do as your recommend" (both installs ran every gate twice) | Guide: `tasks/TASK_GUIDE_T305.md` | Started 2026-11-10: branch `fix/t305-plugin-hook-guard`, worktree `../wt-t305` | Stage 4 2026-11-10: code-review P0 0, P1 0 (2 P3); security-review no findings; record `tasks/TASK_REVIEW_T305.md` | Ready for Review 2026-11-10: 3 implementer commits + review record on `fix/t305-plugin-hook-guard` | Done 2026-11-10: auto verify pass (session 23f08123-268c-4612-abf1-0d6388891d51, commit ed5b615d490819f4a658522e4efda7fc5fce1141), merged 97e510f by the user
 - [x] **T303** — The docs page says what T285, T288, T295 and T297–T299 changed (effort fold-out, step-limit row, `[admin]` config refusal, `tasks/attempts.tsv`) | Supervisor | C1 | Risk: Low | P2 | Registered 2026-11-10 [admin], user: "let check all the change, and make sure all of them avail from the docs and the index" | Started 2026-11-10: branch `feat/t303-docs-recent-changes`, worktree `../wt-t303` | Done 2026-11-10: auto verify pass (session 1a59ddd0-87b2-4f1d-92ed-e318fa9b34c2, commit bd9a0acb20b7); merged and pushed at the user's request ("merge and push") | Track: minimal | Record: tasks/MINIMAL_LOG.md
 - [x] **T297** — A `## CLI Effort Table` beside the CLI Model Table | common-infrastructure | C1 | Risk: Low | P2 | Guide: `tasks/TASK_GUIDE_T297.md` | Registered 2026-11-09 [auto], user: "yes, let create plan and start parallel [auto]" (plan doc `easy-kit — update plan (base)`) | Started 2026-11-09: worktree `../wt-t297`, branch `feat/t297-effort-table` | Ready for Review 2026-11-09 [auto]: head `5cd7cb83`, report `tasks/TASK_REVIEW_T297.md` on the branch (committed there); full suite run, failures are load flakes that pass alone; auto verify not yet run | Done 2026-11-09: merged `acb0ebc`; auto verify pass (session d72e5f74-d5ff-4a92-9e52-2731a3235181, commit 5cd7cb83); row moved 2026-11-10 by T303 (stale Ready for Review)
