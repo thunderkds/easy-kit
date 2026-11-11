@@ -69,7 +69,9 @@ Cause, `.claude/hooks/pre_bash_block_unsafe_merge.py` `has_filled_verify_row`: a
 
 ## Evaluation & Acceptance
 
-The oracle is written first by `qa-expert` (spawn it before the implementer), not by the implementer. The implementer may not edit it. No `Locked oracle` line: the Supervisor names the file after `qa-expert` writes it.
+**Locked oracle**: `.claude/hooks/tests/test_t308_user_verify_extended.py` (written first by `qa-expert`, commit `c2c1252`, red: 9 failed, 27 passed). The implementer may not edit it. Two assertions expect the block text `T900 (no evidence row)`: keep that message.
+
+**Known older hole (out of scope, found by `qa-expert`)**: `VERIFY_ROW_PATTERN` needs the word "pass" in Notes, and `verify_row_passes` accepts any non-hook row that has it (no proof) unless `hook_only` (`[admin]`). So a hand-typed `☑ pass` row with "pass" in Notes already passes the ordinary gate, and `### Known limits` says it does not. `test_verify_row_fill_detection.py` `FILLED_CHECKED_BOX_ROW` and `test_merge_gate_t095.py:83` pin it. T308 does not change this. The `USER_LINE` Notes have no "pass", so the new path needs its own row match. The security review restates the hole; a separate task decides code or docs.
 
 ### Success Criteria (observable, pass/fail)
 
