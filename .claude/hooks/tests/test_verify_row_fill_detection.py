@@ -45,6 +45,7 @@ def load_hook_module(path, name):
 
 
 merge_gate = load_hook_module(HOOK_PATH, "pre_bash_block_unsafe_merge_verify_row")
+import hook_verify_row  # noqa: E402  (T309)
 
 
 def row_is_filled(evidence_section):
@@ -65,6 +66,33 @@ def row_is_filled(evidence_section):
         return merge_gate.has_filled_verify_row("T900", tasks_dir=tmp)
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
+
+
+class ProvenCheckout:
+    """T309: a checkout whose head commit has the hook's pass record, so a row with the hook's
+    Notes (`hook_variant`) counts there. The real gate still judges every row; only the Notes are
+    the hook's. Since T309 a row typed by hand counts for nothing, so a row-shape test (which
+    Result cells count as filled) needs a Notes cell that can count."""
+
+    def __enter__(self):
+        self.root = tempfile.mkdtemp()
+        self.tasks = os.path.join(self.root, "tasks")
+        os.makedirs(self.tasks)
+        hook_verify_row.prove(merge_gate.ROOT, self.root)
+        return self
+
+    def __exit__(self, *exc):
+        shutil.rmtree(self.root, ignore_errors=True)
+
+    def row_is_filled(self, evidence_section):
+        with open(os.path.join(self.tasks, "TASK_REVIEW_T900.md"), "w", encoding="utf-8") as fh:
+            fh.write("# TASK_REVIEW — T900\n\n## Evidence\n\n" + evidence_section + "\n")
+        return merge_gate.has_filled_verify_row("T900", tasks_dir=self.tasks)
+
+
+def hook_variant(row):
+    """The same `verify` row with its Result cell kept and its Notes replaced by the hook's."""
+    return hook_verify_row.hook_row(hook_verify_row.CODE_SHA, result=row.split("|")[2].strip())
 
 
 TEMPLATE_PLACEHOLDER_ROW = (
@@ -121,19 +149,30 @@ def test_ac2_unfilled_two_option_row_is_not_filled():
 
 
 def test_ac3_all_four_real_filled_shapes_are_filled():
-    for row in (
-        FILLED_CHECKED_BOX_ROW,
-        FILLED_BARE_WORD_ROW,
-        FILLED_EMOJI_ROW,
-        TRAP_SHAPE_ROW,
-    ):
-        assert row_is_filled(row) is True, row
+    # T309: each shape's Result cell, with the hook's Notes (a hand-typed row no longer counts).
+    with ProvenCheckout() as checkout:
+        for row in (
+            FILLED_CHECKED_BOX_ROW,
+            FILLED_BARE_WORD_ROW,
+            FILLED_EMOJI_ROW,
+            TRAP_SHAPE_ROW,
+        ):
+            assert checkout.row_is_filled(hook_variant(row)) is True, row
 
 
 def test_ac3_trap_checked_pass_with_unchecked_na_shape():
     """The obvious "reject any ☐" rule fails this shape: it IS filled and
     still contains ☐ (in `☐ N/A`, not attached to "pass")."""
-    assert row_is_filled(TRAP_SHAPE_ROW) is True
+    with ProvenCheckout() as checkout:  # T309: the hook's Notes
+        assert checkout.row_is_filled(hook_variant(TRAP_SHAPE_ROW)) is True
+
+
+def test_t309_the_four_shapes_typed_by_hand_no_longer_count():
+    # T309: the same four rows, typed by hand ("pass" in Notes, no hook tag, no user line), block —
+    # even in a checkout where the hook's own row for the head commit would count.
+    with ProvenCheckout() as checkout:
+        for row in (FILLED_CHECKED_BOX_ROW, FILLED_BARE_WORD_ROW, FILLED_EMOJI_ROW, TRAP_SHAPE_ROW):
+            assert checkout.row_is_filled(row) is False, row
 
 
 def test_ac4_pass_in_result_only_not_notes_stays_rejected():
@@ -157,18 +196,36 @@ def test_ac6_old_vs_new_pattern_over_real_corpus_differs_only_on_placeholders():
         TEMPLATE_PLACEHOLDER_ROW.strip(),
     }
 
+    # T309: a hand-typed row no longer counts at all, so the gate judges each corpus row's
+    # Result-cell shape with the hook's Notes put in place of Notes that say "pass" (the rows the old
+    # pattern could accept). Notes without "pass" stay as written.
     differences = []
     task_files = sorted(glob.glob(os.path.join(ROOT, "tasks", "*.md")))
     assert task_files, "corpus is empty — sanity check failed"
-    for path in task_files:
-        text = open(path, encoding="utf-8").read()
-        for row in row_pattern.findall(text):
-            old_verdict = bool(old_pattern.search(row))
-            new_verdict = row_is_filled(row)
-            if old_verdict != new_verdict and not is_allowed_difference(row, old_verdict, new_verdict):
-                differences.append((path, row, old_verdict, new_verdict))
+    with ProvenCheckout() as checkout:
+        for path in task_files:
+            text = open(path, encoding="utf-8").read()
+            for row in row_pattern.findall(text):
+                old_verdict = bool(old_pattern.search(row))
+                notes_say_pass = "pass" in row.split("|")[3].lower()
+                new_verdict = checkout.row_is_filled(hook_variant(row) if notes_say_pass else row)
+                if old_verdict != new_verdict and not is_allowed_difference(row, old_verdict,
+                                                                            new_verdict):
+                    differences.append((path, row, old_verdict, new_verdict))
 
     assert differences == [], differences
+
+
+def test_t309_no_hand_typed_corpus_row_counts_without_proof():
+    # T309: over the real corpus, no `verify` row counts on its text alone — no run record, no
+    # transcript proof — whatever its Notes say.
+    row_pattern = re.compile(r"^\|\s*verify\s*\|.*\|.*\|\s*$", re.IGNORECASE | re.MULTILINE)
+    counted = []
+    for path in sorted(glob.glob(os.path.join(ROOT, "tasks", "*.md"))):
+        for row in row_pattern.findall(open(path, encoding="utf-8").read()):
+            if row_is_filled(row):
+                counted.append((path, row))
+    assert counted == [], counted
 
 
 def is_allowed_difference(row, old_verdict, new_verdict):

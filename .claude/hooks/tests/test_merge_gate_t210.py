@@ -19,6 +19,7 @@ import os
 import subprocess
 import sys
 import types
+from datetime import datetime, timezone
 
 import pytest
 
@@ -40,6 +41,8 @@ def load_hook_module(path, name):
 
 merge_gate = load_hook_module(HOOK_PATH, "merge_gate_t210")
 import verify_record  # noqa: E402  (on sys.path: the hook put its lib/ there)
+import hook_verify_row  # noqa: E402
+from test_t250_session_ownership import SID, slash_verify, write_transcript  # noqa: E402
 
 # Spelled in halves so this file's own text never reads as a command to the live gate.
 G = "git "
@@ -48,6 +51,8 @@ PULL, MERGE, PUSH = G + "pull", G + "merge", G + "push"
 GUIDE_VACATED = "# TASK_GUIDE - {tid}\n\n## Evidence\n\n> Moved to `tasks/TASK_REVIEW_{tid}.md`.\n"
 REVIEW = ("# TASK_REVIEW - {tid}\n\n## Evidence\n\n| Check | Result | Notes |\n|---|---|---|\n"
           "| verify | {result} | {notes} |\n")
+# A row typed by hand. Since T309 it counts for nothing on any gate; the fixtures below use the
+# hook's own pass (`hook_pass`), and `test_admin_tag.py` uses this one as the hand-typed control.
 MANUAL_PASS = ("☑ pass", "verify skill run, feature confirmed working — pass")
 UNCOMMITTED = "verify row for T900 is not committed on feat/t900-x — commit it, then merge"
 
@@ -105,8 +110,15 @@ class Fixture:
             git(where or self.wt, "add", "-A")
             git(where or self.wt, "commit", "-qm", f"T900: {name}")
 
-    def review(self, result=MANUAL_PASS, commit=False):
+    def hook_pass(self, where=None, tid="T900"):
+        """T309: the hook's own pass for the head commit of `where` (the worktree by default),
+        with its run record: `(Result, Notes)`. A hand-typed row no longer counts."""
+        sha = hook_verify_row.prove(merge_gate.ROOT, where or self.wt, tid)
+        return tuple(hook_verify_row.hook_cells(sha, tid).split(" | ", 1))
+
+    def review(self, result=None, commit=False):
         self.task_file("TASK_GUIDE_T900.md", GUIDE_VACATED.format(tid="T900"), commit=True)
+        result = self.hook_pass() if result is None else result
         self.task_file("TASK_REVIEW_T900.md", REVIEW.format(tid="T900", result=result[0],
                                                           notes=result[1]), commit=commit)
 
@@ -128,11 +140,14 @@ def gate(tmp_path, monkeypatch):
     return build
 
 
-def reason(command, cwd=None):
-    """Drive the hook's real `main()`; the block reason, or None when it allows."""
+def reason(command, cwd=None, transcript=None):
+    """Drive the hook's real `main()`; the block reason, or None when it allows. `transcript`
+    (T309) is the event's `transcript_path`, for a row that needs the user's `/verify` proof."""
     event = {"tool_name": "Bash", "tool_input": {"command": command}}
     if cwd is not None:
         event["cwd"] = cwd
+    if transcript is not None:
+        event["transcript_path"] = str(transcript)
     saved = (sys.stdin, sys.stdout, sys.stderr)
     sys.stdin, sys.stdout, sys.stderr = io.StringIO(json.dumps(event)), io.StringIO(), io.StringIO()
     try:
@@ -302,11 +317,21 @@ def test_ac4_a_committed_auto_row_with_more_code_after_it_is_not_confirmed(gate)
     assert reason(MERGE + " feat/t900-x", fx.main) is not None
 
 
-def test_ac4_guide_first_a_row_committed_in_the_guide_counts(gate):
+def test_ac4_guide_first_a_row_committed_in_the_guide_counts(gate, tmp_path, monkeypatch):
+    # T309: a hand-typed row no longer counts, and the hook writes its row only into the review
+    # file, so the row committed in the guide is the user's own `/verify` line (T308), proven by
+    # a human `/verify T900` entry dated after the code commit and before the row's commit.
     fx = gate(kanban(ready=("T900",)))
-    fx.task_file("TASK_GUIDE_T900.md", REVIEW.format(tid="T900", result=MANUAL_PASS[0],
-                                                     notes=MANUAL_PASS[1]), commit=True)
-    assert reason(MERGE + " feat/t900-x", fx.main) is None
+    sha = git(fx.wt, "rev-parse", "HEAD")
+    code_at = int(git(fx.wt, "show", "-s", "--format=%ct", sha))
+    entry_at = datetime.fromtimestamp(code_at + 60, timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    transcript = write_transcript(tmp_path / "projects" / f"{SID}.jsonl",
+                                  [slash_verify("T900", entry_at)])
+    monkeypatch.setenv("GIT_COMMITTER_DATE", f"@{code_at + 120} +0000")
+    fx.task_file("TASK_GUIDE_T900.md", REVIEW.format(
+        tid="T900", result="☑ pass", notes=f"/verify by the user, session {SID}, commit {sha}"),
+        commit=True)
+    assert reason(MERGE + " feat/t900-x", fx.main, transcript) is None
 
 
 def test_ac4_guide_first_a_filled_guide_section_shadows_the_review_file(gate):
@@ -315,8 +340,9 @@ def test_ac4_guide_first_a_filled_guide_section_shadows_the_review_file(gate):
     fx = gate(kanban(ready=("T900",)))
     fx.task_file("TASK_GUIDE_T900.md", REVIEW.format(tid="T900", result="☐ pass / ☐ fail",
                                                      notes="[to fill]"), commit=True)
-    fx.task_file("TASK_REVIEW_T900.md", REVIEW.format(tid="T900", result=MANUAL_PASS[0],
-                                                      notes=MANUAL_PASS[1]), commit=True)
+    cells = fx.hook_pass()  # T309: a review file that would pass on its own
+    fx.task_file("TASK_REVIEW_T900.md", REVIEW.format(tid="T900", result=cells[0],
+                                                      notes=cells[1]), commit=True)
     assert reason(MERGE + " feat/t900-x", fx.main) is not None
 
 

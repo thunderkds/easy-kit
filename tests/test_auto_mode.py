@@ -32,6 +32,7 @@ HOOKS = ROOT / ".claude" / "hooks"
 # The one definition of who may change the merge gate, beside the other suite that asserts it.
 sys.path.insert(0, str(HOOKS / "tests"))
 import merge_gate_guard  # noqa: E402
+import hook_verify_row  # noqa: E402  (T309)
 
 MERGE_GATE = HOOKS / "pre_bash_block_unsafe_merge.py"
 AGENTS_MD = ROOT / "AGENTS.md"
@@ -516,10 +517,17 @@ def test_ac4_gate_ignores_a_passing_auto_check_in_the_final_report(tmp_path):
     assert out.get("decision") == "block" and "T951 (no evidence row)" in out["reason"]
 
 
-def test_ac4_control_a_real_verify_row_passes(tmp_path):
+def test_ac4_control_a_real_verify_row_passes(tmp_path, monkeypatch):
     """Positive control: same project, the row filled from a real `/verify` run -> no block. So the
-    blocks above come from the row's text, not from a broken fixture."""
-    project = _project(tmp_path, _review_file("user ran /verify T951 — pass", "☑ pass"))
+    blocks above come from the row's text, not from a broken fixture. T309: a hand-typed
+    "user ran /verify T951 — pass" no longer counts, so the real run is the hook's row with its
+    run record for the project's head commit."""
+    monkeypatch.setenv("CLAUDE_TRACE_ANCHOR_DIR", str(tmp_path / "anchors"))
+    project = _project(tmp_path, "")
+    sha = hook_verify_row.prove(project, project, "T951")
+    result_cell, notes = hook_verify_row.hook_cells(sha, "T951").split(" | ", 1)
+    (project / "tasks" / "TASK_REVIEW_T951.md").write_text(_review_file(notes, result_cell),
+                                                           encoding="utf-8")
     result, out = _merge(project)
     assert result.returncode == 0 and out == {}, out
 

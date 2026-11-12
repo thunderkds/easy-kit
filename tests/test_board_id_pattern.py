@@ -25,6 +25,8 @@ import pytest
 
 ROOT = Path(__file__).resolve().parent.parent
 HOOKS = ROOT / ".claude" / "hooks"
+sys.path.insert(0, str(HOOKS / "tests"))
+import hook_verify_row  # noqa: E402  (T309)
 MEMORY_SLICE = ROOT / "skills" / "craft-spawn-prompt" / "scripts" / "memory_slice.py"
 DIRTY = ROOT / "skills" / "wake" / "scripts" / "dirty_worktrees.py"
 TOKEN_METER = ROOT / "scripts" / "token_meter.py"
@@ -139,8 +141,16 @@ def ready_for_review_board(tmp_path, config):
     return project
 
 
-def test_merge_gate_passes_board_id_with_evidence(tmp_path):
-    result = push(ready_for_review_board(tmp_path, ENG))
+def test_merge_gate_passes_board_id_with_evidence(tmp_path, monkeypatch):
+    # T309: a hand-typed pass row no longer counts, so the evidence is the hook's own row for the
+    # project's head commit, with its run record.
+    monkeypatch.setenv("CLAUDE_TRACE_ANCHOR_DIR", str(tmp_path / "anchors"))
+    project = ready_for_review_board(tmp_path, ENG)
+    sha = hook_verify_row.prove(project, project, "ENG-170")
+    (project / "tasks" / "TASK_REVIEW_ENG-170.md").write_text(
+        "## Evidence\n\n| Check | Result | Notes |\n|---|---|---|\n"
+        f"{hook_verify_row.hook_row(sha, 'ENG-170')}\n")
+    result = push(project)
     assert result.stdout.strip() == "", result.stdout
 
 

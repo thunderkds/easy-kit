@@ -22,7 +22,7 @@ import time
 import pytest
 
 from test_merge_gate_t210 import (  # noqa: F401  (`gate` is a fixture, used by name)
-    G, MANUAL_PASS, MERGE, PUSH, REVIEW, gate, git, kanban, merge_gate, reason, write)
+    G, MERGE, PUSH, REVIEW, gate, git, kanban, merge_gate, reason, write)
 
 # Spelled in halves so this file's own text never reads as a command to the live gate.
 PULL_, REBASE_ = G + "pull", G + "rebase"
@@ -205,11 +205,13 @@ def test_edge_the_message_of_dash_m_is_not_a_branch(gate):
 # ---------------------------------------------------------------------------
 
 def add_t901(fx, monkeypatch, commit):
-    """Worktree `wt-t901` on `feat/t901-y` with a manual verify pass, committed or not."""
+    """Worktree `wt-t901` on `feat/t901-y` with the hook's verify pass and its run record (T309:
+    a manual pass no longer counts), committed or not."""
     wt = os.path.join(fx.root, "wt-t901")
     git(fx.main, "worktree", "add", "-q", "-b", "feat/t901-y", wt)
+    result, notes = fx.hook_pass(where=wt, tid="T901")
     write(os.path.join(wt, "tasks", "TASK_REVIEW_T901.md"),
-          REVIEW.format(tid="T901", result=MANUAL_PASS[0], notes=MANUAL_PASS[1]))
+          REVIEW.format(tid="T901", result=result, notes=notes))
     if commit:
         git(wt, "add", "-A")
         git(wt, "commit", "-qm", "T901: verify row")

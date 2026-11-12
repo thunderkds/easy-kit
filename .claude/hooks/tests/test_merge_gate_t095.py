@@ -29,6 +29,7 @@ HOOK_PATH = os.path.join(HOOKS_DIR, "pre_bash_block_unsafe_merge.py")
 sys.path.insert(0, os.path.join(HOOKS_DIR, "lib"))
 
 from shell_data import strip_heredoc_bodies  # noqa: E402
+import hook_verify_row  # noqa: E402
 
 
 def load_hook_module(path, name):
@@ -73,14 +74,16 @@ GUIDE_WITH_VACATED_EVIDENCE = """# TASK_GUIDE - T900
 ---
 """
 
-REVIEW_WITH_FILLED_VERIFY_ROW = """# TASK_REVIEW - T900
+# T309: a hand-typed `verify` pass row no longer counts, so the filled row is the hook's own
+# (`hook_verify_row`); `GateFixture` writes its run record for the checkout that holds it.
+REVIEW_WITH_FILLED_VERIFY_ROW = f"""# TASK_REVIEW - T900
 
 ## Evidence
 
 | Check | Result | Notes / output snippet |
 |-------|--------|------------------------|
 | Verification command run | ☑ pass | 707 passed |
-| verify | ☑ pass | verify skill run, feature confirmed working — pass |
+{hook_verify_row.HOOK_PASS_ROW}
 """
 
 PYTEST_TRACE_RECORD = json.dumps({
@@ -119,8 +122,10 @@ class GateFixture:
         self._write(self.worktree_tasks, "TASK_GUIDE_T900.md", GUIDE_WITH_VACATED_EVIDENCE)
         if review_in_worktree:
             self._write(self.worktree_tasks, "TASK_REVIEW_T900.md", REVIEW_WITH_FILLED_VERIFY_ROW)
+            hook_verify_row.prove(merge_gate.ROOT, os.path.dirname(self.worktree_tasks))
         if review_in_main:
             self._write(self.main_tasks, "TASK_REVIEW_T900.md", REVIEW_WITH_FILLED_VERIFY_ROW)
+            hook_verify_row.prove(merge_gate.ROOT, os.path.dirname(self.main_tasks))
 
         self.kanban = os.path.join(self.root, "PROJECT_KANBAN.md")
         with open(self.kanban, "w") as f:

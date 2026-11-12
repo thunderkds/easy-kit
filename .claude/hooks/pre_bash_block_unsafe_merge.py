@@ -511,9 +511,9 @@ def _evidence_rel(task_id, directory, section):
 def verify_row_passes(section, confirm, hook_only=False, confirm_user=None):
     """True when an Evidence `section` holds a filled `verify` pass row. `confirm(notes, None)`
     decides an `auto-run by hook` row (T182 D5): against which commit is the caller's choice.
-    `hook_only` (T284) counts only such a row: a hand-typed pass row is skipped. T308: a
-    `☑ pass` row whose whole Notes cell is the user's `/verify` line (`USER_LINE`) counts when
-    `confirm_user(notes)` proves it; never with `hook_only`."""
+    A hand-typed pass row is skipped on every gate (T309; before, only with `[admin]`'s
+    `hook_only`, T284). T308: a `☑ pass` row whose whole Notes cell is the user's `/verify` line
+    (`USER_LINE`) counts when `confirm_user(notes)` proves it; never with `hook_only`."""
     return (_verify_row_passes(section, confirm, hook_only)
             or (not hook_only and confirm_user is not None
                 and _user_row_passes(section, confirm_user)))
@@ -553,7 +553,10 @@ def _verify_row_passes(section, confirm, hook_only=False):
         # head commit of the checkout (or branch) this row was read from.
         if AUTO_CHECKED_TAG in notes:
             continue
-        if hook_only and AUTO_ROW_TAG not in notes:
+        # T309: on every gate, not only `[admin]`'s `hook_only`, a row with no `auto-run by hook`
+        # tag is typed by hand and counts for nothing, even with "pass" in Notes. The user's own
+        # `/verify` row is read by `_user_row_passes` (T308), never here.
+        if AUTO_ROW_TAG not in notes:
             continue
         if AUTO_ROW_TAG in notes and not confirm(match.group("notes"), None):
             continue

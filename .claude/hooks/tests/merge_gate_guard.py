@@ -86,8 +86,12 @@ GATE_REL = ".claude/hooks/pre_bash_block_unsafe_merge.py"
 #          (`☑ pass`, Notes exactly the `USER_LINE` shape), with the same proof; `user_line_confirmed`
 #          reads the file the row came from (`tasks/TASK_GUIDE_T308.md`, AC 1-4). User request,
 #          2026-11-11 ("yes, do both"); the Supervisor signs this line off (spawn prompt of T308).
+#   T309 — on the ordinary gate, as with `[admin]`, a `verify` Evidence row with no `auto-run by
+#          hook` tag counts for nothing, even with "pass" in Notes; only the hook's row with its run
+#          record, or the T308 user `/verify` row with its proof (`tasks/TASK_GUIDE_T309.md`, AC 1-5).
+#          User, 2026-11-11 ("register it"); the Supervisor signs this line off (guide of T309).
 AUTHORISED_TASKS = ("T182", "T188", "T190", "T197", "T196", "T210", "T211", "T232", "T250", "T284",
-                    "T289", "T291", "T296", "T295", "T308")
+                    "T289", "T291", "T296", "T295", "T308", "T309")
 
 
 def _git(root, *args):

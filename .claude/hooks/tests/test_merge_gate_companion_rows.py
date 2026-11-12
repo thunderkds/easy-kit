@@ -50,6 +50,7 @@ def load_hook_module(path, name):
 
 
 merge_gate = load_hook_module(HOOK_PATH, "merge_gate_t190")
+import hook_verify_row  # noqa: E402
 
 
 # ---------------------------------------------------------------------------
@@ -103,14 +104,16 @@ GUIDE_WITH_VACATED_EVIDENCE = """# TASK_GUIDE - T900
 ---
 """
 
-REVIEW_HEADER = """# TASK_REVIEW - T900
+# T309: a hand-typed `verify` pass row no longer counts, so the filled row is the hook's own
+# (`hook_verify_row`); `GateFixture` writes its run record for the checkout.
+REVIEW_HEADER = f"""# TASK_REVIEW - T900
 
 ## Evidence
 
 | Check | Result | Notes / output snippet |
 |-------|--------|------------------------|
 | Verification command run | ☑ pass | 917 passed |
-| verify | ☑ pass | verify skill run, feature confirmed working — pass |
+{hook_verify_row.HOOK_PASS_ROW}
 """
 
 PYTEST_TRACE_RECORD = json.dumps({
@@ -161,6 +164,7 @@ class GateFixture:
 
         self._write(self.main_tasks, "TASK_GUIDE_T900.md",
                     GUIDE_WITH_VACATED_EVIDENCE if guide is None else guide)
+        hook_verify_row.prove(merge_gate.ROOT, os.path.dirname(self.main_tasks))  # T309
         if review is not None:
             self._write(self.main_tasks, "TASK_REVIEW_T900.md", review)
 
@@ -618,7 +622,7 @@ def test_a_failed_row_in_the_task_guide_also_blocks():
     guide = GUIDE_WITH_VACATED_EVIDENCE.replace(
         "> Filled by the reviewer at Stage 4/5 in `tasks/TASK_REVIEW_T900.md`.",
         "| Check | Result | Notes |\n|---|---|---|\n"
-        "| verify | ☑ pass | verify skill run — pass |\n"
+        f"{hook_verify_row.HOOK_PASS_ROW}\n"  # T309: the hook's pass, not a hand-typed one
         + row(COMPANION, "☑ fail", "overall 62"))
     reason, _ = gate(None, guide=guide)
     assert reason is not None and "Companion score" in reason
@@ -631,6 +635,7 @@ def test_a_failed_row_in_a_worktree_blocks():
     try:
         worktree_tasks = os.path.join(fixture.root, "wt-t900", "tasks")
         os.makedirs(worktree_tasks)
+        hook_verify_row.prove(merge_gate.ROOT, os.path.dirname(worktree_tasks))  # T309
         GateFixture._write(worktree_tasks, "TASK_GUIDE_T900.md", GUIDE_WITH_VACATED_EVIDENCE)
         GateFixture._write(worktree_tasks, "TASK_REVIEW_T900.md",
                            review_with(row(COMPANION, "☑ fail", "overall 62")))
@@ -657,7 +662,7 @@ NO_COMPANION_SCENARIOS = (
     ("no review file, push", None, KANBAN_READY_FOR_REVIEW,
      "git push origin feat/t900"),
     ("unfilled verify row, push",
-     REVIEW_HEADER.replace("| verify | ☑ pass | verify skill run, feature confirmed working — pass |",
+     REVIEW_HEADER.replace(hook_verify_row.HOOK_PASS_ROW,  # T309: the filled row is the hook's
                            "| verify | ☐ pass / ☐ fail / ☐ N/A | [what was observed] |"),
      KANBAN_READY_FOR_REVIEW, "git push origin feat/t900"),
     ("task still in progress, push", review_with(),
