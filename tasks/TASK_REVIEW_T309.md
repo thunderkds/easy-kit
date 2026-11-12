@@ -47,16 +47,26 @@ Not done: merge (yours); <auto verify: running (T182) | auto verify: <result> | 
 
 | Check | Result | Notes / output snippet |
 |-------|--------|------------------------|
-| **New test(s) cover Acceptance Criteria (file paths pasted)** | ☐ pass / ☐ fail | [test file path(s) — required before Done] |
-| Verification command run | ☐ pass / ☐ fail | [paste actual output] |
-| Negative cases hold | ☐ pass / ☐ fail | [paste the red run against the prior content, or the mutation diff (`git diff --stat`, non-empty) before each verdict] |
+| **New test(s) cover Acceptance Criteria (file paths pasted)** | ☑ pass | `.claude/hooks/tests/test_t309_hand_typed_pass_row.py` (oracle by `qa-expert`, 43 tests); `hook_verify_row.py` helper; pins repointed in `test_verify_row_fill_detection.py`, `test_merge_gate_t095.py` and 10 more files (AC 5)
+| Verification command run | ☑ pass | 2026-11-12T03:19:11Z at `afcb3ed`: `pytest .claude/hooks/tests/test_t309_hand_typed_pass_row.py -q` → `43 passed in 9.42s`
+| Negative cases hold | ☑ pass | Red run at `eedd717` before any implementation commit: `18 failed, 25 passed` (see Demonstration BEFORE). The oracle's `test_mutation_the_old_any_pass_branch_lets_a_hand_typed_row_through` (2 cases) puts the old branch back and shows the hand-typed row passes
 | verify | ☐ pass / ☐ fail / ☐ N/A | [what was observed — must literally state "pass" or "fail" here too, e.g. "skill run, feature confirmed working — pass": the merge gate scans this Notes column for the word "pass", not just the Result column] |
-| Review scope bounded to the change's blast radius (affected set, not whole repo) | ☐ pass / ☐ fail | [what was reviewed vs. skipped, and why] |
-| Full smoke suite still green (no regression) | ☐ pass / ☐ fail | |
-| **Companion score (easy-verifier)** | ☐ pass / ☐ fail / ☐ N/A | [`overall` and `change_risk` as the tool returned them, the scope, the ref, and the absolute path of the verifier report after a literal `report:` label — e.g. "overall 86 (>= 80), change_risk pass, scope changes, ref `main...HEAD`, report: `/home/me/.easy-verifier-reports/kit/score_changes_20261028T0530Z.html`". The gate reads the path that follows `report:` and nothing else, so with no label, or a path that is absent, the row is unscored — write ☑ N/A instead. ☑ N/A with a reason when neither companion tool was run: the merge gate blocks on ☑ fail only, never on an absent or N/A row] |
-| **UI: Visual regression (diff or verdict pasted)** | ☐ pass / ☐ fail / ☐ N/A | [screenshot path or LLM verdict — required for UI tasks, Hard-Stop Gate 6] |
-| **UI: Design-system compliance (tokens/colors/typography verified)** | ☐ pass / ☐ fail / ☐ N/A | [method used + output] |
-| **UI: Responsiveness at target viewports** | ☐ pass / ☐ fail / ☐ N/A | [viewports tested, any overflow findings] |
+| Review scope bounded to the change's blast radius (affected set, not whole repo) | ☑ pass | Scope: `pre_bash_block_unsafe_merge.py` (`verify_row_passes`, `_verify_row_passes`, callers `has_filled_verify_row` and `committed_verify_row`), 14 repointed test files, glossary, `skills/bugfix/SKILL.md`, review template. Skipped: `[admin]` push-scope code and `verify_record.py` (not touched). Lane check: C2, 21 files, 1017 lines, EXCEEDS (files 21 > 14; lines 1017 > 500), all unpredicted files are fixture fallout or the AC 4 docs
+| Full smoke suite still green (no regression) | ☑ pass | 2026-11-12, worktree at `afcb3ed`: `pytest .claude/hooks/tests tests -q` → `2 failed, 7170 passed, 6 skipped`. The 2 failures, `test_heredoc_quoted_marker.py::test_round4_premise_the_shell_runs_the_push_and_the_scanner_keeps_it[d-busybox-ash-bash|zsh]`, fail the same way on `main` (checked: `2 failed, 814 passed` in that file alone): no busybox `ash` on this machine, not T309
+| **Companion score (easy-verifier)** | ☑ N/A | easy-verifier was not run for this task
+| **UI: Visual regression (diff or verdict pasted)** | ☑ N/A | no UI component (hook, tests and docs only)
+| **UI: Design-system compliance (tokens/colors/typography verified)** | ☑ N/A | no UI component (hook, tests and docs only)
+| **UI: Responsiveness at target viewports** | ☑ N/A | no UI component (hook, tests and docs only)
+
+---
+
+## Stage 4 results
+
+- `code-review` (2026-11-12): P0 0, P1 0, P2 1, P3 1. Entry-point check: `verify_row_passes` is reached from `has_filled_verify_row` and `committed_verify_row`, both found. Stale-reference sweep: `tracks.md:658` and the `Known limits` item at `tracks.md:935` already say a hand-typed row does not count; the glossary row, `skills/bugfix/SKILL.md` and the template placeholder are fixed in this task.
+  - P2 (process): lane check EXCEEDS (21 files > 14, 1017 lines > 500). The extra files are the fixture fallout of AC 5 that the guide lists, so the label C2 stands; raised to the Supervisor.
+  - P3 (`pre_bash_block_unsafe_merge.py:544`, `:560`): `_verify_row_passes` keeps its `hook_only` parameter, which no line in it reads now, and `AUTO_ROW_TAG in notes and` is redundant after the new `continue`. Left alone: removing them touches the T284 signature that `committed_verify_row` and the tests pass through (Surgical Changes).
+- Rows that would now fail: none. The board has no other task at Ready for Review, and a Done task is not read by the gate.
+- `security-review` (2026-11-12): no findings at confidence 8 or above. The change only narrows what the gate accepts. Residual: an agent that forges the transcript or the run record, as `### Known limits` already records.
 
 ---
 
@@ -103,9 +113,14 @@ FAILED .claude/hooks/tests/test_t309_hand_typed_pass_row.py::test_mutation_the_o
 
 The gate returns `None` (allows the merge) for every hand-typed `☑ pass` row with "pass" in Notes.
 
-**AFTER**: [same command, post-change] OR [verbatim excerpt of the new content]
+**AFTER**: captured 2026-11-12T03:19:11Z at `afcb3ed`, same command:
 
-**DELTA**: [one sentence — what a user can now do that they could not before]
+```
+$ pytest .claude/hooks/tests/test_t309_hand_typed_pass_row.py -q -p no:cacheprovider
+...........................................                              [100%]
+43 passed in 9.42s
+```
 
-**WITNESS**: [who ran it and when — derived from `memory/event-trace/Txxx.jsonl`, never the
-implementing agent alone]
+**DELTA**: A `☑ pass` verify row typed by hand no longer opens the merge gate; only the hook's row with its run record, or your own proven `/verify` line, does.
+
+**WITNESS**: Supervisor session 5f36b464, 2026-11-12, re-ran the oracle and the full suite in `/home/thunderkds/workspace/pets/wt-t309` (BEFORE capture by `common-infrastructure`, 2026-11-11).
