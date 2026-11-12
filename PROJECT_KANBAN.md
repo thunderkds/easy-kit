@@ -88,7 +88,6 @@
 
 
 ### In Progress
-- [ ] **T309** — the ordinary merge gate stops accepting a hand-typed `☑ pass` verify row with no proof (`verify_row_passes` counts any non-hook row with "pass" in Notes; `### Known limits` says it does not); repoint the two pins | common-infrastructure | C2 | Risk: High | P1 | Depends on: T308 (merged 4b61607) | Guide: `tasks/TASK_GUIDE_T309.md` | Registered 2026-11-11, user: "register it" (found by `qa-expert` in the T308 oracle) | Oracle by `qa-expert` first | Started 2026-11-11: branch `fix/t309-hand-typed-pass-row`, worktree `../wt-t309`
 
 
 
@@ -99,6 +98,7 @@
 
 
 ### Ready for Review
+- [ ] **T309** — the ordinary merge gate stops accepting a hand-typed `☑ pass` verify row with no proof (`verify_row_passes` counts any non-hook row with "pass" in Notes; `### Known limits` says it does not); repoint the two pins | common-infrastructure | C2 | Risk: High | P1 | Depends on: T308 (merged 4b61607) | Guide: `tasks/TASK_GUIDE_T309.md` | Registered 2026-11-11, user: "register it" (found by `qa-expert` in the T308 oracle) | Oracle by `qa-expert` first | Started 2026-11-11: branch `fix/t309-hand-typed-pass-row`, worktree `../wt-t309` | Stage 4 2026-11-12: code-review P0 0, P1 0 (1 P2 lane size, 1 P3 unused `hook_only` kept); security-review no findings; record `tasks/TASK_REVIEW_T309.md` | Ready for Review 2026-11-12: oracle by `qa-expert` (`eb85f72`), implementation and review record on `fix/t309-hand-typed-pass-row` (`0547def`)
 - [ ] **T304** — The docs layout puts `general-agent-template.md` in `templates/`, not `agents/` | Supervisor | C0 | Risk: Low | P3 | Registered 2026-11-10, user: "yes, do both" (follow-up named in T303) | Started 2026-11-10: branch `fix/t304-docs-agents-row`, worktree `../wt-t304` | Track: minimal | Record: tasks/MINIMAL_LOG.md
 
 
