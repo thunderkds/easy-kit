@@ -26,6 +26,7 @@
 
 ### Decisions
 - [T306–T308: `[admin]` end to end](decisions.md) — T309 gate hole
+- [T309: hand-typed `verify` pass row counts for nothing](decisions.md) — only the hook row or the user's `/verify` passes; merged `0310dd7`
 - [T297–T299: effort per Complexity, passed at spawn](decisions.md) — `## CLI Effort Table`; raise one step on move up or `fail`; T300: opus·low 4.1x cost, lost a pass (DDR-0010)
 - [T301: security-finding rules in `security-reviewer.md`](decisions.md) — `confirmed`/`needs_validation`/`rejected`; `code-review/SKILL.md` is at the 8 KB cap
 - [T232–T236, T239, T240: plugin, init, Stage 0–5, repo `easy-kit`](decisions.md) — never reuse old repo name
@@ -350,3 +351,4 @@
 - [T095: merge gate reads worktree evidence; heredoc bodies are data] — main checkout first, then worktrees; `lib/shell_data.py` strips heredocs. →
 - [T099: quoted spans are sometimes code] — naive quoted-span stripping would ALLOW `bash -c "git push"`. Needs wrapper-awareness. → tasks/TASK_GUIDE_T099.md
 - [Two gate tasks conflict in meaning (T295+T296)](learnings.md) — merge the tighter one first; re-run both
+- [Merge-gate traps (T309)](learnings.md) — stale untracked guides, truncated trace summaries, suite deletes worktree files
