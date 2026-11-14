@@ -185,17 +185,18 @@ def test_ac3_row19_allows_ship_plan_with_admin():
 # ── AC 4: stops only for `### Stops that stay`, says so in one line; the list is frozen ──────
 AC4_KEY = r"`### Stops that stay`"
 AC4_ANCHORS = (r"\bonly\b", r"one line")
-STOPS_SHA = "d73098dc6936799271e92a480c793e05477f8e24d361c6a8e9df3d2cc658832b"
+STOPS_SHA = "d73098dc6936799271e92a480c793e05477f8e24d361c6a8e9df3d2cc658832b"  # base text (BASE_COMMIT)
+STOPS_SHA_NOW = "f0e4a17c7d3e19f9e569be111e788c3af8590ce2822be905775bb7d433d49e25"  # T310: new `[admin]` unsettled-Debate bullet
 
 
 def check_ac4(text):
     _block_with(paragraphs(section(text, "Admin tag")), AC4_KEY, AC4_ANCHORS, "AC 4 `### Admin tag`")
 
 
-def check_stops_frozen(text):
+def check_stops_frozen(text, sha=STOPS_SHA_NOW):
     raw = section(text, "Stops that stay")
     assert raw, "no `### Stops that stay` section"
-    assert _sha(raw) == STOPS_SHA, "AC 4: `### Stops that stay` changed (must be byte-for-byte the base text)"
+    assert _sha(raw) == sha, "AC 4: `### Stops that stay` changed (must be byte-for-byte the base text)"
 
 
 def test_ac4_admin_stops_only_for_stops_that_stay():
@@ -366,7 +367,7 @@ def test_frozen_hashes_match_base_commit():
                               capture_output=True, text=True, timeout=30, check=True).stdout
     except (OSError, subprocess.SubprocessError):
         pytest.skip(f"git cannot read {BASE_COMMIT} here (shallow clone?)")
-    check_stops_frozen(base)
+    check_stops_frozen(base, STOPS_SHA)  # T310: the base text keeps the base hash
     check_rows_frozen(base)
     check_never_auto_list(base)
     check_row19_auto(base)

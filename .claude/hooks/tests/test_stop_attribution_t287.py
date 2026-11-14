@@ -791,7 +791,9 @@ STOPS_THAT_STAY = (
     "- the 4th Debate in a task (the `resolve-question` cap);",
     "- a paid action outside the task's own work;",
     "- a login or secret the Supervisor does not have;",
-    "- the same sub-agent hitting the step limit twice.",
+    "- the same sub-agent hitting the step limit twice;",
+    # T310: new `[admin]` bullet
+    "- with `[admin]` only, an unsettled Debate: the Advocates disagree and no written rule or Citation picks one. `[auto]` alone is unchanged: it decides by its rules and logs `⚠ decided for you`.",
 )
 
 

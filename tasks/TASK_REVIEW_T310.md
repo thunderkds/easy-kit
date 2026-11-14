@@ -89,7 +89,17 @@ The pause also goes in the final report, on its `Paused:` line.
 
 Oracle, red: `python3 -m pytest .claude/hooks/tests/test_t310_admin_unsure_stop.py -q -p no:cacheprovider` -> `9 failed, 9 passed` (the 9 failures are the doc-text tests; the 9 passes are the hook tests, as the hook stays unchanged).
 
-**AFTER**: [same command, post-change] OR [verbatim excerpt of the new content]
+**AFTER** (implementer, 2026-11-14, docs and skill text; the oracle run is the real run):
+
+```
+$ python3 -m pytest .claude/hooks/tests/test_t310_admin_unsure_stop.py -q -p no:cacheprovider
+..................                                                       [100%]
+18 passed in 1.13s
+$ wc -c skills/resolve-question/SKILL.md
+8190 skills/resolve-question/SKILL.md
+```
+
+New bullet in `### Stops that stay`: "with `[admin]` only, an unsettled Debate: the Advocates disagree and no written rule or Citation picks one. `[auto]` alone is unchanged: it decides by its rules and logs `⚠ decided for you`." 
 
 **DELTA**: [one sentence — what a user can now do that they could not before]
 

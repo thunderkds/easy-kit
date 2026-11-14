@@ -193,6 +193,8 @@ Each Advocate `Agent` call's `description` is `Advocate <n>: <short question>` (
 (`Using the repo, answer alone:`), so the auto-mode check below can count them. A call with only one of the
 two is not counted.
 
+Under `[admin]`, a Debate whose Advocates disagree and that no written rule or Citation settles (an unsettled Debate) is not decided: it is a stop (`### Stops that stay`).
+
 Every decision, at every Risk level, has its log line in the final report. This supersedes T179's count
 ("2, or 3 for 3+ options or High risk") in auto mode. Outside auto mode, `resolve-question` is unchanged.
 
@@ -527,9 +529,24 @@ Even in auto mode, the Supervisor pauses the task, with one message that says wh
 - the 4th Debate in a task (the `resolve-question` cap);
 - a paid action outside the task's own work;
 - a login or secret the Supervisor does not have;
-- the same sub-agent hitting the step limit twice.
+- the same sub-agent hitting the step limit twice;
+- with `[admin]` only, an unsettled Debate: the Advocates disagree and no written rule or Citation picks one. `[auto]` alone is unchanged: it decides by its rules and logs `⚠ decided for you`.
 
 The pause also goes in the final report, on its `Paused:` line.
+
+The `[admin]` stop for an unsettled Debate (T310) works like this. The `Paused:` line reads
+`Paused: unsure — <question>; options: <A> / <B> [/ <C>]`. It holds one question: with two unsettled
+questions, the first one stops the run. If the 4th Debate cap fires at the same time, the one line names both.
+The Supervisor logs no decision line for that question. It sends one `PushNotification`: one line, under 200
+characters, task ID first, then the question. A "not sent" result is not an error and never blocks the pause.
+Then it ends the run. The line does not replace the one `DEBATED` line with 3 Advocates that Risk High
+requires (rule D10). Risk Low has no Debate, so it has no unsettled Debate and no stop.
+
+Not a stop: the Advocates disagree on whether to convert `recurring.csv` too, but `Surgical Changes` in
+`AGENTS.md` picks "leave it". A written rule picks one, so the Supervisor decides and logs `RULE`.
+
+The user answers in chat. The Supervisor logs that answer as `RULE`, in the shape
+`N. <answer> — RULE: <path> § <heading>`, because a user reply has no file to cite for `FACT`.
 
 ### Never in auto mode
 
@@ -579,8 +596,8 @@ the final report.
 The Supervisor never ends such a decision with "your decision" or "please approve": it decides, logs
 the line and goes on. A skill's own "ask the user" text yields to the row named in its `[admin]` pointer.
 
-Stops: the Supervisor stops only for the `### Stops that stay` list, and it says so in one line after
-the track line: `[admin]: I stop only for the stops that stay`.
+Stops: the Supervisor stops only for the `### Stops that stay` list, which under `[admin]` includes the
+unsettled Debate, and it says so in one line after the track line: `[admin]: I stop only for the stops that stay`.
 The only hand-backs left under `[admin]` are the `### Stops that stay` list, `Approved by` on a new
 project, the settings changes of row 5, a `git pull`, and the second `blocked` verify (T306).
 
@@ -869,6 +886,7 @@ Read these before you rely on `[auto]`. T180 left them open, on purpose. T186 re
   no git remote, the Supervisor may add a temporary `refs/remotes/origin/HEAD` so the skill can start. It
   removes the ref afterwards and logs both steps in the final report. Without that ref, the skill cannot
   start, and the auto-mode check pauses a Medium or High risk task (you accepted this on 2026-10-27).
+- **The hook cannot tell an unsettled Debate (T310).** The Advocates' disagreement is not in the trace. A Supervisor can still decide an unsettled choice and log `DEBATED`. The stop is a rule, not a gate.
 - **Two auto tasks in one session can share evidence.** The auto-mode check counts the Advocate and
   Skill calls in `memory/event-trace/_untagged.jsonl` from the last 6 hours for every task. Advocate
   prompts carry no task ID. A second task can be credited with the first task's Advocates or reviews.
