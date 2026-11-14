@@ -3505,7 +3505,7 @@ curl -fsSL https://raw.githubusercontent.com/$GITHUB_USERNAME/easy-kit/main/setu
   if (!app) { return; }
   var MISSING = "The explorer data is missing. The lists above show the same names.";
   var PICK = "Pick an agent or a skill to see its steps.";
-  // Built from parts so the page source itself holds none of these words (test_no_project_state_on_page).
+  // Built from parts: the page-text test forbids these literal words on the static page.
   var STATE = new RegExp(["KAN" + "BAN", "In Pro" + "gress", "Phase \\d", "\\bT\\d{3}\\b"].join("|"));
   var STAGES = [["0", "Stage 0 Define"], ["1", "Stage 1 Set up"], ["2", "Stage 2 Intent Transformation"],
     ["3", "Stage 3 Parallel Execution via Isolation"], ["4", "Stage 4 Review"],
