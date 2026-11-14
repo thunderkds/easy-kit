@@ -26,11 +26,11 @@ CHECKLISTS = ("Implementation checklist", "Evaluation checklist",
 # The built-ins have no definition file, so AGENTS.md names them but cannot describe them.
 # Stage and one line each; a built-in missing here still appears (stage "any").
 BUILTINS = {
-    "security-review": ("4", "Reviews a change for security risk; mandatory at Medium and High risk."),
-    "verify": ("5", "Runs the app and checks the change works before a merge."),
-    "run": ("any", "Launches the app to confirm the environment serves it."),
-    "update-config": ("1", "Configures hooks and settings, for example an automated hook."),
-    "fewer-permission-prompts": ("1", "Scans transcripts and allows common read and bash operations."),
+    "security-review": ("4", "Reviews the pending changes of a branch for security risk. Stage 4, mandatory at Medium and High risk."),
+    "verify": ("5", "Confirms a change works in the running app. Stage 5, mandatory before any merge."),
+    "run": ("any", "Launches and drives the project's app to show a change working."),
+    "update-config": ("1", "Changes the Claude Code settings: permissions, environment variables and hooks."),
+    "fewer-permission-prompts": ("1", "Scans transcripts for common read-only calls and adds an allowlist to the project settings."),
 }
 
 

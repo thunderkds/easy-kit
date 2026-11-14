@@ -91,6 +91,7 @@ $ git diff --stat site/docs.html
  site/docs.html | 1539 ++++++++++++++++++++++++++++++++++++++++++++++++++++++++
  1 file changed, 1539 insertions(+)   (0 deletions)
 ```
+Page weight: `site/docs.html` 163,864 -> 241,348 bytes; the block is 77,453 bytes (compact JSON would save 8 KB, so the indented form is kept for readable diffs).
 
 **DELTA**: [one sentence — what a user can now do that they could not before]
 

@@ -2361,27 +2361,27 @@ Decided by: auto-approve (overwrite all)
   {
    "name": "fewer-permission-prompts",
    "stage": "1",
-   "description": "Scans transcripts and allows common read and bash operations."
+   "description": "Scans transcripts for common read-only calls and adds an allowlist to the project settings."
   },
   {
    "name": "run",
    "stage": "any",
-   "description": "Launches the app to confirm the environment serves it."
+   "description": "Launches and drives the project's app to show a change working."
   },
   {
    "name": "security-review",
    "stage": "4",
-   "description": "Reviews a change for security risk; mandatory at Medium and High risk."
+   "description": "Reviews the pending changes of a branch for security risk. Stage 4, mandatory at Medium and High risk."
   },
   {
    "name": "update-config",
    "stage": "1",
-   "description": "Configures hooks and settings, for example an automated hook."
+   "description": "Changes the Claude Code settings: permissions, environment variables and hooks."
   },
   {
    "name": "verify",
    "stage": "5",
-   "description": "Runs the app and checks the change works before a merge."
+   "description": "Confirms a change works in the running app. Stage 5, mandatory before any merge."
   }
  ]
 }
