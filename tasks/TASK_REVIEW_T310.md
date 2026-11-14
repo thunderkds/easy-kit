@@ -1,4 +1,4 @@
-# TASK_REVIEW — T310: [Short Title]
+# TASK_REVIEW — T310: `[admin]` stops when a Debate does not settle a choice
 
 > Sibling of `tasks/TASK_GUIDE_T310.md`. Everything here is **filled by the reviewer at Stage
 > 4/5** — it is deliberately NOT in the guide, because the implementing agent re-reads the guide on
@@ -48,16 +48,16 @@ Not done: merge (yours); <auto verify: running (T182) | auto verify: <result> | 
 
 | Check | Result | Notes / output snippet |
 |-------|--------|------------------------|
-| **New test(s) cover Acceptance Criteria (file paths pasted)** | ☐ pass / ☐ fail | [test file path(s) — required before Done] |
-| Verification command run | ☐ pass / ☐ fail | [paste actual output] |
-| Negative cases hold | ☐ pass / ☐ fail | [paste the red run against the prior content, or the mutation diff (`git diff --stat`, non-empty) before each verdict] |
+| **New test(s) cover Acceptance Criteria (file paths pasted)** | ☑ pass | `.claude/hooks/tests/test_t310_admin_unsure_stop.py` (18 tests, written first by `qa-expert`, red 9 failed / 9 passed at `dbe20e67`, green 18 passed after `ac208553`, `107d831f`, `c89e25f3`). AC 1–4, 6, 7 are doc-text tests; AC 5 and the `RULE` label run `stop_auto_mode_check.py` as a subprocess at Risk Medium and High. Three existing pins repointed with T310 comments: `tests/test_t307_admin_end_to_end.py`, `tests/test_auto_verify.py`, `.claude/hooks/tests/test_stop_attribution_t287.py`; one stale pin fixed: `.claude/hooks/tests/test_verify_row_fill_detection.py` |
+| Verification command run | ☑ pass | `python3 -m pytest .claude/hooks/tests/test_t310_admin_unsure_stop.py -q -p no:cacheprovider` -> `18 passed in 1.46s` (Supervisor, at `c89e25f3`). Targeted run of the oracle plus the 3 repointed pins and the stale-pin file (`test_verify_row_fill_detection.py`, `tests/test_t307_admin_end_to_end.py`, `tests/test_auto_verify.py`) -> `371 passed in 105.64s` (at `107d831f`) |
+| Negative cases hold | ☑ pass | Red run against the prior content (`qa-expert`, commit `dbe20e67`): `9 failed, 9 passed` — the 9 failures are the missing doc text (AC 1, 2, 3, 4, 6, 7). Negative cases in the oracle: a `[auto]`-only report and a Debate settled by a written rule are not a stop (AC 1, 7); a `DEBATED` line under `[admin]` is judged as before; at Risk High a `Paused:` line alone is still blocked by rule D10. `git diff main..HEAD --stat`: 9 files, 506 insertions before the review fixes (non-empty) |
 | verify | ☐ pass / ☐ fail / ☐ N/A | [leave it: the auto verify hook writes this row, with its run record. If you ran /verify yourself, tick pass and make the whole Notes cell "/verify by the user, session <id>, commit <sha>" (the full 40-character commit). The merge gate counts no other row, even with the word "pass" in it] |
-| Review scope bounded to the change's blast radius (affected set, not whole repo) | ☐ pass / ☐ fail | [what was reviewed vs. skipped, and why] |
-| Full smoke suite still green (no regression) | ☐ pass / ☐ fail | |
-| **Companion score (easy-verifier)** | ☐ pass / ☐ fail / ☐ N/A | [`overall` and `change_risk` as the tool returned them, the scope, the ref, and the absolute path of the verifier report after a literal `report:` label — e.g. "overall 86 (>= 80), change_risk pass, scope changes, ref `main...HEAD`, report: `/home/me/.easy-verifier-reports/kit/score_changes_20261028T0530Z.html`". The gate reads the path that follows `report:` and nothing else, so with no label, or a path that is absent, the row is unscored — write ☑ N/A instead. ☑ N/A with a reason when neither companion tool was run: the merge gate blocks on ☑ fail only, never on an absent or N/A row] |
-| **UI: Visual regression (diff or verdict pasted)** | ☐ pass / ☐ fail / ☐ N/A | [screenshot path or LLM verdict — required for UI tasks, Hard-Stop Gate 6] |
-| **UI: Design-system compliance (tokens/colors/typography verified)** | ☐ pass / ☐ fail / ☐ N/A | [method used + output] |
-| **UI: Responsiveness at target viewports** | ☐ pass / ☐ fail / ☐ N/A | [viewports tested, any overflow findings] |
+| Review scope bounded to the change's blast radius (affected set, not whole repo) | ☑ pass | Reviewed the 9 files of `main..feat/t310-admin-unsure-stop`: `docs/claude-md/tracks.md`, `skills/resolve-question/SKILL.md`, the oracle, 4 pin tests, the guide and this file. Direct readers found by grep: `.claude/hooks/stop_auto_mode_check.py` (unchanged; proved by the oracle's subprocess tests) and the pins named in the guide's `Pre-existing pin tests` row. Skipped: the ~90 files of T294–T309 that the `security-review` prompt listed — they are not in this branch. `code-review` 2026-11-14: P0 0, P1 0, P2 2, P3 2 (P2 x2 and one P3 fixed in `c89e25f3`; one P3 left: the `PushNotification` rule is in `tracks.md` only, the skill file has 2 spare bytes). `lane_check`: `lane: C2, 8 files, 445 lines, FITS`. `security-review`: no findings. Reports: `reports/code-review_feat-t310-admin-unsure-stop_20261114T033757.html`, `reports/security-review_feat-t310-admin-unsure-stop_20261114T033757.html` (git-ignored) |
+| Full smoke suite still green (no regression) | ☑ pass | Implementer, clean run at `c89e25f3`: `7191 passed, 5 skipped, 25 subtests passed in 399.64s`. Supervisor run at `c89e25f3`: `1 failed, 7190 passed, 5 skipped, 25 subtests passed in 370.62s`. The one failure, `test_memory_usage_report.py::test_script_does_not_touch_the_real_repository`, compares `git status` before and after; the Supervisor edited this review file during the run. Alone: `9 passed in 0.22s`. The auto verify run re-runs the suite |
+| **Companion score (easy-verifier)** | ☑ N/A | not run: the optional companion score was skipped for a change to docs, skill text and tests. The merge gate blocks on `☑ fail` only, never on an N/A row |
+| **UI: Visual regression (diff or verdict pasted)** | ☑ N/A | no UI component: docs, skill text and tests only |
+| **UI: Design-system compliance (tokens/colors/typography verified)** | ☑ N/A | no UI component |
+| **UI: Responsiveness at target viewports** | ☑ N/A | no UI component |
 
 ---
 
@@ -101,7 +101,7 @@ $ wc -c skills/resolve-question/SKILL.md
 
 New bullet in `### Stops that stay`: "with `[admin]` only, an unsettled Debate: the Advocates disagree and no written rule or Citation picks one. `[auto]` alone is unchanged: it decides by its rules and logs `⚠ decided for you`." 
 
-**DELTA**: [one sentence — what a user can now do that they could not before]
+**DELTA**: A task run with `[admin]` now stops and asks you, with one `Paused: unsure — <question>; options: <A> / <B>` line and one push notification, when its Debate does not settle a choice. Before, the Supervisor picked the safer option itself and logged it.
 
 **WITNESS**: [who ran it and when — derived from `memory/event-trace/Txxx.jsonl`, never the
 implementing agent alone]
