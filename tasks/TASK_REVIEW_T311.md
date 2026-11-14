@@ -48,16 +48,16 @@ Not done: merge (yours); <auto verify: running (T182) | auto verify: <result> | 
 
 | Check | Result | Notes / output snippet |
 |-------|--------|------------------------|
-| **New test(s) cover Acceptance Criteria (file paths pasted)** | ☐ pass / ☐ fail | [test file path(s) — required before Done] |
-| Verification command run | ☐ pass / ☐ fail | [paste actual output] |
-| Negative cases hold | ☐ pass / ☐ fail | [paste the red run against the prior content, or the mutation diff (`git diff --stat`, non-empty) before each verdict] |
+| **New test(s) cover Acceptance Criteria (file paths pasted)** | ☑ pass | `tests/test_kit_explorer_data.py` (18 tests, written first by `qa-expert`; red `9 failed, 9 errors` at `cb4ffbdc`, green `18 passed` after `591cf07a`). AC 1–5 are tested directly (markers, one JSON block, idempotence, every skill and agent once, built-ins, stage mapping, no `/home/`, timestamp or raw `</`, hostile text, `--check` exit codes, missing marker exits 2, `--check` never writes). AC 6 is held by the existing site suites (`test_site_content.py`, `test_site_story.py`, `test_site_visual_first.py`: 213 passed). Two pins repointed past the generated block, each with a T311 comment: `tests/test_site_content.py` (`_page_text()` cuts the block) and `tests/test_stage_names.py` (`OWN_PHASE_LINES` gains one `site/docs.html` line) |
+| Verification command run | ☑ pass | Supervisor at `08693dfd`: `python3 -m pytest tests/test_kit_explorer_data.py -q -p no:cacheprovider` -> `18 passed in 0.78s`; `python3 scripts/gen_kit_explorer.py --check; echo "exit $?"` -> printed nothing, `exit 0`. Data: 37 skills (34 steps, 3 sections), 4 agents, 5 built-ins |
+| Negative cases hold | ☑ pass | Red run before any implementation (`qa-expert`, `cb4ffbdc`, 2026-11-14T04:35:38Z): `scripts/gen_kit_explorer.py` did not exist (exit 2), `grep -c kit-explorer-data site/docs.html` printed 0, oracle `9 failed, 9 errors`. Oracle mutations in a temp copy of the repo: a changed skill description gives `stale:` naming it (exit 1); a new and a removed skill exit 1; a changed stage index exits 1; a deleted marker exits 2 and writes nothing; text holding `</script><b>x</b>` and `-->` stays text and the block closes once. `git diff main..HEAD --stat`: 7 files, non-empty |
 | verify | ☐ pass / ☐ fail / ☐ N/A | [leave it: the auto verify hook writes this row, with its run record. If you ran /verify yourself, tick pass and make the whole Notes cell "/verify by the user, session <id>, commit <sha>" (the full 40-character commit). The merge gate counts no other row, even with the word "pass" in it] |
-| Review scope bounded to the change's blast radius (affected set, not whole repo) | ☐ pass / ☐ fail | [what was reviewed vs. skipped, and why] |
-| Full smoke suite still green (no regression) | ☐ pass / ☐ fail | |
-| **Companion score (easy-verifier)** | ☐ pass / ☐ fail / ☐ N/A | [`overall` and `change_risk` as the tool returned them, the scope, the ref, and the absolute path of the verifier report after a literal `report:` label — e.g. "overall 86 (>= 80), change_risk pass, scope changes, ref `main...HEAD`, report: `/home/me/.easy-verifier-reports/kit/score_changes_20261028T0530Z.html`". The gate reads the path that follows `report:` and nothing else, so with no label, or a path that is absent, the row is unscored — write ☑ N/A instead. ☑ N/A with a reason when neither companion tool was run: the merge gate blocks on ☑ fail only, never on an absent or N/A row] |
-| **UI: Visual regression (diff or verdict pasted)** | ☐ pass / ☐ fail / ☐ N/A | [screenshot path or LLM verdict — required for UI tasks, Hard-Stop Gate 6] |
-| **UI: Design-system compliance (tokens/colors/typography verified)** | ☐ pass / ☐ fail / ☐ N/A | [method used + output] |
-| **UI: Responsiveness at target viewports** | ☐ pass / ☐ fail / ☐ N/A | [viewports tested, any overflow findings] |
+| Review scope bounded to the change's blast radius (affected set, not whole repo) | ☑ pass | Reviewed the 7 files of `main..feat/t311-kit-explorer-data`: `scripts/gen_kit_explorer.py`, the generated block in `site/docs.html`, the oracle, two repointed pins, the guide and this file. Callers by grep: the existing site tests that read `docs.html` (all run; 213 passed). Skipped: the ~90 files of T294–T310 that the `security-review` prompt listed (not in this branch). `code-review` 2026-11-14: P0 0, P1 0, P2 2 (guide said "every string from a kit file" but the built-ins are hand-written; guide said step headings stay inside the Workflow section but the code reads on past it — both fixed in `08693dfd`), P3 3 (page weight +77 KB, kept indented for readable diffs; a change to a built-in line is invisible to `--check`, written into the guide as a known limit; `lane_check` `EXCEEDS (lines 2217 > 500)`, almost all of it the generated block, warn-only). A scan of the block for emails, home paths, task IDs and key patterns found none. For T312: the block holds `KANBAN` (5) and `In Progress` (2), recorded in the T312 guide. `security-review`: no findings. Reports: `reports/code-review_feat-t311-kit-explorer-data_20261114T045913.html`, `reports/security-review_feat-t311-kit-explorer-data_20261114T045913.html` (git-ignored) |
+| Full smoke suite still green (no regression) | ☑ pass | Implementer, clean run (no edits during it, `git status` clean before) at `08693dfd`: `python3 -m pytest .claude/hooks/tests/ tests/ -q` -> `7209 passed, 5 skipped, 25 subtests passed in 339.66s (0:05:39)`. The auto verify run re-runs the suite |
+| **Companion score (easy-verifier)** | ☑ N/A | not run: the optional companion score was skipped; the merge gate blocks on `☑ fail` only, never on an N/A row |
+| **UI: Visual regression (diff or verdict pasted)** | ☑ N/A | no visible change: this task adds a data block and a script; the visible section is T312 |
+| **UI: Design-system compliance (tokens/colors/typography verified)** | ☑ N/A | no visible change; `test_site_visual_first.py` (no hex outside tokens, no third-party asset) passes with the block in the page |
+| **UI: Responsiveness at target viewports** | ☑ N/A | no visible change |
 
 ---
 
@@ -93,7 +93,7 @@ $ git diff --stat site/docs.html
 ```
 Page weight: `site/docs.html` 163,864 -> 241,348 bytes; the block is 77,453 bytes (compact JSON would save 8 KB, so the indented form is kept for readable diffs).
 
-**DELTA**: [one sentence — what a user can now do that they could not before]
+**DELTA**: A maintainer can run `python3 scripts/gen_kit_explorer.py` to put every agent's and skill's data into `site/docs.html`, and `--check` (and the test) fails the moment the kit and the page disagree. No reader sees a change yet; T312 draws the explorer from this block.
 
 **WITNESS**: [who ran it and when — derived from `memory/event-trace/Txxx.jsonl`, never the
 implementing agent alone]
