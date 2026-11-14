@@ -53,6 +53,9 @@ BASELINE_RECORD = re.compile(r'^\s*(\("[0-9a-f]{12}", |"[0-9a-f]{12,16}": )')
 OWN_PHASE_LINES = {
     ("skills/compound/SKILL.md", "If a high-overlap doc was found in Phase 0:"):
         "points at the `compound` skill's own Phase 0 (Classify the Problem)",
+    # T311: the generated kit-explorer data block in site/docs.html quotes that same skill line.
+    ("site/docs.html", "If a high-overlap doc was found in Phase 0:"):
+        "the generated copy of the compound skill's own Phase 0 line",
 }
 
 

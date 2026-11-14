@@ -31,7 +31,9 @@ def _raw_page_text():
 
 def _page_text():
     # <wbr> only offers line-break points inside long code tokens (T167); it is not content.
-    return _raw_page_text().replace("<wbr>", "")
+    text = _raw_page_text().replace("<wbr>", "")
+    # T311: the generated kit-explorer data block is kit source text, not page prose; T312 draws it.
+    return re.sub(r"<!-- kit-explorer-data:start -->.*<!-- kit-explorer-data:end -->", "", text, flags=re.S)
 
 
 def _skill_dirs():
