@@ -25,7 +25,7 @@
      run; read them there. The enforced gate is the whole-file character budget above. -->
 
 ### Decisions
-- [T311: kit data in `site/docs.html`](decisions.md) — `--check` fails when stale; `e37b2be3`
+- [T311–T312: kit data and Explorer on `site/docs.html`](decisions.md) — `39ab138e`
 - [T310: `[admin]` stops when unsure](decisions.md) — `Paused: unsure`; `d839663d`
 - [T306–T308: `[admin]` end to end](decisions.md) — T309 gate hole
 - [T309: hand-typed `verify` pass row counts for nothing](decisions.md) — only the hook row or the user's `/verify` passes; merged `0310dd7`
@@ -353,6 +353,6 @@
 - [T095: merge gate reads worktree evidence; heredoc bodies are data] — main checkout first, then worktrees; `lib/shell_data.py` strips heredocs. →
 - [T099: quoted spans are sometimes code] — naive quoted-span stripping would ALLOW `bash -c "git push"`. Needs wrapper-awareness. → tasks/TASK_GUIDE_T099.md
 - [Two gate tasks conflict in meaning (T295+T296)](learnings.md) — merge the tighter one first; re-run both
-- [Whole-page text pins (T311)](learnings.md) — only the full suite finds them
-- [Merge-gate traps (T310)](learnings.md) — an orphan Ready row blocks merges; edit the board a call earlier
+- [Whole-page pins; sub-agent traps (T311–T312)](learnings.md) — see entry
+- [Merge-gate traps (T310)](learnings.md) — an orphan Ready row blocks merges
 - [Merge-gate traps (T309)](learnings.md) — stale untracked guides, truncated trace summaries, suite deletes worktree files
