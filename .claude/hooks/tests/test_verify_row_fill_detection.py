@@ -95,12 +95,9 @@ def hook_variant(row):
     return hook_verify_row.hook_row(hook_verify_row.CODE_SHA, result=row.split("|")[2].strip())
 
 
-TEMPLATE_PLACEHOLDER_ROW = (
-    '| verify | ☐ pass / ☐ fail / ☐ N/A | [what was observed — must '
-    'literally state "pass" or "fail" here too, e.g. "skill run, feature confirmed '
-    'working — pass": the merge gate scans this Notes column for the word '
-    '"pass", not just the Result column] |'
-)
+# T310: the pin was stale since T309 changed the template wording; read the row from the template so it follows.
+with open(os.path.join(ROOT, "templates", "TASK_REVIEW_template.md"), encoding="utf-8") as _f:
+    TEMPLATE_PLACEHOLDER_ROW = next(l for l in _f.read().splitlines() if l.startswith("| verify |"))
 
 UNFILLED_TWO_OPTION_ROW = "| verify | ☐ pass / ☐ fail | |"
 
@@ -235,7 +232,9 @@ def is_allowed_difference(row, old_verdict, new_verdict):
     its run record for that task and head commit, and a temp copy of the corpus has none."""
     if not (old_verdict and not new_verdict):
         return False
-    is_placeholder_shape = "☐ pass" in row and "must literally state" in row
+    # T310: also the post-T309 template wording
+    is_placeholder_shape = "☐ pass" in row and (
+        "must literally state" in row or "the auto verify hook writes this row" in row)
     is_auto_run_row = "auto-run by hook" in row
     return is_placeholder_shape or is_auto_run_row
 

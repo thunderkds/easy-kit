@@ -1328,7 +1328,7 @@ def test_ac8_glossary_auto_verify_covers_both_tracks():
 MEMORY = "Memory: nothing new"
 COMPLETE = _review(memory=MEMORY)
 DONE_ROW_BEFORE = "- [x] **T900** — An older task | Supervisor | C1 | Risk: Low | P2"
-STOPS_THAT_STAY_SHA256 = "774b98a717e3f90b52929e2f73a91386af8b29c9d27ea88b3b74db75e35045ba"
+STOPS_THAT_STAY_SHA256 = "b0386aad8d7ad8fd3e357b08741b9947b7e07b8a0d3bd49a38f17607123fe293"  # T310: repointed, new `[admin]` unsettled-Debate bullet
 CLOSE_TERMINAL = ("moved to Done", "done not moved", "report incomplete", "nothing moved")
 WRITING_GIT = {"merge", "push", "commit", "checkout", "switch", "reset", "rebase", "pull", "add",
                "rm", "mv", "tag", "stash", "branch", "cherry-pick", "revert", "restore", "apply",
