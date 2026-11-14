@@ -91,7 +91,41 @@ $ python3 -m pytest tests/test_site_explorer.py -q -p no:cacheprovider
 
 Screenshot (git-ignored): `/home/hungnguyenhuu/workspace/pets/wt-t312/reports/T312_before_docs_1280.png`. The sidebar has no "Explorer" link and the page has no `#explorer`.
 
-**AFTER**: [same command, post-change] OR [verbatim excerpt of the new content]
+**AFTER** (frontend-developer, 2026-11-14, branch `feat/t312-docs-explorer-section`):
+
+```
+$ python3 -m pytest tests/test_site_explorer.py -q -p no:cacheprovider
+24 passed in 2.86s
+$ python3 scripts/gen_kit_explorer.py --check; echo "exit $?"
+exit 0
+$ python3 -m pytest .claude/hooks/tests/ tests/ -q
+6 failed, 7227 passed, 5 skipped
+  1 failed: tests/test_site_story.py::test_redirect_id_list_equals_the_link_target_ids_of_docs (needs a site/index.html edit; STOPPED, see report)
+  5 failed: test_memory_channel_and_budget.py (4) + test_token_audit_format.py::test_memory_md_hot_tier_stays_within_char_budget (memory/MEMORY.md budget; file untouched by this branch)
+```
+
+Screenshots (git-ignored, `reports/`, shot from temp copies that hide the other sections; selected states by a clicking script in the copy): `T312_after_rest_{375,1280}.png`, `T312_after_tdd_{375,1280}.png`, `T312_after_qa_{375,1280}.png`, `T312_after_verify_{375,1280}.png`, `T312_after_missing_{375,1280}.png`.
+
+ux-evaluate (by hand):
+
+| # | Flow / state | Width | Verdict | Screenshot | Reason |
+|---|---|---|---|---|---|
+| 1 | first load | 375 / 1280 | pass | rest_375, rest_1280 | chips grouped Agents, Stage 0..5, Any stage; panel shows "Pick an agent or a skill to see its steps." |
+| 2 | click tdd | 1280 | pass | tdd_1280 | panel right of map; "Steps" numbered 1-5: Planning, Tracer Bullet, Incremental Loop, Refactor, Prove each test can go RED |
+| 3 | click qa | 375 | pass | qa_375 | panel below the map; "Startup sequence" numbered list; no sideways scroll |
+| 4 | click verify | 1280 | pass | verify_1280 | "The kit has no file for this built-in." |
+| 5 | block removed | 375 / 1280 | pass | missing_375 | one line "The explorer data is missing. The lists above show the same names."; oracle shows no pageerror |
+| B-a | default | both | pass | rest_* | the chip map is the one thing to act on, in view |
+| B-b | default | both | pass | rest_* | h2, lead, group titles, chips |
+| B-c | default | both | pass | rest_* | same card padding and gaps in all groups |
+| B-d | default | 375 | pass | rest_375 | oracle test measures every chip at least 44x44 at 375 |
+| B-e | default | 375 | pass | qa_375 | panel body 16px, contrast tokens; chip text is 12px mono, the site's own `.chip` size (note) |
+| B-f | empty, success, error | both | pass | rest, tdd, missing | each state says what it is |
+| B-g | after a click | both | pass | tdd_1280, qa_375 | pressed chip gets mint border; panel fills |
+| B-h | default | 375 | pass | qa_375 | one column, chips wrap, no clipping |
+| B-i | default | both | pass | rest_* | same mint accent, chip shape and radius as `#skills`; built-ins dashed |
+
+ux-evaluate: 14 pass, 0 fail. Overall: pass. One fix made during the run: a selection scrolled the panel under the sticky header; fixed with `scroll-margin-top` on `.ex-panel`.
 
 **DELTA**: [one sentence — what a user can now do that they could not before]
 
