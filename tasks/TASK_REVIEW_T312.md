@@ -68,8 +68,28 @@ Not done: merge (yours); <auto verify: running (T182) | auto verify: <result> | 
 > **before any implementation commit exists**; if it does not (docs, templates, skill-instruction
 > text), BEFORE is the **verbatim prior content** of what changed — a quoted excerpt, not a command.
 
-**BEFORE**: [pasted timestamped command output showing the thing absent/failing, captured before the
-first implementation commit] OR [verbatim excerpt of the prior content, for non-executable changes]
+**BEFORE** (qa-expert, 2026-11-14T07:21Z, branch `feat/t312-docs-explorer-section`, before any implementation commit):
+
+```
+$ grep -c 'id="explorer"' site/docs.html
+0
+$ sed -n 237,243p site/docs.html      # sidebar, "// the team"
+    <p class="nav-group-title">// the team</p>
+    <ul>
+      <li><a href="#agent-roles">Agent roles</a></li>
+      <li><a href="#skills">Skills</a></li>
+      <li><a href="#hooks">Hooks</a></li>
+      <li><a href="#agent-focus">Agent focus</a></li>
+    </ul>
+$ google-chrome --headless=new --no-sandbox --disable-gpu --window-size=1280,900 --screenshot=reports/T312_before_docs_1280.png file://$PWD/site/docs.html
+159108 bytes written to file /home/hungnguyenhuu/workspace/pets/wt-t312/reports/T312_before_docs_1280.png
+$ python3 -m pytest tests/test_site_explorer.py -q -p no:cacheprovider
+24 failed in 3.29s
+  static tests:  AssertionError: site/docs.html has no <section id="explorer">
+  browser tests: AssertionError: probe has no 'clicks': the #explorer section is absent or its script failed ({'errs': [], 'hasSection': False})
+```
+
+Screenshot (git-ignored): `/home/hungnguyenhuu/workspace/pets/wt-t312/reports/T312_before_docs_1280.png`. The sidebar has no "Explorer" link and the page has no `#explorer`.
 
 **AFTER**: [same command, post-change] OR [verbatim excerpt of the new content]
 
