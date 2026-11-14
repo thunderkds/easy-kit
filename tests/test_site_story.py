@@ -483,7 +483,8 @@ def test_each_stage_marks_exactly_one_key_skill_with_a_shape_and_a_text_cue():
 def test_docs_holds_all_17_section_ids_in_the_old_order():
     base = _baseline()
     assert len(base["sections"]) == 17
-    assert [sid for sid, _ in top_level_sections(docs_html())] == base["sections"]
+    # T312 added #explorer after #skills; the 17 old sections keep their order
+    assert [sid for sid, _ in top_level_sections(docs_html()) if sid != "explorer"] == base["sections"]
 
 
 # T251: the Legacy preset in the settings catalog carries the kit's 4 deny rules (2 for the trace anchors,

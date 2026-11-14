@@ -514,3 +514,27 @@ footer { color: var(--text-muted); font-size: 13.5px; margin: var(--s-10) 0 var(
     --glow-box: none;
   }
 }
+
+/* ---- explorer (T312): a map of chips and one panel; tokens only, no motion ---- */
+.ex-app { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--s-5); margin-top: var(--s-4); align-items: start; }
+.ex-map { display: flex; flex-direction: column; gap: var(--s-3); min-width: 0; }
+.ex-group { border: 1px solid var(--line); border-radius: var(--r-sm); padding: var(--s-3) var(--s-4); }
+.ex-group h3 { margin: 0 0 var(--s-2); font-size: 14px; }
+.ex-group .ex-row + .ex-row { margin-top: var(--s-2); }
+.ex-kind { font: 400 11.5px var(--font-mono); color: var(--text-muted); align-self: center; }
+.ex-chip { background: transparent; cursor: pointer; }
+.ex-chip:hover { background: var(--bg-hover); color: var(--text-strong); }
+.ex-chip.is-builtin { border-style: dashed; }
+.ex-chip[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); color: var(--text-strong); font-weight: 500; }
+.ex-panel { border: 1px solid var(--line-strong); border-radius: var(--r-sm); padding: var(--s-4) var(--s-5); min-width: 0; overflow-wrap: anywhere; scroll-margin-top: calc(var(--header-h) + var(--s-4)); }
+.ex-panel > :last-child { margin-bottom: 0; }
+.ex-panel h3 { margin: 0 0 var(--s-2); font: 600 15px var(--font-mono); color: var(--text-strong); }
+.ex-panel h4 { margin: var(--s-4) 0 var(--s-2); font: 500 12px var(--font-mono); color: var(--text-muted); }
+.ex-panel ol, .ex-panel ul { margin: 0; padding-left: 1.6em; }
+.ex-panel li { margin-bottom: var(--s-2); }
+.ex-panel ol li::marker { font: 400 11.5px var(--font-mono); color: var(--accent); }
+.ex-step-title { font-weight: 600; color: var(--text-strong); }
+.ex-step-note { display: block; color: var(--text-2); }
+.ex-missing { color: var(--text); }
+@media (min-width: 1100px) { .ex-app { grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); } }
+@media (max-width: 719px) { .ex-chip { min-height: 44px; min-width: 44px; } }

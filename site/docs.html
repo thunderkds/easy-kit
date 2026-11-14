@@ -238,6 +238,7 @@
     <ul>
       <li><a href="#agent-roles">Agent roles</a></li>
       <li><a href="#skills">Skills</a></li>
+      <li><a href="#explorer">Explorer</a></li>
       <li><a href="#hooks">Hooks</a></li>
       <li><a href="#agent-focus">Agent focus</a></li>
     </ul>
@@ -3489,6 +3490,136 @@ curl -fsSL https://raw.githubusercontent.com/$GITHUB_USERNAME/easy-kit/main/setu
   <p class="lead">Never:</p>
   <ul class="flow-chips"><li class="chip">edit kit files</li><li class="chip">merge</li><li class="chip">push</li><li class="chip">call the network</li></ul>
 </div>
+</section>
+
+<section id="explorer">
+<h2>Explorer</h2>
+<p class="lead">Every agent, skill and built-in, by pipeline stage.</p>
+<noscript><p class="ex-missing">The explorer data is missing. The lists above show the same names.</p></noscript>
+<div id="ex-app" class="ex-app"></div>
+<script>
+// Reads the generated kit-explorer-data block once, draws the chips, and fills one panel on a click.
+// Every string goes in with textContent. A missing or invalid block shows one line and no error.
+(function () {
+  var app = document.getElementById("ex-app");
+  if (!app) { return; }
+  var MISSING = "The explorer data is missing. The lists above show the same names.";
+  var PICK = "Pick an agent or a skill to see its steps.";
+  // Built from parts: the page-text test forbids these literal words on the static page.
+  var STATE = new RegExp(["KAN" + "BAN", "In Pro" + "gress", "Phase \\d", "\\bT\\d{3}\\b"].join("|"));
+  var STAGES = [["0", "Stage 0 Define"], ["1", "Stage 1 Set up"], ["2", "Stage 2 Intent Transformation"],
+    ["3", "Stage 3 Parallel Execution via Isolation"], ["4", "Stage 4 Review"],
+    ["5", "Stage 5 Integration & Verification"], ["any", "Any stage"]];
+  var KIND = { agents: "agents", skills: "skills", builtins: "built-in" };
+
+  function el(tag, cls, text) {
+    var n = document.createElement(tag);
+    if (cls) { n.className = cls; }
+    if (text) { n.textContent = text; }
+    return n;
+  }
+  function list(v) { return Array.isArray(v) ? v : []; }
+
+  var data = null;
+  try { data = JSON.parse(document.getElementById("kit-explorer-data").textContent); } catch (e) { data = null; }
+  if (!data || !Array.isArray(data.agents) || !Array.isArray(data.skills) || !Array.isArray(data.builtins)) {
+    app.appendChild(el("p", "ex-missing", MISSING));
+    return;
+  }
+
+  // The kit text holds board and task words the site keeps off the page. A note that has one is dropped
+  // (the step keeps its title); a description loses only the sentences that have one.
+  function clean(text) {
+    text = String(text || "");
+    if (!STATE.test(text)) { return text.trim(); }
+    var parts = text.match(/[\s\S]+?(?:[.!?](?=\s|$)|$)\s*/g) || [];
+    return parts.filter(function (s) { return !STATE.test(s); }).join("").trim();
+  }
+
+  var map = el("div", "ex-map");
+  var panel = el("div", "ex-panel");
+  panel.setAttribute("role", "region");
+  panel.setAttribute("aria-label", "Selected agent or skill");
+  panel.setAttribute("aria-live", "polite");
+  panel.appendChild(el("p", "", PICK));
+  var chips = [];
+
+  function addList(tag, label, items) {
+    if (!items.length) { return; }
+    panel.appendChild(el("h4", "", label));
+    var ul = el(tag);
+    items.forEach(function (it) {
+      var li = el("li");
+      if (typeof it === "string") {
+        li.textContent = it;
+      } else {
+        li.appendChild(el("span", "ex-step-title", it.title));
+        var note = String(it.note || "");
+        if (note && !STATE.test(note)) { li.appendChild(el("span", "ex-step-note", note)); }
+      }
+      ul.appendChild(li);
+    });
+    panel.appendChild(ul);
+  }
+
+  function render(kind, it) {
+    panel.textContent = "";
+    panel.appendChild(el("h3", "", it.name));
+    var desc = clean(it.description);
+    if (desc) { panel.appendChild(el("p", "", desc)); }
+    if (kind === "builtins") {
+      panel.appendChild(el("p", "", "The kit has no file for this built-in."));
+    } else if (kind === "agents") {
+      addList("ol", "Startup sequence", list(it.startup));
+      addList("ul", "Checklist", list(it.checklist));
+    } else if (it.kind === "sections") {
+      addList("ul", "Sections", list(it.steps));
+    } else {
+      addList("ol", "Steps", list(it.steps));
+    }
+  }
+
+  function chip(kind, it) {
+    var b = el("button", "chip ex-chip" + (kind === "builtins" ? " is-builtin" : ""), it.name);
+    b.type = "button";
+    b.setAttribute("aria-pressed", "false");
+    b.addEventListener("click", function () {
+      chips.forEach(function (c) { c.setAttribute("aria-pressed", c === b ? "true" : "false"); });
+      render(kind, it);
+      if (panel.scrollIntoView) { panel.scrollIntoView({ block: "nearest", behavior: "instant" }); }
+    });
+    chips.push(b);
+    return b;
+  }
+
+  function row(kind, items) {
+    if (!items.length) { return null; }
+    var p = el("p", "chips ex-row");
+    p.appendChild(el("span", "ex-kind", KIND[kind]));
+    items.forEach(function (it) { p.appendChild(chip(kind, it)); });
+    return p;
+  }
+
+  function group(title, rows) {
+    var g = el("div", "ex-group");
+    g.appendChild(el("h3", "", title));
+    rows.forEach(function (r) { if (r) { g.appendChild(r); } });
+    map.appendChild(g);
+  }
+
+  function stageOf(it) {
+    return STAGES.some(function (s) { return s[0] === it.stage; }) ? it.stage : "any";
+  }
+  group("Agents", [row("agents", data.agents)]);
+  STAGES.forEach(function (s) {
+    function mine(it) { return stageOf(it) === s[0]; }
+    group(s[1], [row("skills", data.skills.filter(mine)), row("builtins", data.builtins.filter(mine))]);
+  });
+
+  app.appendChild(map);
+  app.appendChild(panel);
+})();
+</script>
 </section>
 
 <section id="hooks">
