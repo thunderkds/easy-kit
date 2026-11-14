@@ -79,7 +79,18 @@ $ python3 -m pytest tests/test_kit_explorer_data.py -q -p no:cacheprovider
 9 failed, 9 errors in 0.37s   (script and markers absent)
 ```
 
-**AFTER**: [same command, post-change] OR [verbatim excerpt of the new content]
+**AFTER** (captured 2026-11-14, after the implementation):
+```
+$ python3 scripts/gen_kit_explorer.py --check; echo "exit $?"
+exit 0
+$ grep -c 'kit-explorer-data' site/docs.html
+4
+$ python3 -m pytest tests/test_kit_explorer_data.py -q -p no:cacheprovider
+18 passed in 0.86s
+$ git diff --stat site/docs.html
+ site/docs.html | 1539 ++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 1539 insertions(+)   (0 deletions)
+```
 
 **DELTA**: [one sentence — what a user can now do that they could not before]
 
