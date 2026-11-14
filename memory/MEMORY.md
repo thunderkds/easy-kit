@@ -25,6 +25,7 @@
      run; read them there. The enforced gate is the whole-file character budget above. -->
 
 ### Decisions
+- [T310: `[admin]` stops when a Debate does not settle a choice](decisions.md) — `Paused: unsure — …` + one push, no hook change; `resolve-question/SKILL.md` at 8190 of 8192 bytes; merged `d839663d`
 - [T306–T308: `[admin]` end to end](decisions.md) — T309 gate hole
 - [T309: hand-typed `verify` pass row counts for nothing](decisions.md) — only the hook row or the user's `/verify` passes; merged `0310dd7`
 - [T297–T299: effort per Complexity, passed at spawn](decisions.md) — `## CLI Effort Table`; raise one step on move up or `fail`; T300: opus·low 4.1x cost, lost a pass (DDR-0010)
@@ -351,4 +352,5 @@
 - [T095: merge gate reads worktree evidence; heredoc bodies are data] — main checkout first, then worktrees; `lib/shell_data.py` strips heredocs. →
 - [T099: quoted spans are sometimes code] — naive quoted-span stripping would ALLOW `bash -c "git push"`. Needs wrapper-awareness. → tasks/TASK_GUIDE_T099.md
 - [Two gate tasks conflict in meaning (T295+T296)](learnings.md) — merge the tighter one first; re-run both
+- [Merge-gate traps (T310)](learnings.md) — orphan Ready for Review row blocks every merge; Done row in the wrong section; edit the board in the call before the merge; do not edit during a suite run
 - [Merge-gate traps (T309)](learnings.md) — stale untracked guides, truncated trace summaries, suite deletes worktree files
