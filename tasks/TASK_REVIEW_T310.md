@@ -68,8 +68,26 @@ Not done: merge (yours); <auto verify: running (T182) | auto verify: <result> | 
 > **before any implementation commit exists**; if it does not (docs, templates, skill-instruction
 > text), BEFORE is the **verbatim prior content** of what changed — a quoted excerpt, not a command.
 
-**BEFORE**: [pasted timestamped command output showing the thing absent/failing, captured before the
-first implementation commit] OR [verbatim excerpt of the prior content, for non-executable changes]
+**BEFORE** (captured 2026-11-14T02:44:05Z by qa-expert, before any implementation commit; docs and skill text, so the verbatim prior content):
+
+`docs/claude-md/tracks.md` `### Stops that stay`:
+
+```
+Even in auto mode, the Supervisor pauses the task, with one message that says why, for:
+
+- a safety-hook block;
+- an action that deletes or overwrites data with no backup;
+- the 4th Debate in a task (the `resolve-question` cap);
+- a paid action outside the task's own work;
+- a login or secret the Supervisor does not have;
+- the same sub-agent hitting the step limit twice.
+
+The pause also goes in the final report, on its `Paused:` line.
+```
+
+`skills/resolve-question/SKILL.md` size: 8191 bytes (`wc -c`; cap 8192).
+
+Oracle, red: `python3 -m pytest .claude/hooks/tests/test_t310_admin_unsure_stop.py -q -p no:cacheprovider` -> `9 failed, 9 passed` (the 9 failures are the doc-text tests; the 9 passes are the hook tests, as the hook stays unchanged).
 
 **AFTER**: [same command, post-change] OR [verbatim excerpt of the new content]
 
