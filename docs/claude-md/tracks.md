@@ -543,11 +543,14 @@ characters, task ID first, then the question. A "not sent" result is not an erro
 Then it ends the run. The line does not replace the one `DEBATED` line with 3 Advocates that Risk High
 requires (rule D10). Risk Low has no Debate, so it has no unsettled Debate and no stop.
 
-Not a stop: the Advocates disagree on whether to convert `recurring.csv` too, but `Surgical Changes` in
-`AGENTS.md` picks "leave it". A written rule picks one, so the Supervisor decides and logs `RULE`.
+Not a stop: the Advocates disagree on whether to convert `recurring.csv` too, but `AGENTS.md`
+`## Karpathy Engineering Principles` (Surgical Changes) picks "leave it". A written rule picks one, so the
+Supervisor decides and logs `RULE: AGENTS.md § Karpathy Engineering Principles`.
 
 The user answers in chat. The Supervisor logs that answer as `RULE`, in the shape
-`N. <answer> — RULE: <path> § <heading>`, because a user reply has no file to cite for `FACT`.
+`N. <answer> — RULE: <path> § <heading>`, because a user reply has no file to cite for `FACT`. The path
+is the file that holds the `Paused:` line, for example `tasks/TASK_REVIEW_<ID>.md § Auto decisions` (minimal
+track: the Decision record in `tasks/MINIMAL_LOG.md`).
 
 ### Never in auto mode
 

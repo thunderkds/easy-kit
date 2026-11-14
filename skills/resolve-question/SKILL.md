@@ -93,7 +93,7 @@ Decision needed: <the one thing the user must decide or confirm>
 The HITL message carries the question, each Scanner's finding, and the decision needed.
 Never answer from memory in its place.
 
-Done when: the answer is accepted with Citations, or the HITL message is answered.
+Done when: the answer is accepted with opened Citations, or the HITL message is answered.
 
 #### 5. Log
 

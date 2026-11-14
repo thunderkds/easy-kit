@@ -186,7 +186,7 @@ def test_ac3_row19_allows_ship_plan_with_admin():
 AC4_KEY = r"`### Stops that stay`"
 AC4_ANCHORS = (r"\bonly\b", r"one line")
 STOPS_SHA = "d73098dc6936799271e92a480c793e05477f8e24d361c6a8e9df3d2cc658832b"  # base text (BASE_COMMIT)
-STOPS_SHA_NOW = "0e9818870815329e9e16fbbf21539587b06bdad849a007fda11a5d076000cd02"  # T310: new `[admin]` unsettled-Debate bullet
+STOPS_SHA_NOW = "47cc25b7fd1f2be158ee4224210149a78060e5338fe2a808ba9aaa62e782fccf"  # T310: new `[admin]` unsettled-Debate bullet
 
 
 def check_ac4(text):
