@@ -531,6 +531,7 @@ Even in auto mode, the Supervisor pauses the task, with one message that says wh
 - a login or secret the Supervisor does not have;
 - the same sub-agent hitting the step limit twice;
 - with `[admin]` only, an unsettled Debate: the Advocates disagree and no written rule or Citation picks one. `[auto]` alone is unchanged: it decides by its rules and logs `⚠ decided for you`.
+  Decide rules 2 and 3 of `resolve-question` (the tie-breakers) do not count as a written rule for this test.
 
 The pause also goes in the final report, on its `Paused:` line.
 

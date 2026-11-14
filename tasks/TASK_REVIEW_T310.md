@@ -96,7 +96,7 @@ $ python3 -m pytest .claude/hooks/tests/test_t310_admin_unsure_stop.py -q -p no:
 ..................                                                       [100%]
 18 passed in 1.13s
 $ wc -c skills/resolve-question/SKILL.md
-8190 skills/resolve-question/SKILL.md
+8183 skills/resolve-question/SKILL.md
 ```
 
 New bullet in `### Stops that stay`: "with `[admin]` only, an unsettled Debate: the Advocates disagree and no written rule or Citation picks one. `[auto]` alone is unchanged: it decides by its rules and logs `⚠ decided for you`." 

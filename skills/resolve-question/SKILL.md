@@ -1,6 +1,6 @@
 ---
 name: resolve-question
-description: "Resolve a question before anyone guesses. Invoke when the Supervisor is confused about a repo fact, or when a sub-agent report shows `Status: blocked` with a `Question:` line. Sorts the question, answers it from a Citation or from 2-3 independent read-only Scanners, sends what they cannot settle to the user (auto mode: a Debate first), and logs every answer. Args: task=<TASK_ID|none> risk=<Low|Medium|High>"
+description: "Resolve a question before anyone guesses. Invoke when the Supervisor is confused about a repo fact, or when a sub-agent report shows `Status: blocked` with a `Question:` line. Sorts the question, answers it from a Citation or from 2-3 read-only Scanners, sends what they cannot settle to the user (auto mode: a Debate first), and logs every answer. Args: task=<TASK_ID|none> risk=<Low|Medium|High>"
 ---
 
 ## Role: Question Resolver
@@ -58,7 +58,7 @@ run has its own step budget. A Scanner at that limit answers "not found".
 Scanner prompt template (fill `{question}` and `{area}` only):
 
 ```
-Read-only search. Answer this question from the repository: {question}
+Read-only search. Answer from the repository: {question}
 Start in this area: {area}. Follow a lead anywhere in the repo if needed.
 Return either:
   ANSWER: <one or two sentences>
@@ -93,7 +93,7 @@ Decision needed: <the one thing the user must decide or confirm>
 The HITL message carries the question, each Scanner's finding, and the decision needed.
 Never answer from memory in its place.
 
-Done when: the answer is accepted with opened Citations, or the HITL message is answered.
+Done when: the answer is accepted with Citations, or the HITL message is answered.
 
 #### 5. Log
 
@@ -139,9 +139,9 @@ citing one stale doc: no Citation. An Advocate at its step limit: proposal "none
    request's literal words.
 3. Taste or scope (what the user wants): rule 2, flagged.
 
-With `[admin]`, if the Advocates disagree and no written rule or Citation picks one (an unsettled Debate),
+With `[admin]`, if the Advocates disagree and no written rule or Citation picks one (an unsettled Debate; Decide rules 2-3 are no written rule here),
 do not decide: write `Paused: unsure — <question>; options: <A> / <B>`, end the run
-(`tracks.md`, Stops that stay).
+(`tracks.md`).
 
 **Log.** As step 5 (with arguments), plus under `## Questions Log`:
 `- <YYYY-MM-DD> DEBATE <question> → <option> (Advocate 1: <its proposal>; Advocate 2: <its proposal>) ⚠ decided for you — please review`
