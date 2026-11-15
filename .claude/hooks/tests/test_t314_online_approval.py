@@ -27,6 +27,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+import uuid
 
 # --- Pinned names (the implementer's file names must match these) -----------------------
 RECORDER_NAME = "post_tool_sensitive_approval.py"
@@ -101,8 +102,11 @@ class OnlineApprovalTest(unittest.TestCase):
 
     # --- events -------------------------------------------------------------------------
 
-    def _event(self, tool_name, tool_input, post=False):
-        event = {"tool_name": tool_name, "cwd": self.project, "tool_input": tool_input}
+    def _event(self, tool_name, tool_input, post=False, tool_use_id=None):
+        # Fix round (guide decision 2, F1/F2): real events carry tool_use_id and permission_mode.
+        event = {"tool_name": tool_name, "cwd": self.project, "tool_input": tool_input,
+                 "tool_use_id": tool_use_id or "toolu_" + uuid.uuid4().hex,
+                 "permission_mode": "default"}
         if post:
             event["hook_event_name"] = "PostToolUse"
             event["tool_response"] = ({"stdout": "", "stderr": "", "interrupted": False}
@@ -126,8 +130,13 @@ class OnlineApprovalTest(unittest.TestCase):
     def record(self, tool_name, target, task_id=TASK):
         self.assertTrue(os.path.exists(RECORDER),
                         f"recorder missing: {RECORDER_NAME} does not exist in .claude/hooks/")
+        # Fix round (F1): Post records only what Pre asked, so the same call runs Pre first.
+        tool_use_id = "toolu_" + uuid.uuid4().hex
+        run_script(PRE_HOOK, self.project, task_id,
+                   self._event(tool_name, self._input(tool_name, target), tool_use_id=tool_use_id))
         proc = run_script(RECORDER, self.project, task_id,
-                          self._event(tool_name, self._input(tool_name, target), post=True))
+                          self._event(tool_name, self._input(tool_name, target), post=True,
+                                      tool_use_id=tool_use_id))
         self.assert_silent(proc)
         return proc
 
