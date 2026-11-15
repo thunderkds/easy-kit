@@ -2,21 +2,23 @@
 """
 PostToolUse recorder (T314) — fires after every Edit, Write and Bash tool call.
 
-In board mode `online` with an active task, it records each sensitive path the call
-touched in `.claude/state/sensitive-approvals.json` as `{"<task_id>": ["<path>", ...]}`.
-A PostToolUse event means the call ran, so for a call that
-`pre_tool_sensitive_path.py` asked about, the user said yes: that yes is the only
-trust source (NFR-005 stays — board text approves nothing). The PreToolUse hook then
-stays silent on later calls in the same task that touch only approved paths.
+It records an approval only for what `pre_tool_sensitive_path.py` asked. When that hook
+asks in board mode `online` with an active task, it writes
+`.claude/state/pending/<tool_use_id>.json` = `{"task_id": T, "keys": [...]}`. A PostToolUse
+event with the same `tool_use_id` means the call ran, so the user said yes: that yes is the
+only trust source (NFR-005 stays — board text approves nothing). This recorder then moves
+exactly those keys under T into `.claude/state/sensitive-approvals.json` and deletes the
+pending entry. It records only when the event's `permission_mode` is `default` or `auto`,
+the modes where a hook `ask` shows the prompt. No pending entry -> nothing is recorded.
 
-Path parsing is the PreToolUse hook's own code (imported, not copied), so both
-hooks agree on what a call touches. The approval file itself is never recorded.
-
-Never breaks the session: local mode, no active task, or any error -> exit 0, no output.
+The keys, state checks and file writes are the PreToolUse hook's own code (imported, not
+copied). Never breaks the session: any error -> exit 0, no output.
 """
 import json
 import os
 import sys
+
+RECORDING_MODES = ("default", "auto")
 
 
 def record(event):
@@ -26,43 +28,28 @@ def record(event):
 
     if hook.IMPORT_ERROR is not None:
         return
-    tool_name = event["tool_name"]
-    tool_input = event["tool_input"]
-    if tool_name not in ("Edit", "Write", "Bash") or not isinstance(tool_input, dict):
-        return
-
     root = hook.project_dir()
-    cwd = event.get("cwd") if isinstance(event.get("cwd"), str) else None
-    cwd = cwd or os.getcwd()
-    roots = [root, cwd]
-    if not hook.is_online(roots):
+    pending = hook.pending_file(root, event.get("tool_use_id"))
+    if pending is None:
         return
-    task_id = hook.resolve_task_id(event)
-    if not task_id:
+    entry = hook.read_json_in_state(root, pending)
+    if entry is None:
         return
-
-    patterns = hook.load_patterns(hook.pattern_file_path(root))
-    new = [key
-           for _, forms, pattern in hook.sensitive_hits(tool_name, tool_input, cwd, roots, patterns)
-           if pattern != hook.APPROVALS_RELPATH
-           for key in hook.approval_keys(forms)]
-    if not new:
+    if os.path.lexists(pending) and not os.path.isdir(pending):
+        os.remove(pending)
+    if event.get("permission_mode") not in RECORDING_MODES or not isinstance(entry, dict):
         return
+    task_id, keys = entry.get("task_id"), entry.get("keys")
+    if not isinstance(task_id, str) or not task_id or not isinstance(keys, list):
+        return
+    keys = [k for k in keys if isinstance(k, str) and k and not hook.is_state_key(k)]
 
     data = hook.read_approvals(root)
     approved = data.setdefault(task_id, [])
-    added = [key for key in dict.fromkeys(new) if key not in approved]
-    if not added:
-        return
-    approved.extend(added)
-
-    path = hook.approvals_file(root)
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    tmp = f"{path}.{os.getpid()}.tmp"
-    with open(tmp, "w", encoding="utf-8") as f:
-        json.dump(data, f, indent=2, sort_keys=True)
-        f.write("\n")
-    os.replace(tmp, path)
+    added = [k for k in dict.fromkeys(keys) if k not in approved]
+    if added:
+        approved.extend(added)
+        hook.write_json_in_state(root, hook.approvals_file(root), data)
 
 
 def main():

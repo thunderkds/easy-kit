@@ -149,11 +149,14 @@ lists the row for Stage 4. That is a wrong reminder, not a weaker gate.
 
 Sensitive paths (T314, NFR-005). In board mode `online` a guide comes from the board, so its
 `## Files to Change (Predicted)` never exempts a sensitive path: `pre_tool_sensitive_path.py` asks. The user
-approves a path once per task. After the user says yes, the call runs and `post_tool_sensitive_approval.py`
-writes each sensitive path of the call for the active task to `.claude/state/sensitive-approvals.json`
-(gitignored). Later calls in that task that touch only approved paths get no prompt from the hook. Any other
-sensitive path still asks. With no active task, every call asks. The approval file is itself always sensitive.
-To withdraw all approvals, delete the file. Board mode `local` does not read or write it.
+approves a file once per task. The hook records only what it asked: on each online ask with an active task it
+writes a pending entry under `.claude/state/pending/`. If the user says yes, the call runs and
+`post_tool_sensitive_approval.py` moves that entry's files to `.claude/state/sensitive-approvals.json`
+(gitignored), only when the permission mode is `default` or `auto`. Approval covers files only, never a
+folder, and any action on them, writes and deletes included. Later calls in that task that touch only approved
+files get no prompt from the hook. Any other sensitive path still asks. With no active task, every call asks.
+`.claude/state` and everything in it are always sensitive. To withdraw all approvals, delete the file. Board
+mode `local` does not read or write any of it.
 
 ---
 

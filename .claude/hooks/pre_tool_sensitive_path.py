@@ -22,16 +22,20 @@ with workspace access can write, so no guide's prediction exempts a sensitive pa
 always asks. An unusable `.claude/board.json` counts as online here (the safe side).
 
 Online approve-once (T314): the trust source is the user's own yes, never board text.
-After the user approves a call that this hook asked about, the call runs and the
-PostToolUse recorder `post_tool_sensitive_approval.py` writes each sensitive path of
-the call, for the active task, to `.claude/state/sensitive-approvals.json`
-(`{"<task_id>": ["<path>", ...]}`, gitignored). In online mode a later call in the
-same task that touches only approved paths gets no output (no decision, never
-`allow`); any unapproved sensitive path still asks, naming only that path. No
-active task -> no approval, every call asks. The approval file itself is always
-sensitive (hard-coded below, not in the pattern list) and can never approve
-itself; a bad file counts as empty. Local mode neither reads nor writes it. To
-withdraw every approval, delete the file.
+Approval is recorded only for what this hook asked. When it asks in online mode with
+an active task, it writes `.claude/state/pending/<tool_use_id>.json` =
+`{"task_id": T, "keys": [...]}`. If the user says yes, the call runs and the PostToolUse
+recorder `post_tool_sensitive_approval.py` moves exactly those keys under T into
+`.claude/state/sensitive-approvals.json` (gitignored), but only when the event's
+`permission_mode` is `default` or `auto` (the modes where an `ask` shows the prompt).
+Keys are files only, never a directory: one key per file, root-relative under the
+project root, else its absolute realpath. A later call in T that touches only
+approved files gets no output (no decision, never `allow`), for any action on them,
+writes and deletes included; any other sensitive path still asks, naming only that
+path. No active task -> no approval, every call asks. `.claude/state` and everything
+under it are always sensitive (hard-coded below, not in the pattern list) and never
+approvable; a symlinked or bad approval file counts as empty. Local mode neither
+reads nor writes any of it. To withdraw every approval, delete the file.
 
 Bash: the command's heredoc bodies and its *data* quoted spans are removed with
 `lib/shell_data.py` first — the only sanctioned way to separate command text from
@@ -59,9 +63,14 @@ PREDICTED_HEADING = "Files to Change (Predicted)"
 # qualifier, so the bare prefix resolves `## Files to Change (Predicted)`.
 PREDICTED_LOOKUP = "Files to Change"
 TAG = "[hook:sensitive-path]"
-# T314: the online approval file. Always sensitive, protected here rather than by a
-# line in `.claude/sensitive-paths.txt`, so a project's list edit cannot drop it.
-APPROVALS_RELPATH = ".claude/state/sensitive-approvals.json"
+# T314: the online approval state. `.claude/state` and everything under it is always
+# sensitive, protected here rather than by a line in `.claude/sensitive-paths.txt`, so
+# a project's list edit cannot drop it.
+STATE_RELDIR = ".claude/state"
+STATE_PATTERN = STATE_RELDIR + "/**"
+APPROVALS_RELPATH = STATE_RELDIR + "/sensitive-approvals.json"
+PENDING_RELDIR = STATE_RELDIR + "/pending"
+TOOL_USE_ID_PATTERN = re.compile(r"[A-Za-z0-9_-]{1,200}\Z")
 
 # Guarded like pre_bash_block_unsafe_merge.py: an unguarded ImportError exits 1
 # with empty stdout, which the harness treats as a non-blocking error and lets
@@ -285,17 +294,63 @@ def is_predicted(forms, predicted):
 
 # --- Online approvals (T314) -------------------------------------------------
 
+def _rel(root, relpath):
+    return os.path.join(root, *relpath.split("/"))
+
+
 def approvals_file(root):
-    return os.path.join(root, *APPROVALS_RELPATH.split("/"))
+    return _rel(root, APPROVALS_RELPATH)
+
+
+def pending_file(root, tool_use_id):
+    """`.claude/state/pending/<tool_use_id>.json`, or None for an id unsafe as a file name."""
+    if not isinstance(tool_use_id, str) or not TOOL_USE_ID_PATTERN.match(tool_use_id):
+        return None
+    return os.path.join(_rel(root, PENDING_RELDIR), tool_use_id + ".json")
+
+
+def state_is_real(root, path):
+    """True when `.claude/state` is a real folder of this project and `path` (no symlink) is in it."""
+    state = _rel(root, STATE_RELDIR)
+    if os.path.islink(state) or os.path.islink(path):
+        return False
+    real_state = os.path.join(os.path.realpath(root), *STATE_RELDIR.split("/"))
+    return (os.path.realpath(state) == real_state
+            and os.path.realpath(path).startswith(real_state + os.sep))
+
+
+def read_json_in_state(root, path):
+    """The JSON at `path` under a real `.claude/state`, else None."""
+    if not state_is_real(root, path):
+        return None
+    try:
+        with open(path, encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return None
+
+
+def write_json_in_state(root, path, data):
+    """Write `data` to `path` atomically; refuse a symlinked or foreign `.claude/state`."""
+    for step in ("check", "create"):
+        if step == "create":
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+        if not state_is_real(root, path):
+            raise OSError(f"{STATE_RELDIR} is not this project's own folder")
+    tmp = f"{path}.{os.getpid()}.tmp"
+    try:
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2, sort_keys=True)
+            f.write("\n")
+        os.replace(tmp, path)
+    finally:
+        if os.path.lexists(tmp):
+            os.remove(tmp)
 
 
 def read_approvals(root):
-    """The approval file as `{task_id: [path, ...]}`. Anything unusable -> `{}` (asks)."""
-    try:
-        with open(approvals_file(root), encoding="utf-8") as f:
-            data = json.load(f)
-    except Exception:
-        return {}
+    """The approval file as `{task_id: [key, ...]}`. Anything unusable -> `{}` (asks)."""
+    data = read_json_in_state(root, approvals_file(root))
     if not isinstance(data, dict):
         return {}
     return {task: [p for p in paths if isinstance(p, str)]
@@ -303,24 +358,28 @@ def read_approvals(root):
             if isinstance(task, str) and isinstance(paths, list)}
 
 
-def approval_keys(forms):
-    """The project-relative forms a path is approved under (floating forms never count)."""
-    return sorted({path_string for anchored, path_string in forms if anchored})
+def is_state_key(key):
+    return key == STATE_RELDIR or key.startswith(STATE_RELDIR + "/")
 
 
-def is_approved(forms, approved):
-    """Every anchored form approved: a symlink re-pointed elsewhere asks again."""
-    keys = approval_keys(forms)
-    return bool(keys) and all(k in approved for k in keys)
+def file_key(path, cwd, root):
+    """The one approval key of a file: root-relative under the root, else its absolute
+    realpath. None for a directory or anything under `.claude/state` (never approvable)."""
+    absolute = os.path.normpath(os.path.join(cwd, os.path.expanduser(path.replace("\\", "/"))))
+    real = os.path.realpath(absolute)
+    if os.path.isdir(real):
+        return None
+    key = _within(real, os.path.realpath(root)) or real.replace(os.sep, "/")
+    return None if is_state_key(key) else key
 
 
 def sensitive_hits(tool_name, tool_input, cwd, roots, patterns):
     """`[(path, forms, pattern), ...]` for every sensitive path of the call.
 
-    The approval file is appended as the last pattern, so no `!` line in the
+    `.claude/state/**` is appended as the last pattern, so no `!` line in the
     project's list can unmark it (last match wins).
     """
-    patterns = patterns + parse_patterns(APPROVALS_RELPATH)
+    patterns = patterns + parse_patterns(STATE_PATTERN)
     hits = []
     for path in candidate_paths(tool_name, tool_input, cwd):
         forms = path_forms(path, cwd, roots)
@@ -358,6 +417,18 @@ def candidate_paths(tool_name, tool_input, cwd):
     if not isinstance(command, str):
         raise ValueError("Bash call has no command string")
     return command_tokens(command, cwd)
+
+
+def record_pending(root, tool_use_id, task_id, keys):
+    """What this ask covers, for the PostToolUse recorder. A failed write only means
+    no approval is recorded: the ask still goes out."""
+    path = pending_file(root, tool_use_id)
+    if path is None:
+        return
+    try:
+        write_json_in_state(root, path, {"task_id": task_id, "keys": keys})
+    except Exception:
+        pass
 
 
 def main():
@@ -401,12 +472,22 @@ def main():
         predicted = set() if board_text else predicted_paths(
             task_id, [os.path.join(root, "tasks"), os.path.join(cwd, "tasks")]
         )
-        approved = set(read_approvals(root).get(task_id, [])) if board_text and task_id else set()
-        unpredicted = [(p, pat) for p, forms, pat in hits
-                       if pat == APPROVALS_RELPATH
-                       or not (is_predicted(forms, predicted) or is_approved(forms, approved))]
+        online_task = board_text and task_id
+        approved = set(read_approvals(root).get(task_id, [])) if online_task else set()
+        unpredicted, keys = [], []
+        for p, forms, pat in hits:
+            key = None if pat == STATE_PATTERN else file_key(p, cwd, root)
+            if is_predicted(forms, predicted) and pat != STATE_PATTERN:
+                continue
+            if key and key in approved:
+                continue
+            unpredicted.append((p, pat))
+            if key and key not in keys:
+                keys.append(key)
         if not unpredicted:
             sys.exit(0)
+        if online_task and keys:
+            record_pending(root, event.get("tool_use_id"), task_id, keys)
     except SystemExit:
         raise
     except Exception as exc:
@@ -419,9 +500,9 @@ def main():
     if board_text:
         owner = ("board mode is online, where guides come from the board and cannot "
                  "pre-authorise a sensitive path")
-        if task_id:
-            owner += (f". After you approve, later calls in {task_id} that touch only "
-                      "these paths will not ask again")
+        if task_id and keys:
+            owner += (f". After you approve, later calls in {task_id} that touch only these "
+                      "files, including writes and deletes, will not ask again")
     ask(f"This {tool_name} call touches a sensitive path: {listed}. "
         f"Listed in .claude/sensitive-paths.txt and {owner}.")
 
