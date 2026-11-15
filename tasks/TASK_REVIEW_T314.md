@@ -26,7 +26,9 @@ At Risk Medium or High, a `RULE:` counts only when it names a written rule (`pat
 `Memory:` records the diff-driven memory pass you run before you stop: each entry written, or `nothing new`.
 After an auto verify pass the hook, never you, adds `Closed: row moved to Done <date> — …` and moves the row,
 or adds `Paused: done not moved — <reason>`. It moves the row only when this block holds `Mode: auto`, a
-numbered decision, `Checks:`, `Memory:`, the `Not done:` auto verify slot with its result, and `Not done:`
+numbered decision, `5. security-review re-check (Skill `security-review`, cf180bc4): 1 Medium, confirmed by an independent false-positive check (confidence 8) — a `\` in an Edit/Write path collapses onto an approved key; fix: build the approval key from the path as the OS sees it — RULE: skills/code-review/SKILL.md § Finding Classification (security finding, must fix before merge)
+6. The same `\` gap in local mode (`path_forms` → `is_predicted`) is on `main` and outside this task — RULE: tasks/TASK_GUIDE_T314.md § Out of scope ("Any change to local board mode"); registered as T319
+Checks:`, `Memory:`, the `Not done:` auto verify slot with its result, and `Not done:`
 naming the merge — no `<...>` left (`docs/claude-md/tracks.md` `### Auto close-out`).
 With `/verify (yours)`, your pass goes in the `verify` row below: Result `☑ pass`, Notes `/verify by the user, session <id>, commit <sha>`.
 
