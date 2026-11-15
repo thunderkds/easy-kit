@@ -326,12 +326,16 @@ def test_sc2_another_sessions_admin_does_not_unlock_this_session(gate, tmp_path)
 @pytest.mark.parametrize("latest", ["tag-request", "untagged"])
 def test_sc3_ticket_session_task_branch_push_to_origin_is_allowed(gate, tmp_path, latest):
     fx = gate(kanban(ready=("T900",)))
-    auto_verified(fx)
+    auto_verified(fx)  # the pass record is written now, after the `--start` call below
+    # Re-locked for T317 R1 (guide decision 3): the loop binding needs this session's own `--start`
+    # Bash call, dated after the `[ticket]` request and before the pass record.
+    start = bash("python3 .claude/hooks/stop_auto_verify.py --start T900", fx.wt, -150)
     if latest == "tag-request":
         path = transcript(tmp_path, [human("work the tickets [ticket]", -900),
-                                     wrote(os.path.join(fx.wt, "tasks", "TASK_REVIEW_T900.md"), -800)])
+                                     wrote(os.path.join(fx.wt, "tasks", "TASK_REVIEW_T900.md"), -800),
+                                     start])
     else:
-        path = tagged_session(tmp_path, fx, "work the tickets [ticket]")
+        path = tagged_session(tmp_path, fx, "work the tickets [ticket]", after=[start])
     assert reason(PUSH + " origin " + TASK_BRANCH, fx.wt, path) is None
 
 
