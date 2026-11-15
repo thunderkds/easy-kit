@@ -49,7 +49,11 @@ Not done: merge (yours); <auto verify: running (T182) | auto verify: <result> | 
 Mode: auto
 1. T317 starts in parallel with T314; T315 and T316 wait for T314 — FACT: tasks/TASK_GUIDE_T315.md:126 "- `.claude/hooks/pre_tool_sensitive_path.py`" (T315 edits the same hook as T314; T317's Files to Change do not include it)
 2. A session tag survives `/compact` (including auto-compact) and ends at any resume, continue or fork; the user types it again after a resume; while a tag is on, the Supervisor's first reply line names it — DEBATED: survive compact, end at resume (Advocate 1: `[ticket]` survives compact and same-id resume, `[admin]` ends at both; Advocate 2: survive both, plus a first-line guard; Advocate 3: survive compact, end at resume via a `SessionStart` resume marker). Picked by RULE: `.claude/hooks/lib/auto_mode.py:91` "Any doubt is \"not admin\"" — the raw typed tag is still in the same transcript after a compact (no doubt); a resume is a new moment of intent (doubt) ⚠ decided for you — please review
-Checks: tests pending (locked oracle being written)
+3. Oracle gap G1: under a session tag the merge gate binds to the branch's task, the only one this session holds open, with a passed auto verify — RULE: tasks/TASK_GUIDE_T317.md § Out of scope ("the loop is one ticket at a time inside one session")
+4. Oracle gap G2: a `[ticket]` push needs a passed auto verify — RULE: tasks/TASK_GUIDE_T317.md § Requirement ("run it Stage 0–5 in auto mode, push its feature branch")
+5. Oracle gap G3: a later `[auto]` ends a session tag — RULE: tasks/TASK_GUIDE_T317.md § Requirement ("until the user types `[stop]` (or a different tag)")
+6. Oracle gap G4: update the five-profile-id test — RULE: AGENTS.md § Karpathy Engineering Principles (Goal-Driven Execution)
+Checks: tests — locked oracle 3ac24be3: 118 failed / 19 passed (red, as required); implementation in progress
 Memory: nothing new yet (pass runs at merge)
 Not done: implementation; code-review; security-review; auto verify: not started; merge (admin: after the auto verify pass)
 Paused: auto-mode check failed — Risk High, but the trace has no `security-review` Skill call [report a9360b2a0cd9]
