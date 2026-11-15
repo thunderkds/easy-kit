@@ -21,7 +21,9 @@ T232: the project comes from `lib/project_root.py`, and from a plugin the hook s
 non-kit project. Inside one, input it cannot read is a block: it cannot tell the call is not a push.
 
 T284: while the session's latest user request carries `[auto]` or `[admin]`, a merge, push or pull
-is blocked, unless `[admin]` allows that one command (see `auto_mode_blocker`).
+is blocked, unless `[admin]` allows that one command (see `auto_mode_blocker`). T317: the same holds
+while a session tag (`[admin]`, `[ticket]`) is in force; `[ticket]` allows only a plain push of its
+task branch to `origin` (docs/claude-md/tracks.md `### Session tags`).
 
 T296: in that mode a git word or git verb that is not a plain literal word is a block too
 (`hidden_git_verb`); a `git merge` option's value is never read as the branch (`_merge_sources`);
@@ -29,6 +31,7 @@ a branch push goes only to the repository's own remote; `invokes_test_runner` re
 as the shell does.
 """
 import fnmatch
+import glob
 import json
 import os
 import re
@@ -72,7 +75,7 @@ try:
     from verify_record import (  # noqa: E402
         AUTO_CHECKED_TAG, AUTO_ROW_TAG, MINIMAL_LOG_REL, ROW_COMMIT, ROW_SESSION, SHA_PATTERN,
         auto_row_confirmed, head_commit, minimal_verify_lines, read_record, record_confirms_pass,
-        record_verify_lines, same_code)
+        record_path, record_verify_lines, same_code)
     import auto_mode  # noqa: E402
     from auto_mode import record_block  # noqa: E402
     import session_work  # noqa: E402
@@ -1528,7 +1531,8 @@ ADMIN_PUSH_FLAGS = frozenset({"-u", "--set-upstream", "-q", "--quiet", "-v", "--
 AUTO_MODE_LIMIT = ("With `[auto]`, merge and push stay the user's. `[admin]` allows only a merge or a "
                    "plain push of the request's own task branch (or of `main` after that merge), "
                    "after its auto verify passed "
-                   "(docs/claude-md/tracks.md `### Admin tag`).")
+                   "(docs/claude-md/tracks.md `### Admin tag`). `[ticket]` allows only a plain push "
+                   "of its task branch to `origin`, after that same pass (`### Session tags`).")
 
 
 def _config_value(directory, key):
@@ -2260,9 +2264,58 @@ def _guides_added_since(directory, when):
     return {task for task, at in first.items() if at >= when.timestamp()}
 
 
-def admin_refusal(command, cwd, transcript_path, admin):
+def _session_holds(transcript_path, when, task_id):
+    """T317 G1: True when this session (or a sub-agent of it) changed task `task_id` since `when`, the
+    time of the request that set the session tag, and changed no other task that the board shows In
+    Progress or Ready for Review. False on any doubt (no transcript, no board, an error)."""
+    try:
+        calls = session_work.load_work(transcript_path, since=when)
+        with open(KANBAN, encoding="utf-8") as f:
+            kanban = f.read()
+    except Exception:
+        return False
+    if calls is None:
+        return False
+    rows = auto_mode.board_rows(kanban, ("In Progress", "Ready for Review", "Done"))
+    own_row = next((row for tid, row in rows if tid.upper() == task_id), None)
+    if not session_work.worked_on(calls, task_id,
+                                  session_work.task_worktrees(ROOT, task_id, own_row)):
+        return False
+    return not any(tid.upper() != task_id and session_work.worked_on(
+        calls, tid, session_work.task_worktrees(ROOT, tid, row))
+        for tid, row in auto_mode.board_rows(kanban))
+
+
+def _pass_recorded_since(task_id, branch, where, when):
+    """T317 G1: True when the hook's run record says pass for `task_id` at a commit that `branch`
+    holds, and the hook wrote that record at or after `when` (the tag request): the session ran the
+    task's Stage 5 itself. The record's own file time is read: agents are denied writes there."""
+    try:
+        normalized = normalize_task_id(task_id, ROOT)
+        empty = "0" * 40
+        prefix = record_path(ROOT, normalized, empty)[:-len(empty + ".json")]
+        for path in glob.glob(glob.escape(prefix) + "*.json"):
+            sha = os.path.basename(path)[len(os.path.basename(prefix)):-len(".json")]
+            record = read_record(ROOT, normalized, sha) if SHA_PATTERN.match(sha) else None
+            if (record is None or record.get("commit") != sha
+                    or os.path.getmtime(path) < when.timestamp()
+                    or not record_confirms_pass(where, record)):
+                continue
+            held = _git(where, "merge-base", "--is-ancestor", sha, f"refs/heads/{branch}^{{commit}}")
+            if held is not None and held.returncode == 0:
+                return True
+    except Exception:
+        return False
+    return False
+
+
+def admin_refusal(command, cwd, transcript_path, admin, tag=None):
     """Why `[admin]` (`admin` = `(timestamp, text)` of the request) does not allow `command`, or
-    None when it does. Never raises: an error is a refusal."""
+    None when it does. Never raises: an error is a refusal.
+
+    T317: `tag` is the session tag in force ("admin" or "ticket"; None for a per-request `[admin]`).
+    Under a session tag the task may also be bound by G1 (`_session_holds`); under "ticket" that is
+    the only binding, and only a push of the task branch is allowed: no merge, no `main` push."""
     try:
         when, text = admin
         # Round 2: any `git -c <k>=<v>` (or `--config-env`) before the verb can change what a merge
@@ -2316,6 +2369,8 @@ def admin_refusal(command, cwd, transcript_path, admin):
             repo_refusal = _admin_repo_refusal(where)
             if repo_refusal:
                 return repo_refusal
+            if args[0] == "merge" and tag == "ticket":
+                return "`[ticket]` allows no merge: only a plain push of the task branch to `origin`"
             if args[0] == "merge":
                 names = [name for _, name in _merge_sources(args[1:], where)]
                 if len(names) != 1:
@@ -2333,6 +2388,8 @@ def admin_refusal(command, cwd, transcript_path, admin):
                 own = _own_origin_refusal(where, cwd)
                 if own:
                     return own
+                if branch == ADMIN_MAIN_BRANCH and tag == "ticket":
+                    return "`[ticket]` never pushes `main`: only the task branch, to `origin`"
                 if branch == ADMIN_MAIN_BRANCH:
                     # AC 8 / 7b: `main` only after this session's own merge of the task branch,
                     # and only when `main` really holds that branch's tip.
@@ -2356,7 +2413,8 @@ def admin_refusal(command, cwd, transcript_path, admin):
                         targets.add((task_id, merged, merge_where))
                     continue
             else:
-                return f"`[admin]` allows only merge and push, not `git {args[0]}`"
+                allowed = "a push" if tag == "ticket" else "merge and push"
+                return f"`[admin]` allows only {allowed}, not `git {args[0]}`"
             task_id = _ref_task_id(branch, id_regex)
             if task_id is None:
                 return f"{branch} names no single task"
@@ -2365,12 +2423,21 @@ def admin_refusal(command, cwd, transcript_path, admin):
         if len(task_ids) != 1:
             return "an `[admin]` command covers one task only"
         task_id = task_ids.pop()
-        if task_id not in _named_tasks(text, id_regex):
-            added = _guides_added_since(sorted(targets)[0][2], when)
-            if added != {task_id}:
-                return (f"{task_id} is not the task of the `[admin]` request: the request does not "
-                        "name it, and it is not the one task whose guide was first added after "
-                        "the request")
+        bound = tag != "ticket" and (task_id in _named_tasks(text, id_regex) or _guides_added_since(
+            sorted(targets)[0][2], when) == {task_id})
+        if not bound and tag is not None:
+            _, branch, where = sorted(targets)[0]
+            bound = (_session_holds(transcript_path, when, task_id)
+                     and _pass_recorded_since(task_id, branch, where, when))
+        if not bound:
+            loop = ("the task of this session's loop (changed by this session since the tag "
+                    "request, its only task In Progress or Ready for Review, and its auto verify "
+                    "pass recorded after the request)")
+            if tag == "ticket":
+                return f"{task_id} is not {loop}"
+            return (f"{task_id} is not the task of the `[admin]` request: the request does not "
+                    "name it, and it is not the one task whose guide was first added after "
+                    "the request" + ("" if tag is None else ", nor " + loop))
         for _, branch, where in sorted(targets):
             if committed_verify_row(task_id, branch, where, hook_only=True) is not True:
                 return (f"{task_id} has no passed auto verify committed on {branch} (a hook-written "
@@ -2380,9 +2447,27 @@ def admin_refusal(command, cwd, transcript_path, admin):
         return f"the `[admin]` check failed ({type(exc).__name__})"
 
 
+def in_auto_mode(transcript_path):
+    """True while the latest request carries `[auto]` or `[admin]`, or a session tag holds (T317)."""
+    latest = auto_mode.latest_request(transcript_path)
+    return ((latest is not None and auto_mode.auto_tagged(latest[1]))
+            or auto_mode.session_tag(transcript_path) != "none")
+
+
 def auto_mode_blocker(command, cwd, transcript_path):
     """The block line for a merge, push or pull while the latest request carries `[auto]` or
-    `[admin]`, or None (no such request, or `[admin]` allows this command)."""
+    `[admin]`, or a session tag holds, or None (none of these, or the tag allows this command).
+
+    T317: a session tag (`auto_mode.session_request`) is read first. `[ticket]` allows only a plain
+    push of its task branch to `origin`; `[admin]` keeps every `[admin]` rule. Both bind the task by
+    G1 as well (`admin_refusal`)."""
+    session = auto_mode.session_request(transcript_path)
+    if session is not None:
+        tag, when, text = session
+        why = admin_refusal(command, cwd, transcript_path, (when, text), tag=tag)
+        if why and tag == "ticket":
+            why = why.replace("`[admin]`", "`[ticket]`")
+        return f"`[{tag}]` does not allow this command: {why}" if why else None
     latest = auto_mode.latest_request(transcript_path)
     if latest is None or not auto_mode.auto_tagged(latest[1]):
         return None
@@ -2500,8 +2585,7 @@ def main():
         except Exception:
             hidden = True
         if hidden:
-            latest = auto_mode.latest_request(transcript_path)
-            if latest is not None and auto_mode.auto_tagged(latest[1]):
+            if in_auto_mode(transcript_path):
                 print(json.dumps({"decision": "block", "reason": (
                     "[hook:pre_bash] Auto-mode gate — cannot push/merge:\n  • cannot tell: the "
                     "command may run git push, merge or pull in a hidden form (a `$`, brace, glob, "

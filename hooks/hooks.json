@@ -110,6 +110,17 @@
           }
         ]
       }
+    ],
+    "SessionStart": [
+      {
+        "matcher": "resume",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "grep -qsF '$CLAUDE_PROJECT_DIR\\\"/.claude/hooks/session_start_resume_mark.py' \"$CLAUDE_PROJECT_DIR/.claude/settings.json\" || python3 \"${CLAUDE_PLUGIN_ROOT}/.claude/hooks/session_start_resume_mark.py\""
+          }
+        ]
+      }
     ]
   }
 }

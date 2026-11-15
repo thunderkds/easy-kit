@@ -35,6 +35,8 @@ keeps a second copy.
 **The tags (T284).** `request_text`, `auto_tagged`, `admin_tagged`, `latest_request` and
 `admin_request` are the one reader of the tags in a user request: the Stop check reads `[auto]` /
 `[admin]` windows with them, and the merge gate reads whether the latest request is `[admin]`.
+T317 adds `session_tag` / `session_request`, the one reader of the session tags `[admin]` and
+`[ticket]` (see "Session tags" below).
 
 **Never widens, never raises on its own.** `read` raises `Unreadable` for a file that exists but
 cannot be read, so each caller keeps its own fail-open line on stderr; everything else degrades to
@@ -173,6 +175,116 @@ def admin_request(transcript_path):
         return None
     ts = ts if ts.tzinfo else ts.replace(tzinfo=timezone.utc)
     return (ts, text) if admin_tagged(text) else None
+
+
+# --- Session tags (T317) ----------------------------------------------------------------------
+#
+# `[admin]` and `[ticket]` hold for the whole session: the latest typed request that carries
+# `[admin]`, `[ticket]` or `[stop]` decides, read as strictly as `admin_request` (an `origin.kind`
+# "human" request, outside code spans and `>` quoted lines). `[stop]`, or a later request with
+# `[auto]` alone (G3), ends it. In one request `[stop]` beats `[ticket]`, and `[ticket]` (the
+# narrower tag) beats `[admin]`. The compact summary never counts (`request_text`), so a tag typed
+# before `/compact` survives it. A resume ends it: `session_start_resume_mark.py` writes the resume
+# time to `<project root>/.claude/hooks/.state/resume_at.d/<session id>`, and every tag typed before
+# that time is ignored. Any doubt (no transcript, an unreadable mark) is "none".
+TICKET_TAG = "[ticket]"
+STOP_TAG = "[stop]"
+RESUME_MARK_DIR = os.path.join(".claude", "hooks", ".state", "resume_at.d")
+SESSION_ID = re.compile(r"[A-Za-z0-9_-]+")
+
+
+def resume_mark_path(session_id):
+    """The resume mark file of `session_id` under the project root, or None for an unsafe ID."""
+    if not isinstance(session_id, str) or not SESSION_ID.fullmatch(session_id):
+        return None
+    from project_root import project_root  # read at call time: `$CLAUDE_PROJECT_DIR` may change
+    return os.path.join(project_root(), RESUME_MARK_DIR, session_id)
+
+
+def _resume_mark(session_id):
+    """`(ok, time)`: the session's recorded resume time (None when there is no mark). `ok` is False
+    when a mark exists but cannot be read or parsed: the caller then trusts no tag."""
+    path = resume_mark_path(session_id)
+    if path is None:
+        return True, None
+    try:
+        with open(path, encoding="utf-8") as f:
+            raw = f.read().strip()
+    except FileNotFoundError:
+        return True, None
+    except Exception:
+        return False, None
+    when = parse_ts(raw)
+    return (when is not None), when
+
+
+def _session_entries(source):
+    """`(session id, entries)` of a transcript path or a list of parsed events; None on any doubt."""
+    if isinstance(source, list):
+        sid = next((e.get("sessionId") for e in source
+                    if isinstance(e, dict) and isinstance(e.get("sessionId"), str)), None)
+        return sid, source
+    if not isinstance(source, str) or not os.path.isabs(source) or not os.path.isfile(source):
+        return None
+    entries = []
+    with open(source, encoding="utf-8") as f:
+        for line in f:
+            if '"user"' not in line:
+                continue
+            try:
+                entries.append(json.loads(line))
+            except Exception:
+                continue
+    return os.path.splitext(os.path.basename(source))[0], entries
+
+
+def request_session_tag(text):
+    """The session-tag word request `text` carries: "stop", "ticket", "admin", "auto" (`[auto]` alone,
+    which ends a session tag, G3) or None (no tag)."""
+    plain = QUOTED_LINE.sub(" ", CODE.sub(" ", text or ""))
+    if STOP_TAG in plain:
+        return "stop"
+    if TICKET_TAG in plain:
+        return "ticket"
+    if ADMIN_TAG in plain:
+        return "admin"
+    return "auto" if auto_tagged(text) else None
+
+
+def session_request(source):
+    """`(tag, timestamp, text)` of the typed request that set the session tag now in force, with
+    `tag` "admin" or "ticket"; None when no session tag holds or on any doubt."""
+    try:
+        found = _session_entries(source)
+        if found is None:
+            return None
+        sid, entries = found
+        ok, resumed = _resume_mark(sid)
+        if not ok:
+            return None
+        current = None
+        for entry in entries:
+            text = request_text(entry)
+            origin = entry.get("origin") if isinstance(entry, dict) else None
+            if text is None or not isinstance(origin, dict) or origin.get("kind") != "human":
+                continue
+            ts = parse_ts(entry.get("timestamp"))
+            if resumed is not None and (ts is None or ts < resumed):
+                continue  # typed before the resume (or undated while a mark exists)
+            tag = request_session_tag(text)
+            if tag in ("ticket", "admin"):
+                current = (tag, ts, text) if ts is not None else None
+            elif tag is not None:
+                current = None  # `[stop]`, or G3: a later different tag ends the session tag
+        return current
+    except Exception:
+        return None
+
+
+def session_tag(source):
+    """AC 1: "admin", "ticket" or "none" for a transcript path or a list of parsed events."""
+    found = session_request(source)
+    return found[0] if found else "none"
 
 
 def request_tagged(text):

@@ -171,6 +171,13 @@ def test_sc5_supervisor_settings_have_no_permissions_or_sandbox():
                     '"matcher": "Edit|Write|MultiEdit|NotebookEdit"',
                     '"command": "python3 \\"$CLAUDE_PROJECT_DIR\\"/.claude/hooks/'
                     'pre_tool_locked_oracle.py"'}
+        # T317: one SessionStart hook entry (the resume mark), likewise named line by line.
+        allowed |= {'"SessionStart": [',
+                    '"description": "Session tags (T317): on a resume, record the resume time so a '
+                    '[admin] or [ticket] typed before it no longer holds"',
+                    '"matcher": "resume"',
+                    '"command": "python3 \\"$CLAUDE_PROJECT_DIR\\"/.claude/hooks/'
+                    'session_start_resume_mark.py"'}
         assert set(changed) <= allowed, set(changed) - allowed
 
 

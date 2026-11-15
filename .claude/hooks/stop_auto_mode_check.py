@@ -165,10 +165,12 @@ def auto_windows(transcript_path):
     """(start, end) spans the session's `[auto]` requests cover (T229). A request carrying `[auto]`
     (or `[admin]`, T284) outside code spans opens a span; the next request without it closes the
     span (end None: still open). Before T229 the first `[auto]` request covered the rest of the session, so a task done
-    in normal mode later was checked as an auto-mode task."""
+    in normal mode later was checked as an auto-mode task. T317: a session tag (`[admin]`, `[ticket]`)
+    keeps the span open across untagged requests until `[stop]` or `[auto]` alone
+    (`am.request_session_tag`); the resume mark is not read here (a wider span checks more)."""
     if not transcript_path or not os.path.isfile(transcript_path):
         return []
-    spans, start = [], None
+    spans, start, held = [], None, False
     try:
         with open(transcript_path, encoding="utf-8") as f:
             for line in f:
@@ -182,7 +184,9 @@ def auto_windows(transcript_path):
                 ts = parse_ts(entry.get("timestamp"))
                 if ts is None:
                     continue
-                if am.auto_tagged(text):  # T284: `[admin]` opens the window as `[auto]` does
+                tag = am.request_session_tag(text)
+                held = tag in ("admin", "ticket") or (held and tag is None)
+                if am.auto_tagged(text) or held:  # T284: `[admin]` opens the window as `[auto]` does
                     if start is None:
                         start = ts
                 elif start is not None:

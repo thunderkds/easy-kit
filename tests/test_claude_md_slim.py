@@ -19,7 +19,10 @@ RAW = (ROOT / "AGENTS.md").read_bytes()
 # cap at merge time (merge order: T284, then T286).
 # T289: lowered 21732 -> 21724 (ratchet down): the Tracks sentence lost "`skip`, " (8 bytes) because a
 # docs-only SKIP is now a pass. Measured at commit 83ac3e7a.
-AGENTS_MD_BYTE_CAP = 21724
+# T317: raised 21724 -> 21886 (+162 bytes): the Tracks paragraph gains the one sentence that points to
+# `docs/claude-md/tracks.md` `### Session tags` (TASK_GUIDE_T317 AC 4: "`AGENTS.md` `## Tracks` gets
+# one line pointing to it"); the paragraph stays one line (`tests/test_auto_mode.py` AC 1 pin).
+AGENTS_MD_BYTE_CAP = 21886
 
 
 def _norm(t: str) -> str:
@@ -42,7 +45,7 @@ def _byte_cap_problem(data: bytes):
     )
 
 
-def test_agents_md_is_at_most_21724_bytes():
+def test_agents_md_is_at_most_21886_bytes():
     assert _byte_cap_problem(RAW) is None, _byte_cap_problem(RAW)
 
 
