@@ -48,12 +48,13 @@ Not done: merge (yours); <auto verify: running (T182) | auto verify: <result> | 
 
 Mode: auto
 1. AC6 vs AC8: the approval file is protected inside the hook, not by a pattern-list line — RULE: AGENTS.md § Karpathy Engineering Principles (Surgical Changes)
-2. Stage 4 code-review fixes F1–F6 (record only what Pre asked, by `tool_use_id`; record only in `default`/`auto` permission mode; canonical keys; `.claude/state/**` protected; file keys only) — SAFER OPTION: each closes a confirmed probe; logged in the guide, decision 2
+2. Stage 4 code-review fixes F1–F6 (record only what Pre asked, by `tool_use_id`; record only in `default`/`auto` permission mode; canonical keys; `.claude/state/**` protected; file keys only) — RULE: skills/code-review/SKILL.md § Finding Classification ("| **P1** | Logic error, broken contract, test gap for critical path | Yes |"; P2 "Recommended"): each fix closes a confirmed finding, applied as the review directs
 3. Approvals are recorded and honoured for Edit and Write only; every Bash call that touches a sensitive path asks, as on `main`; S1's directory-change list and S3 are dropped; S2's basename guard and S4 stay — DEBATED: Edit/Write only (Advocate 1: Edit/Write only, still record Bash yes; Advocate 2: Edit/Write only, still record Bash yes; Advocate 3: Edit/Write only, record from Edit/Write only, because a Bash yes can store the wrong key after `cd`). All three agree on honouring; recording from Edit/Write only is the SAFER OPTION from Advocate 3's evidence ⚠ decided for you — please review
-4. Residuals accepted: a programmatic permission host answering the ask; task switching via the active-task state file; interpreter strings — SAFER OPTION: all pre-existing or outside the kit; logged in the guide, decision 3 ⚠ decided for you — please review
+4. Residuals kept out of this task (a programmatic permission host answering the ask; task switching via the active-task state file; interpreter strings) — RULE: AGENTS.md § Karpathy Engineering Principles (Surgical Changes: "Touch only code required by the task"); each exists on `main` or outside the kit and is recorded in the guide, decision 3
 Checks: tests pending (security-round fix in progress); reviews code-review — P0 0 / P1 1 / P2 4 / P3 2, fixed in d778e406; security-review — P1 2 / P3 2, fix in progress
 Memory: nothing new yet (pass runs at merge)
-Not done: security-review re-check; auto verify: not started; merge (admin: after the auto verify pass)
+Not done: security-review re-check (Skill `security-review`, after the decision-4 fix); auto verify: not started; merge (admin: after the auto verify pass)
+Paused: auto-mode check failed — Risk High: decision 2 (`SAFER OPTION`) is a choice — a safer-option pick is a choice — so it must be `DEBATED` with exactly 3 Advocates named; Risk High: decision 4 (`SAFER OPTION`) is a choice — it is flagged ⚠ — so it must be `DEBATED` with exactly 3 Advocates named; Risk High, but the trace has no `security-review` Skill call [report e54ff7fcc336]
 
 ## Evidence
 
