@@ -30,8 +30,9 @@ RECORDER_NAME = "post_tool_sensitive_approval.py"
 APPROVALS_RELPATH = ".claude/state/sensitive-approvals.json"
 PENDING_RELDIR = ".claude/state/pending"
 STATE_RELDIR = ".claude/state"
-# F5: the ask sentence names writes and deletes. Matched case-insensitively.
-WRITES_AND_DELETES_PHRASE = "including writes and deletes"
+# Decision 4 (replaces F5's "including writes and deletes" sentence): approvals are
+# Edit/Write-only, and the Bash ask says a later Edit or Write will not ask again.
+EDIT_OR_WRITE_PHRASE = "edit or write"
 RECORDING_MODES = ("default", "auto")
 NON_RECORDING_MODES = ("bypassPermissions", "acceptEdits", "plan", "dontAsk", None, "yolo")
 MISSING = None  # permission_mode=None -> the field is left out of the event
@@ -199,47 +200,57 @@ class F1RecordOnlyWhatPreAsked(FixRoundTest):
         self.assert_ask(self.pre("Write", "d/secrets/k"), "d/secrets/k")
 
     def test_f1_no_pending_entry_records_nothing(self):
-        self.post("Bash", f"cat {SECRET}", self.new_id())
+        self.post("Write", SECRET, self.new_id())
         self.assertEqual(self.all_approved_keys(), [],
                          "F1: a Post with no pending entry from Pre must record nothing")
-        self.assert_ask(self.pre("Bash", f"cat {SECRET}"), SECRET)
+        self.assert_ask(self.pre("Write", SECRET), SECRET)
 
     def test_f1_pre_ask_writes_pending_entry(self):
         tool_use_id = self.new_id()
-        self.assert_ask(self.pre("Bash", f"cp {SECRET} {SECRET_2}", tool_use_id=tool_use_id))
+        self.assert_ask(self.pre("Write", SECRET, tool_use_id=tool_use_id))
         path = self.pending_path(tool_use_id)
         self.assertTrue(os.path.isfile(path), f"F1: Pre must write {PENDING_RELDIR}/<tool_use_id>.json")
         with open(path, encoding="utf-8") as f:
             entry = json.load(f)
         self.assertIsInstance(entry, dict)
         self.assertEqual(entry.get("task_id"), TASK)
-        self.assertEqual(sorted(entry.get("keys", [])), sorted([SECRET, SECRET_2]))
+        self.assertEqual(entry.get("keys"), [SECRET])
 
     def test_f1_post_promotes_exactly_the_pending_keys_and_deletes_it(self):
         tool_use_id = self.new_id()
-        cmd = f"cp {SECRET} {SECRET_2}"
-        self.assert_ask(self.pre("Bash", cmd, tool_use_id=tool_use_id))
+        self.assert_ask(self.pre("Write", SECRET, tool_use_id=tool_use_id))
         self.assertTrue(os.path.isfile(self.pending_path(tool_use_id)),
                         "F1: Pre must write the pending entry before Post runs")
         self.assertEqual(self.all_approved_keys(), [], "Pre alone records nothing")
-        self.post("Bash", cmd, tool_use_id)
-        self.assertEqual(sorted(self.approved_keys(TASK)), sorted([SECRET, SECRET_2]))
+        self.post("Write", SECRET, tool_use_id)
+        self.assertEqual(self.approved_keys(TASK), [SECRET])
         self.assertFalse(os.path.exists(self.pending_path(tool_use_id)),
                          "F1: Post must delete the pending entry it promoted")
-        self.assert_silent(self.pre("Bash", f"diff {SECRET} {SECRET_2}"))
+        self.assert_silent(self.pre("Write", SECRET))
+        self.assert_silent(self.pre("Edit", SECRET))
+        # Decision 4: Bash asks even on an approved file, and says Edit/Write will not.
+        reason = self.assert_ask(self.pre("Bash", f"cat {SECRET}"), SECRET)
+        self.assertIn(EDIT_OR_WRITE_PHRASE, reason.lower())
+
+    def test_f1_bash_event_records_nothing(self):
+        # Decision 4: the recorder records nothing from a Bash event, even after Pre asked.
+        self.approve("Bash", f"cp {SECRET} {SECRET_2}")
+        self.assertEqual(self.all_approved_keys(), [],
+                         "decision 4: a Bash call is never recorded as an approval")
+        self.assert_ask(self.pre("Write", SECRET), SECRET)
 
     def test_f1_post_records_under_the_pending_task_id(self):
-        self.approve("Bash", f"cat {SECRET}", post_task_id=OTHER_TASK)
+        self.approve("Write", SECRET, post_task_id=OTHER_TASK)
         self.assertIn(SECRET, self.approved_keys(TASK),
                       "F1: Post records under the task id Pre wrote, not the one re-resolved")
         self.assertNotIn(SECRET, self.approved_keys(OTHER_TASK))
-        self.assert_ask(self.pre("Bash", f"cat {SECRET}", task_id=OTHER_TASK), SECRET)
+        self.assert_ask(self.pre("Write", SECRET, task_id=OTHER_TASK), SECRET)
 
     def test_f1_pre_with_no_task_writes_no_pending_entry(self):
         tool_use_id = self.new_id()
-        self.assert_ask(self.pre("Bash", "cat .env", task_id=None, tool_use_id=tool_use_id))
+        self.assert_ask(self.pre("Write", ".env", task_id=None, tool_use_id=tool_use_id))
         self.assertEqual(self.pending_entries(), [])
-        self.post("Bash", "cat .env", tool_use_id, task_id="T999")
+        self.post("Write", ".env", tool_use_id, task_id="T999")
         self.assertEqual(self.all_approved_keys(), [])
 
     def test_f1_silent_pre_writes_no_pending_entry(self):
@@ -265,19 +276,19 @@ class F2PermissionMode(FixRoundTest):
             with self.subTest(permission_mode=mode if mode is not MISSING else "<missing>"):
                 if os.path.exists(self.approvals):
                     os.remove(self.approvals)  # each mode fails for its own reason
-                self.approve("Bash", f"cat {SECRET}", permission_mode=mode)
+                self.approve("Write", SECRET, permission_mode=mode)
                 self.assertEqual(self.all_approved_keys(), [],
                                  f"F2: permission_mode {mode!r} must record nothing")
-                self.assert_ask(self.pre("Bash", f"cat {SECRET}"), SECRET)
+                self.assert_ask(self.pre("Write", SECRET), SECRET)
 
     def test_f2_default_and_auto_record(self):
         for mode in RECORDING_MODES:
             with self.subTest(permission_mode=mode):
                 if os.path.exists(self.approvals):
                     os.remove(self.approvals)
-                self.approve("Bash", f"cat {SECRET}", permission_mode=mode)
+                self.approve("Write", SECRET, permission_mode=mode)
                 self.assertIn(SECRET, self.approved_keys(TASK))
-                self.assert_silent(self.pre("Bash", f"cat {SECRET}"))
+                self.assert_silent(self.pre("Write", SECRET))
 
 
 class F3OneCanonicalKey(FixRoundTest):
@@ -341,7 +352,7 @@ class F4StateDirProtected(FixRoundTest):
 
 
 class F5FileKeysOnly(FixRoundTest):
-    """F5: never a directory key; the ask sentence says writes and deletes are included."""
+    """F5: never a directory key. Decision 4: the Bash ask names Edit or Write."""
 
     def test_f5_directory_read_does_not_approve_delete(self):
         os.makedirs(os.path.join(self.project, "infra"))
@@ -349,9 +360,9 @@ class F5FileKeysOnly(FixRoundTest):
         self.assertNotIn("infra", self.all_approved_keys(), "F5: no directory key")
         self.assert_ask(self.pre("Bash", "rm -rf infra"), "infra")
 
-    def test_f5_ask_reason_names_writes_and_deletes(self):
+    def test_f5_bash_ask_reason_names_edit_or_write(self):
         reason = self.assert_ask(self.pre("Bash", f"cat {SECRET}"), SECRET)
-        self.assertIn(WRITES_AND_DELETES_PHRASE, reason.lower())
+        self.assertIn(EDIT_OR_WRITE_PHRASE, reason.lower())
 
 
 class F6SiteRow(unittest.TestCase):

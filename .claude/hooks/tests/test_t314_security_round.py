@@ -6,6 +6,10 @@ Written by qa-expert BEFORE the fix (Pillar 3). The implementer may not edit it.
 Same harness as `test_t314_fix_round.py` (its `FixRoundTest` base: temp project, online
 board, Pre -> Post with one `tool_use_id`, `permission_mode` `default`).
 
+Re-locked under decision 4: approvals are recorded and honoured for Edit and Write only;
+every Bash call that touches a sensitive path asks, as on `main`. S1's directory-change
+cases stay as ask tests (Bash always asks); S3 stays as an ask test; S2 and S4 stay.
+
 Run with:
     python3 -m pytest .claude/hooks/tests/test_t314_security_round.py -q -p no:cacheprovider
 """
@@ -18,6 +22,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from test_t314_fix_round import FixRoundTest  # noqa: E402
 
 TASK = "T314"
+EDIT_OR_WRITE_PHRASE = "edit or write"  # decision 4, matched case-insensitively
 ARROW = "→"  # S4: "config/prod.json → .env"
 
 
@@ -31,8 +36,8 @@ class SecurityRoundTest(FixRoundTest):
 
 
 class S1DirectoryChangeHonoursNoApproval(SecurityRoundTest):
-    """S1: a Bash call that can change the directory a path resolves against asks for every
-    sensitive path, approved or not. Edit/Write are unaffected."""
+    """S1 (superseded by decision 4, kept as ask tests): with `.env` approved through Write,
+    every Bash call on it asks; Edit/Write of the approved file stay silent."""
 
     def setUp(self):
         super().setUp()
@@ -42,8 +47,8 @@ class S1DirectoryChangeHonoursNoApproval(SecurityRoundTest):
         self.other = self.outside_dir()
         with open(os.path.join(self.other, ".env"), "w") as f:
             f.write("OTHER=1")
-        self.approve("Bash", "cat .env")
-        self.assertIn(".env", self.approved_keys(TASK), "setup: `.env` approved via Pre -> Post")
+        self.approve("Write", ".env")
+        self.assertIn(".env", self.approved_keys(TASK), "setup: `.env` approved via Write Pre -> Post")
 
     def commands(self):
         return (
@@ -63,8 +68,10 @@ class S1DirectoryChangeHonoursNoApproval(SecurityRoundTest):
             with self.subTest(command=cmd):
                 self.assert_ask(self.pre("Bash", cmd))
 
-    def test_s1_plain_call_stays_silent(self):
-        self.assert_silent(self.pre("Bash", "cat .env"))
+    def test_s1_plain_bash_call_on_approved_file_asks(self):
+        reason = self.assert_ask(self.pre("Bash", "cat .env"), ".env")
+        self.assertIn(EDIT_OR_WRITE_PHRASE, reason.lower(),
+                      "decision 4: the Bash ask says a later Edit or Write will not ask again")
 
     def test_s1_edit_and_write_of_the_approved_file_stay_silent(self):
         self.assert_silent(self.pre("Edit", ".env"))
@@ -105,7 +112,7 @@ class S2ApprovalFileCannotBeForged(SecurityRoundTest):
 
 
 class S3TrailingSlashNeverApproved(SecurityRoundTest):
-    """S3: a token ending in `/` never matches an approval."""
+    """S3 (superseded by decision 4, kept as an ask test): Bash on an approved file asks."""
 
     def test_s3_approved_file_reused_as_directory_asks(self):
         os.makedirs(os.path.join(self.project, "secrets"))
@@ -118,10 +125,23 @@ class S3TrailingSlashNeverApproved(SecurityRoundTest):
 class S4SymlinkAskNamesBoth(SecurityRoundTest):
     """S4: when the recorded key differs from the path as written, the ask names both."""
 
-    def test_s4_symlink_ask_names_written_path_and_key(self):
+    def setUp(self):
+        super().setUp()
         self.write_file(".env", "SECRET")
         os.makedirs(os.path.join(self.project, "config"))
         os.symlink("../.env", os.path.join(self.project, "config", "prod.json"))
+
+    def test_s4_write_on_symlink_records_resolved_key_and_ask_names_both(self):
+        tool_use_id = self.new_id()
+        self.assert_ask(self.pre("Write", "config/prod.json", tool_use_id=tool_use_id),
+                        f"config/prod.json {ARROW} .env")
+        self.post("Write", "config/prod.json", tool_use_id)
+        self.assertEqual(self.all_approved_keys(), [".env"],
+                         "S4: the key is the resolved file, not the symlink as written")
+        self.assert_silent(self.pre("Write", "config/prod.json"))
+        self.assert_silent(self.pre("Edit", ".env"))
+
+    def test_s4_bash_ask_names_written_path_and_key(self):
         self.assert_ask(self.pre("Bash", "cat config/prod.json"), f"config/prod.json {ARROW} .env")
 
 

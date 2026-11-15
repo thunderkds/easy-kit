@@ -34,6 +34,8 @@ RECORDER_NAME = "post_tool_sensitive_approval.py"
 APPROVALS_RELPATH = ".claude/state/sensitive-approvals.json"
 # AC1: the one sentence the `ask` reason adds in online mode. Matched case-insensitively.
 APPROVE_ONCE_PHRASE = "will not ask again"
+# Decision 4: approvals are Edit/Write-only; the Bash ask says so. Matched case-insensitively.
+EDIT_OR_WRITE_PHRASE = "edit or write"
 
 HOOKS_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PRE_HOOK = os.path.join(HOOKS_DIR, "pre_tool_sensitive_path.py")
@@ -207,11 +209,20 @@ class SC1FirstCallAsks(OnlineApprovalTest):
 class SC2RecordThenSilent(OnlineApprovalTest):
     """SC2 / AC2 / AC3: recorder stores (T, P); the next call in T is silent, never `allow`."""
 
-    def test_sc2_bash_recorded_then_second_call_is_silent(self):
+    def test_sc2_bash_is_not_recorded_and_asks_again(self):
+        # Decision 4: the recorder records nothing from a Bash event.
         self.assert_ask(self.pre("Bash", f"cat {SECRET}"), SECRET)
         self.record("Bash", f"cat {SECRET}")
+        if os.path.exists(self.approvals):
+            self.assertNotIn(SECRET, self.approvals_data().get(TASK, []))
+        reason = self.assert_ask(self.pre("Bash", f"cat {SECRET}"), SECRET)
+        self.assertIn(EDIT_OR_WRITE_PHRASE, reason.lower())
+
+    def test_sc2_write_recorded_then_second_write_is_silent(self):
+        self.assert_ask(self.pre("Write", SECRET), SECRET)
+        self.record("Write", SECRET)
         self.assertIn(SECRET, self.approvals_data().get(TASK, []))
-        self.assert_silent(self.pre("Bash", f"cat {SECRET}"))
+        self.assert_silent(self.pre("Write", SECRET))
 
     def test_sc2_approval_covers_every_tool_and_path_form(self):
         # Same normalised path whether given relative, absolute or `./`-prefixed.
@@ -220,26 +231,30 @@ class SC2RecordThenSilent(OnlineApprovalTest):
                       "an absolute path is stored in its project-relative normalised form")
         self.assert_silent(self.pre("Edit", SECRET))
         self.assert_silent(self.pre("Write", "./" + SECRET))
-        self.assert_silent(self.pre("Bash", f"sed -i s/a/b/ {SECRET}"))
+        # Decision 4: Bash always asks, even on an Edit/Write-approved file.
+        reason = self.assert_ask(self.pre("Bash", f"sed -i s/a/b/ {SECRET}"), SECRET)
+        self.assertIn(EDIT_OR_WRITE_PHRASE, reason.lower())
 
     def test_sc2_edit_is_recorded(self):
         self.record("Edit", SECRET)
         self.assertIn(SECRET, self.approvals_data().get(TASK, []))
 
-    def test_sc2_bash_call_with_two_sensitive_paths_records_both(self):
+    def test_sc2_bash_call_with_two_sensitive_paths_records_nothing(self):
         self.record("Bash", f"cp {SECRET} {SECRET_2}")
-        approved = self.approvals_data().get(TASK, [])
-        self.assertIn(SECRET, approved)
-        self.assertIn(SECRET_2, approved)
-        self.assert_silent(self.pre("Bash", f"diff {SECRET} {SECRET_2}"))
+        if os.path.exists(self.approvals):
+            approved = self.approvals_data().get(TASK, [])
+            self.assertNotIn(SECRET, approved)
+            self.assertNotIn(SECRET_2, approved)
+        self.assert_ask(self.pre("Bash", f"diff {SECRET} {SECRET_2}"), SECRET, SECRET_2)
 
     def test_sc2_recording_twice_keeps_one_entry(self):
-        self.record("Bash", f"cat {SECRET}")
-        self.record("Bash", f"cat {SECRET}")
+        self.record("Write", SECRET)
+        self.record("Edit", SECRET)
         self.assertEqual(self.approvals_data()[TASK].count(SECRET), 1)
 
     def test_ac2_records_only_sensitive_paths(self):
-        self.record("Bash", f"cp README.md src/app.py {SECRET}")
+        for target in ("README.md", "src/app.py", SECRET):
+            self.record("Write", target)
         approved = self.approvals_data().get(TASK, [])
         self.assertIn(SECRET, approved)
         for ordinary in ("README.md", "src/app.py", "cp"):
@@ -273,29 +288,34 @@ class SC2RecordThenSilent(OnlineApprovalTest):
             post = json.load(f)["hooks"]["PostToolUse"]
         ours = [g for g in post if any(RECORDER_NAME in h.get("command", "") for h in g["hooks"])]
         self.assertEqual(len(ours), 1, f"{RECORDER_NAME} must be wired once under PostToolUse")
-        self.assertEqual(set(ours[0]["matcher"].split("|")), {"Edit", "Write", "Bash"})
+        # Decision 4: Bash records nothing, so `Bash` in the matcher is optional.
+        matcher = set(ours[0]["matcher"].split("|"))
+        self.assertTrue({"Edit", "Write"} <= matcher <= {"Edit", "Write", "Bash"}, matcher)
 
     def test_ac3_silence_is_no_decision_not_allow(self):
-        self.record("Bash", f"cat {SECRET}")
-        proc = self.pre("Bash", f"cat {SECRET}")
+        self.record("Write", SECRET)
+        proc = self.pre("Edit", SECRET)
         self.assert_silent(proc)
         self.assertNotIn("allow", proc.stdout)
 
     def test_ac3_seeded_approval_file_is_read(self):
         # The read path, independent of the recorder: a well-formed file exempts the path.
         self.seed({TASK: [SECRET]})
-        self.assert_silent(self.pre("Bash", f"cat {SECRET}"))
+        self.assert_silent(self.pre("Write", SECRET))
+        self.assert_silent(self.pre("Edit", SECRET))
+        self.assert_ask(self.pre("Bash", f"cat {SECRET}"), SECRET)  # decision 4
 
 
 class SC3PerPath(OnlineApprovalTest):
     """SC3 / AC4: approved path + unapproved sensitive path -> ask naming only the unapproved one."""
 
-    def test_sc3_mixed_call_asks_naming_only_env(self):
-        self.record("Bash", f"cat {SECRET}")
-        self.assert_ask(self.pre("Bash", f"cp {SECRET} .env"), ".env", absent=(SECRET,))
+    def test_sc3_mixed_call_asks_naming_env(self):
+        # Decision 4: a Bash call asks for every sensitive path, as on `main`.
+        self.record("Write", SECRET)
+        self.assert_ask(self.pre("Bash", f"cp {SECRET} .env"), ".env")
 
     def test_sc3_approval_is_exact_path_not_directory(self):
-        self.record("Bash", f"cat {SECRET}")
+        self.record("Write", SECRET)
         self.assert_ask(self.pre("Edit", SECRET_2), SECRET_2)
 
 
@@ -303,22 +323,22 @@ class SC4PerTask(OnlineApprovalTest):
     """SC4 / AC5: an approval for T never exempts task U, nor a call with no active task."""
 
     def test_sc4_other_task_asks(self):
-        self.record("Bash", f"cat {SECRET}")
+        self.record("Write", SECRET)
         self.assertIn(SECRET, self.approvals_data().get(TASK, []))
-        self.assert_ask(self.pre("Bash", f"cat {SECRET}", task_id=OTHER_TASK), SECRET)
+        self.assert_ask(self.pre("Write", SECRET, task_id=OTHER_TASK), SECRET)
 
     def test_sc4_no_active_task_asks(self):
-        self.record("Bash", f"cat {SECRET}")
+        self.record("Write", SECRET)
         self.assertIn(SECRET, self.approvals_data().get(TASK, []))
-        self.assert_ask(self.pre("Bash", f"cat {SECRET}", task_id=None), SECRET)
+        self.assert_ask(self.pre("Write", SECRET, task_id=None), SECRET)
 
     def test_sc4_recorder_with_no_active_task_records_nothing(self):
-        self.record("Bash", f"cat {SECRET}", task_id=None)
+        self.record("Write", SECRET, task_id=None)
         if os.path.exists(self.approvals):
             data = self.approvals_data()
             self.assertEqual([p for paths in data.values() for p in paths], [],
                              f"no task -> no approval under any key, got {data!r}")
-        self.assert_ask(self.pre("Bash", f"cat {SECRET}", task_id=None), SECRET)
+        self.assert_ask(self.pre("Write", SECRET, task_id=None), SECRET)
 
 
 class SC5ApprovalFileProtected(OnlineApprovalTest):
@@ -362,7 +382,7 @@ class SC6FailTowardTheHuman(OnlineApprovalTest):
         for label, content in self.BAD_FILES.items():
             with self.subTest(file=label):
                 self.seed(content)
-                self.assert_ask(self.pre("Bash", f"cat {SECRET}"), SECRET)
+                self.assert_ask(self.pre("Write", SECRET), SECRET)
 
     def test_sc6_unreadable_approval_file_asks(self):
         self.seed({TASK: [SECRET]})
@@ -370,11 +390,11 @@ class SC6FailTowardTheHuman(OnlineApprovalTest):
         self.addCleanup(os.chmod, self.approvals, 0o600)
         if os.access(self.approvals, os.R_OK):
             self.skipTest("running as root: chmod 0 does not block reads")
-        self.assert_ask(self.pre("Bash", f"cat {SECRET}"), SECRET)
+        self.assert_ask(self.pre("Write", SECRET), SECRET)
 
     def test_sc6_approval_path_is_a_directory_asks(self):
         os.makedirs(self.approvals)
-        self.assert_ask(self.pre("Bash", f"cat {SECRET}"), SECRET)
+        self.assert_ask(self.pre("Write", SECRET), SECRET)
 
     def test_sc6_recorder_bad_stdin_exits_0_silently(self):
         for raw in ("not json{", "", "[]", "null", '{"tool_name": "Bash"}',
@@ -387,14 +407,14 @@ class SC6FailTowardTheHuman(OnlineApprovalTest):
         for label, content in self.BAD_FILES.items():
             with self.subTest(file=label):
                 self.seed(content)
-                self.record("Bash", f"cat {SECRET}")
+                self.record("Write", SECRET)
 
     def test_sc6_recorder_unwritable_state_exits_0_silently(self):
         # `.claude/state` is a plain file, so the approval file cannot be created.
         with open(os.path.join(self.project, ".claude", "state"), "w") as f:
             f.write("not a dir")
-        self.record("Bash", f"cat {SECRET}")
-        self.assert_ask(self.pre("Bash", f"cat {SECRET}"), SECRET)
+        self.record("Write", SECRET)
+        self.assert_ask(self.pre("Write", SECRET), SECRET)
 
     def test_sc6_recorder_import_failure_exits_0_silently(self):
         self.assertTrue(os.path.exists(RECORDER), f"recorder missing: {RECORDER_NAME}")
@@ -402,7 +422,7 @@ class SC6FailTowardTheHuman(OnlineApprovalTest):
         self.addCleanup(shutil.rmtree, sandbox, True)
         copy = os.path.join(sandbox, RECORDER_NAME)
         shutil.copy(RECORDER, copy)  # no lib/ and no pre hook beside it
-        event = self._event("Bash", {"command": f"cat {SECRET}"}, post=True)
+        event = self._event("Write", {"file_path": SECRET, "content": "{}"}, post=True)
         self.assert_silent(self.record_raw(json.dumps(event), recorder=copy))
 
 
@@ -415,14 +435,14 @@ class SC7LocalModeUnchanged(OnlineApprovalTest):
         reason = self.assert_ask(self.pre("Bash", f"cat {SECRET}"), SECRET, TASK)
         self.assertNotIn(APPROVE_ONCE_PHRASE, reason.lower(),
                          "the approve-once sentence is for online mode only")
-        self.record("Bash", f"cat {SECRET}")
+        self.record("Write", SECRET)
         self.assertFalse(os.path.exists(self.approvals),
                          "local mode: the recorder must not create the approval file")
-        self.assert_ask(self.pre("Bash", f"cat {SECRET}"), SECRET)
+        self.assert_ask(self.pre("Write", SECRET), SECRET)
 
     def test_sc7_local_mode_ignores_a_seeded_approval_file(self):
         self.seed({TASK: [SECRET]})
-        self.assert_ask(self.pre("Bash", f"cat {SECRET}"), SECRET)
+        self.assert_ask(self.pre("Write", SECRET), SECRET)
 
     def test_sc7_local_predicted_path_stays_silent_and_records_nothing(self):
         with open(os.path.join(self.project, "tasks", f"TASK_GUIDE_{TASK}.md"), "w") as f:
