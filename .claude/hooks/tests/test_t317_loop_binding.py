@@ -3,10 +3,12 @@
 
 In a `[admin]` / `[ticket]` loop the Supervisor picks each ticket itself, so the tag request names
 none of them and their guides were written before it. The gate then binds the branch's task when
-this session changed it since the tag request, holds no other task In Progress or Ready for Review,
-and the hook wrote the task's auto verify pass after the request (`_session_holds`,
-`_pass_recorded_since`). The locked oracle's fixtures satisfy the older request binding, so this
-file drives the loop binding alone: every request here is dated after the guide's commit.
+its row is in Ready for Review, this session changed it since the tag request, holds no other task
+In Progress or Ready for Review, ran its own `python3 .claude/hooks/stop_auto_verify.py --start
+<ID>` Bash call after the request (R1), and the hook wrote the task's auto verify pass after that
+call (`_session_holds`, `_own_start_since`, `_pass_recorded_since`). The locked oracle's fixtures
+satisfy the older request binding, so this file drives the loop binding alone: every request here is
+dated after the guide's commit.
 
 Run with: python3 -m pytest .claude/hooks/tests/test_t317_loop_binding.py -q -p no:cacheprovider
 """
@@ -17,7 +19,7 @@ import time
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from test_merge_gate_t210 import MERGE, PUSH, gate, git, kanban, merge_gate  # noqa: E402
 from test_admin_tag import (  # noqa: E402
-    SID, auto_verified, human, reason, transcript, wrote, _ts)
+    SID, auto_verified, bash, human, reason, transcript, wrote, _ts)
 
 import verify_record  # noqa: E402
 
@@ -43,9 +45,14 @@ def pass_written_at(fx, offset_s):
     os.utime(path, (when, when))
 
 
+def start(task_id, offset_s):
+    """This session's own `--start` Bash call for `task_id` (R1)."""
+    return bash(f"python3 .claude/hooks/stop_auto_verify.py --start {task_id}", "/", offset_s)
+
+
 def loop(tmp_path, tag, extra=()):
-    return transcript(tmp_path, [human(f"run the board [{tag}]", TAG_AT), spawn("T900", TAG_AT + 10)]
-                      + list(extra))
+    return transcript(tmp_path, [human(f"run the board [{tag}]", TAG_AT), spawn("T900", TAG_AT + 10),
+                                 start("T900", TAG_AT + 20)] + list(extra))
 
 
 def test_admin_loop_binds_the_task_it_ran_and_verified_after_the_tag(gate, tmp_path):
@@ -75,7 +82,8 @@ def test_work_before_the_tag_does_not_bind(gate, tmp_path):
     fx = gate(kanban(ready=("T900",)))
     auto_verified(fx)
     pass_written_at(fx, TAG_AT + 60)
-    path = transcript(tmp_path, [spawn("T900", TAG_AT - 30), human("run the board [admin]", TAG_AT)])
+    path = transcript(tmp_path, [spawn("T900", TAG_AT - 30), human("run the board [admin]", TAG_AT),
+                                 start("T900", TAG_AT + 20)])
     text = reason(MERGE + " " + BRANCH, fx.main, path)
     assert text is not None and "not the task" in text, text
 

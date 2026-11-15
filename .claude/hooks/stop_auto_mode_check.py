@@ -30,7 +30,8 @@ can never disagree about which tasks are in auto mode. Skipped as finished: a ta
 Done, and a review file whose `verify` row has `☑ pass` in its Result cell. A board row counts as
 auto mode when its report is marked as above, or the task's files changed while a request carrying
 `[auto]` or `[admin]` (T284; outside code spans) was the latest user request — up to the next request
-without it (T229).
+without it (T229). T317: under a session tag (`[admin]` or `[ticket]`, `docs/claude-md/tracks.md`
+`### Session tags`) the window stays open across untagged requests, until `[stop]` or `[auto]` alone.
 T250: that last rule also needs this session's own work on the task (`lib/session_work.py`): an edit,
 a writing `Bash` command or a spawn for it, by the session or its sub-agents. A parallel session's task
 whose files changed in the same window is not checked. Ownership that cannot be read keeps the check.

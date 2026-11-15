@@ -1529,9 +1529,10 @@ CLAUSE_END = re.compile(r"[.;,!?\n]")
 ADMIN_PUSH_FLAGS = frozenset({"-u", "--set-upstream", "-q", "--quiet", "-v", "--verbose",
                               "--progress", "-n", "--dry-run"})
 AUTO_MODE_LIMIT = ("With `[auto]`, merge and push stay the user's. `[admin]` allows only a merge or a "
-                   "plain push of the request's own task branch (or of `main` after that merge), "
-                   "after its auto verify passed "
-                   "(docs/claude-md/tracks.md `### Admin tag`). `[ticket]` allows only a plain push "
+                   "plain push of its own task branch (or of `main` after that merge), after its auto "
+                   "verify passed (docs/claude-md/tracks.md `### Admin tag`), in the request that "
+                   "holds it or, as a session tag, for the task of the session's loop "
+                   "(`### Session tags`). `[ticket]` allows only a plain push "
                    "of its task branch to `origin`, after that same pass (`### Session tags`).")
 
 
@@ -2286,10 +2287,43 @@ def _session_holds(transcript_path, when, task_id):
         for tid, row in auto_mode.board_rows(kanban))
 
 
+START_SCRIPT = ".claude/hooks/stop_auto_verify.py"
+
+
+def _own_start_since(transcript_path, when, task_id):
+    """T317 R1: the time of this session's (or a sub-agent's) earliest own `Bash` call dated at or
+    after `when` (the tag request) that runs `python3 .claude/hooks/stop_auto_verify.py --start
+    <task_id>` as a command of its own, read from the transcript like `_session_admin_merges`; None
+    when there is none. An echoed or quoted mention, or one in an `Agent` prompt, is not that call."""
+    starts = []
+    for at, command, _, _ in session_work.bash_calls(transcript_path, when):
+        for tokens, _, _ in _command_segments(command) or []:
+            script = os.path.normpath(tokens[1]).replace(os.sep, "/") if len(tokens) == 4 else ""
+            if (_basename(tokens[0]) in ("python3", "python")
+                    and (script == START_SCRIPT or script.endswith("/" + START_SCRIPT))
+                    and tokens[2] == "--start" and tokens[3].upper() == task_id):
+                starts.append(at)
+    return min(starts) if starts else None
+
+
+def _ready_for_review(task_id):
+    """T317 R4: True when the board shows `task_id`'s own row in Ready for Review; False on any
+    doubt. (An In Progress row is blocked before any tag rule, by the pipeline gate.)"""
+    try:
+        with open(KANBAN, encoding="utf-8") as f:
+            kanban = f.read()
+    except Exception:
+        return False
+    rows = auto_mode.board_rows(kanban, ("Ready for Review",))
+    return any(tid.upper() == task_id for tid, _ in rows)
+
+
 def _pass_recorded_since(task_id, branch, where, when):
-    """T317 G1: True when the hook's run record says pass for `task_id` at a commit that `branch`
-    holds, and the hook wrote that record at or after `when` (the tag request): the session ran the
-    task's Stage 5 itself. The record's own file time is read: agents are denied writes there."""
+    """T317 G1/R1: True when the hook's run record says pass for `task_id` at a commit that `branch`
+    holds, and the hook wrote that record at or after `when`, the time of this session's own
+    `--start` call for the task (`_own_start_since`), itself dated after the tag request. The record's
+    file time is read (agents are denied writes there), but it never binds alone: without that own
+    `--start` call the caller binds nothing, so a `touch` of a file and a fresh record do not bind."""
     try:
         normalized = normalize_task_id(task_id, ROOT)
         empty = "0" * 40
@@ -2362,7 +2396,7 @@ def admin_refusal(command, cwd, transcript_path, admin, tag=None):
         if not actions:
             return "cannot tell which branch this command merges or pushes"
         id_regex = re.compile(task_id_pattern(ROOT, bounded=True), re.IGNORECASE)
-        targets = set()
+        targets, main_push = set(), False
         for args, where in actions:
             if where is None:
                 return "cannot tell which directory this command runs in"
@@ -2411,6 +2445,7 @@ def admin_refusal(command, cwd, transcript_path, admin, tag=None):
                         if refusal:
                             return refusal
                         targets.add((task_id, merged, merge_where))
+                    main_push = True
                     continue
             else:
                 allowed = "a push" if tag == "ticket" else "merge and push"
@@ -2426,13 +2461,22 @@ def admin_refusal(command, cwd, transcript_path, admin, tag=None):
         bound = tag != "ticket" and (task_id in _named_tasks(text, id_regex) or _guides_added_since(
             sorted(targets)[0][2], when) == {task_id})
         if not bound and tag is not None:
+            # R1: the loop binds only through this session's own `--start` call after the tag
+            # request, and a pass record written after that call. R4: for the merge and the task
+            # branch push the task's own row is in Ready for Review (the `main` push after the
+            # merge may follow the close-out, so its row may be Done).
             _, branch, where = sorted(targets)[0]
-            bound = (_session_holds(transcript_path, when, task_id)
-                     and _pass_recorded_since(task_id, branch, where, when))
+            started = _own_start_since(transcript_path, when, task_id)
+            bound = (started is not None
+                     and (main_push or _ready_for_review(task_id))
+                     and _session_holds(transcript_path, when, task_id)
+                     and _pass_recorded_since(task_id, branch, where, started))
         if not bound:
-            loop = ("the task of this session's loop (changed by this session since the tag "
-                    "request, its only task In Progress or Ready for Review, and its auto verify "
-                    "pass recorded after the request)")
+            loop = ("the task of this session's loop (its row in Ready for Review, changed by this "
+                    "session since the tag request, its only task In Progress or Ready for Review, "
+                    "its auto verify started by this session's own `python3 "
+                    ".claude/hooks/stop_auto_verify.py --start <ID>` call after the request, and "
+                    "the pass recorded after that call)")
             if tag == "ticket":
                 return f"{task_id} is not {loop}"
             return (f"{task_id} is not the task of the `[admin]` request: the request does not "
@@ -2472,6 +2516,8 @@ def auto_mode_blocker(command, cwd, transcript_path):
     if latest is None or not auto_mode.auto_tagged(latest[1]):
         return None
     admin = auto_mode.admin_request(transcript_path)
+    if admin is not None and auto_mode.request_session_tag(latest[1]) == "stop":
+        admin = None  # T317 R5: `[stop]` in the same request turns its `[admin]` off
     if admin is None:
         return "auto mode (`[auto]`): merge, push and pull stay the user's"
     why = admin_refusal(command, cwd, transcript_path, admin)
