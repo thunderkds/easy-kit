@@ -95,7 +95,6 @@
 
 
 ### In Progress
-- [ ] **T317** — session-wide `[admin]` and `[ticket]` tags run the board on their own; an "Autonomous" setup profile turns on auto mode | common-infrastructure | C3 | Risk: High | P1 | Depends on: T314, T315 | Registered 2026-11-15, user: "1, all look good / 2, i mean auto run, not ask me for bash execute" | Started 2026-11-15 [admin]: branch `feat/t317-session-tags`, worktree `../wt-t317` | Track: extended
 
 
 
@@ -109,6 +108,7 @@
 
 
 ### Ready for Review
+- [ ] **T317** — session-wide `[admin]` and `[ticket]` tags run the board on their own; an "Autonomous" setup profile turns on auto mode | common-infrastructure | C3 | Risk: High | P1 | Depends on: T314, T315 | Registered 2026-11-15, user: "1, all look good / 2, i mean auto run, not ask me for bash execute" | Started 2026-11-15 [admin]: branch `feat/t317-session-tags`, worktree `../wt-t317` | Track: extended | Ready for Review 2026-11-15: code-review re-run P0 0/P1 0/P2 0/P3 1, security-review no findings, full suite 7410 passed at d7bfd5ae, Evidence 8f9c1d3e
 
 
 
