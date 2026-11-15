@@ -132,6 +132,18 @@
           }
         ]
       }
+    ],
+    "SessionStart": [
+      {
+        "description": "Session tags (T317): on a resume, record the resume time so a [admin] or [ticket] typed before it no longer holds",
+        "matcher": "resume",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/session_start_resume_mark.py"
+          }
+        ]
+      }
     ]
   },
   "permissions": {

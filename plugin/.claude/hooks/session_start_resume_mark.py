@@ -1,0 +1,1 @@
+../../../.claude/hooks/session_start_resume_mark.py

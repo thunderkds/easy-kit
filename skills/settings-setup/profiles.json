@@ -88,6 +88,14 @@
       }
     },
     {
+      "id": "autonomous",
+      "label": "Autonomous",
+      "for": "Opt-in, never the default. Turns on Claude Code's auto mode, so Bash runs without prompts; the kit's hooks still stop risky actions such as a force push or an unverified merge.",
+      "values": {
+        "permissions.defaultMode": "auto"
+      }
+    },
+    {
       "id": "empty",
       "label": "Empty",
       "for": "Adds nothing. Choose this to keep the settings file exactly as it is.",

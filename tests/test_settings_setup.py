@@ -22,7 +22,7 @@ SKILL_MD = os.path.join(SKILL_DIR, "SKILL.md")
 KIT_SETTINGS = os.path.join(ROOT, ".claude", "settings.json")
 PAGE = os.path.join(ROOT, "site", "docs.html")  # T231: the reference moved from index.html
 
-PROFILE_IDS = {"high-security", "legacy", "solo-engineer", "team-project", "empty"}
+PROFILE_IDS = {"high-security", "legacy", "solo-engineer", "team-project", "autonomous", "empty"}
 
 HIGH_SECURITY = {
     "permissions.deny": [
@@ -85,7 +85,7 @@ def kit_shaped(**extra):
 
 # ---- AC 1: profile file shape -------------------------------------------------------------------
 
-def test_ac1_profiles_have_exactly_the_five_ids_and_each_field():
+def test_ac1_profiles_have_exactly_the_six_ids_and_each_field():
     ps = profiles()["profiles"]
     assert [p["id"] for p in ps].count("high-security") == 1
     assert {p["id"] for p in ps} == PROFILE_IDS
@@ -317,7 +317,9 @@ def test_ac8_no_profile_lowers_safety(pid):
     assert "bypassPermissions" not in json.dumps(values)
     for key in values:
         assert "allow" not in key.split("."), f"{pid} sets an allow key: {key}"
-        assert key != "permissions.defaultMode", f"{pid} sets permissions.defaultMode"
+        # T317: only `autonomous` sets `permissions.defaultMode`, and only to "auto".
+        assert key != "permissions.defaultMode" or (pid == "autonomous" and values[key] == "auto"), \
+            f"{pid} sets permissions.defaultMode"
         assert not key.startswith("sandbox."), f"{pid} sets a sandbox key (D5)"
 
 

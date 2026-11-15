@@ -166,6 +166,12 @@ def merge_calls(transcript_path, since):
     """T284: `[(command, cwd, ok)]` for every `Bash` call of the session and its sub-agents dated at
     or after `since`. `ok` is True only when the call's `tool_result` is in the transcript and is not
     an error: a blocked, failed or unanswered call is not `ok`. [] on any doubt."""
+    return [(command, cwd, ok) for _, command, cwd, ok in bash_calls(transcript_path, since)]
+
+
+def bash_calls(transcript_path, since):
+    """`[(time, command, cwd, ok)]`: `merge_calls` with each call's aware datetime (T317 R1: the
+    merge gate dates this session's own `stop_auto_verify.py --start` call). [] on any doubt."""
     try:
         calls, results = [], {}
         for path in _session_files(transcript_path):
@@ -191,10 +197,11 @@ def merge_calls(transcript_path, since):
                               and entry.get("type") == "assistant" and ts is not None
                               and ts >= since and isinstance(block.get("input"), dict)
                               and isinstance(block["input"].get("command"), str)):
-                            calls.append((block.get("id"), block["input"]["command"],
+                            calls.append((block.get("id"), ts, block["input"]["command"],
                                           entry.get("cwd") if isinstance(entry.get("cwd"), str)
                                           else None))
-        return [(command, cwd, results.get(use_id) is True) for use_id, command, cwd in calls]
+        return [(ts, command, cwd, results.get(use_id) is True)
+                for use_id, ts, command, cwd in calls]
     except Exception:
         return []
 

@@ -124,3 +124,19 @@ python3 -m pytest .claude/hooks/tests/ tests/ -q
 - `AGENTS.md`
 - `skills/settings-setup/profiles.json`
 - `skills/settings-setup/SKILL.md`
+
+## Supervisor decisions during Stage 3
+
+1. 2026-11-15 [admin], Debate (3 Advocates): a session tag survives `/compact` (the raw typed request stays in the transcript; the compact summary never counts) and ends at any resume, continue or fork (a `SessionStart` hook with matcher `resume` records a resume time; `session_tag` ignores tags typed before it). While a tag is on, the Supervisor names it in the first line of each reply. New AC 8: a transcript with `[admin]` typed before a compact summary → `admin`; `[admin]` only inside the summary → `none`; `[admin]` typed before a recorded resume → `none`. The implementer checks one real compacted transcript's shape before relying on it.
+2. 2026-11-15 [admin], oracle gaps from qa-expert, each settled by a written rule:
+   - G1 (task binding in the loop): under a session tag the merge gate binds to the task named by the branch, which must be the only task this session holds In Progress or Ready for Review, with a passed auto verify for HEAD; the old "named in the request / only guide added since" binding stays for plain `[admin]`-per-request use. RULE: this guide, Out of scope "the loop is one ticket at a time inside one session".
+   - G2 (`[ticket]` push with no passed auto verify): blocked. RULE: this guide, Requirement "run it Stage 0–5 in auto mode, push its feature branch" (Stage 5 includes the auto verify).
+   - G3 (`[admin]` then `[auto]`): the later different tag ends the session tag; `session_tag` returns `none` and `[auto]` applies to that request only. RULE: this guide, Requirement "until the user types `[stop]` (or a different tag)".
+   - G4 (`tests/test_settings_setup.py` pins exactly five profile ids): the implementer updates that existing test to the new id set; it is not the locked oracle. RULE: AGENTS.md § Karpathy Engineering Principles (Goal-Driven: "Verify existing tests pass, apply changes, and ensure tests still pass").
+3. 2026-11-15 [admin], Stage 4 code-review fix round (P0 0 / P1 0 / P2 3 / P3 3 at 766f1247). Each finding is fixed as the review directs — RULE: skills/code-review/SKILL.md § Finding Classification:
+   - R1 (P2, G1 binding): the loop binding needs this session's own `python3 .claude/hooks/stop_auto_verify.py --start <ID>` Bash call in its transcript, dated after the tag request, plus a hook pass record for that run; a record's mtime alone never binds. The bound task's own row must be In Progress or Ready for Review (also P3 R4). Fix the `_pass_recorded_since` docstring. Add the P1 variant test (fresh record, no own `--start` call → blocked).
+   - R2 (P2, deleting the resume mark revives the tag): the resume mark moves under the anchors base that the existing deny rules already cover (`~/.claude/harness-anchors/…`, beside the run records); no new settings rule. `### Session tags` Known limits states that an install whose settings lack the `SessionStart` entry keeps tags across a resume.
+   - R3 (P2, stale rule): `docs/claude-md/tracks.md` `### Admin tag` merge rule 1 and line ~575, `AUTO_MODE_LIMIT` in the gate, and the `stop_auto_mode_check.py` docstring point at `### Session tags`.
+   - R5 (P3, `[stop]` and `[admin]` in one request): when the latest request's own tag is `stop`, the per-request `[admin]` allowance does not apply.
+   - R6 (P3, "ready" wording): "Todo, every `Depends on` Done, and not claimed by another live session".
+   - Out of this task: `gh pr merge` / `gh api … merges` are not in `BLOCKED_PATTERNS` (pre-existing) → its own task.

@@ -90,8 +90,12 @@ GATE_REL = ".claude/hooks/pre_bash_block_unsafe_merge.py"
 #          hook` tag counts for nothing, even with "pass" in Notes; only the hook's row with its run
 #          record, or the T308 user `/verify` row with its proof (`tasks/TASK_GUIDE_T309.md`, AC 1-5).
 #          User, 2026-11-11 ("register it"); the Supervisor signs this line off (guide of T309).
+#   T317 — a session tag (`[admin]`, `[ticket]`, `auto_mode.session_tag`) holds for the session:
+#          `[admin]` keeps every `[admin]` rule; `[ticket]` allows only a plain push of its task branch
+#          to `origin` after a passed auto verify; both may bind the task by the loop (G1)
+#          (`tasks/TASK_GUIDE_T317.md`, AC 2). User sign-off, 2026-11-15 ("yes [admin]").
 AUTHORISED_TASKS = ("T182", "T188", "T190", "T197", "T196", "T210", "T211", "T232", "T250", "T284",
-                    "T289", "T291", "T296", "T295", "T308", "T309")
+                    "T289", "T291", "T296", "T295", "T308", "T309", "T317")
 
 
 def _git(root, *args):

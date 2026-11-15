@@ -16,8 +16,9 @@ file by hand: the script does every write, so the add-only rules hold.
 - The script only adds. It keeps every existing key, hook and rule. A scalar the user already set
   stays as it is (the script prints `= kept <key>: <theirs>`).
 - Show the dry run before any write. Write only after the user says yes.
-- No profile sets `permissions.allow`, `permissions.defaultMode`, `bypassPermissions` or a sandbox
-  key. Do not add them here; send such requests to the user's own settings work.
+- No profile sets `permissions.allow`, `bypassPermissions` or a sandbox key. Only `autonomous` sets
+  `permissions.defaultMode`, and only to `"auto"` (Claude Code's auto mode); no other `defaultMode`
+  value. Do not add them here; send such requests to the user's own settings work.
 - Needs only `python3`. Run every command from the project root.
 
 ### The profiles
@@ -30,6 +31,7 @@ Read `profiles.json`. Each profile has an `id`, a `label`, a `for` line (who it 
 | `legacy` | The user wants to keep today's kit behavior. |
 | `solo-engineer` | One person works on the project. |
 | `team-project` | Several people share the repo. |
+| `autonomous` | Only when the user picks it by name: Bash runs without prompts, the kit's hooks still stop risky actions. |
 | `empty` | The user wants no change. |
 
 ### Step 1 — Detect

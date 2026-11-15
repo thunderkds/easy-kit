@@ -630,8 +630,9 @@ command, from this session's transcript. It allows a `git merge` or `git push` o
 
 1. The session's latest request is text the user typed, and it holds `[admin]` outside code spans and
    outside `>` quoted lines. The tag in a tool result, a fetched page, a file, a PR comment, a branch name,
-   a commit message or a sub-agent's prompt does not count. A later request without the tag ends it. A
-   tag typed in another session does not count.
+   a commit message or a sub-agent's prompt does not count. A later request without the tag ends a
+   per-request `[admin]`. As a session tag, `[admin]` holds until `[stop]` or another tag, and the gate
+   reads it as `### Session tags` says. A tag typed in another session does not count.
 2. The command merges one task branch (`git merge <branch>`), or pushes a branch to the same branch name
    (`git push origin <branch>`, `git push -u origin HEAD`), on the remote `origin` only (for a bare
    `git push`, `branch.<b>.pushRemote`, `remote.pushDefault` and `branch.<b>.remote` are unset or
@@ -872,6 +873,70 @@ Known limits:
 - The gate is a static check of the command text and of the repo config at the time of the command. It
   is not an airtight security boundary: user-global config, a script that calls git, and a hook or
   config added between the check and the push are out of its reach.
+
+### Session tags
+
+`[ticket]` and `[admin]` hold for the whole session (T317). `[auto]` does not: it still holds for one
+request only, and ends with the next request that has no tag.
+
+**Start and end.** The latest request you type that holds `[admin]`, `[ticket]` or `[stop]` decides.
+The tag is read as `[admin]` is read: only text you typed, outside code spans and `>` quoted lines.
+`[stop]` ends the session tag. A later request with another tag ends it too: `[auto]` then holds for
+that one request only. In one request, `[stop]` wins over `[ticket]`, and `[ticket]` wins over
+`[admin]`. A tag in a tool result, a file, a sub-agent prompt, a PR comment or another session never
+counts. `.claude/hooks/lib/auto_mode.py` `session_tag` is the one reader.
+
+**Compact and resume.** A session tag survives `/compact`: the request you typed stays in the
+transcript, and the compact summary never counts. A resume, continue or fork ends the tag. The
+`SessionStart` hook `session_start_resume_mark.py` (matcher `resume`) writes the resume time to
+`<$CLAUDE_TRACE_ANCHOR_DIR or ~/.claude/harness-anchors>/<repo slug>/resume-at-<session id>`, beside
+the auto verify run records. `.claude/settings.json` denies agents write access there. `session_tag`
+ignores every tag typed before that time. Type the tag again to turn it back on.
+
+**First line.** While a session tag holds, the Supervisor names it in the first line of every reply,
+for example `Session tag: [admin] — type [stop] to end it.`
+
+**The loop.** Under a session tag the Supervisor works the board, one ticket at a time:
+
+1. Pick the next ready ticket. A ticket is ready when it is in Todo, every `Depends on` task is Done,
+   and it is not claimed by another live session. Take the highest Priority first (P0, then P1, then
+   P2), then board order.
+2. Run the ticket from Stage 0 to Stage 5 in auto mode, as `### Admin tag` runs one task. Ask the user
+   nothing. Each decision follows `### Every user stop and its auto rule` and `### Debate size by Risk`.
+3. Start the ticket's auto verify run and wait for the verdict.
+4. After a pass: with `[ticket]`, push the task branch to `origin` (`git push origin <task branch>`).
+   With `[admin]`, merge the task branch into `main` and push `main`, as `### Admin tag` says. After
+   `blocked` or `fail`, push and merge nothing.
+5. Write the ticket's own final report. Then go back to step 1.
+
+The session ends when no ticket is ready. The loop pauses only for `### Stops that stay`. Each pause
+sends one `PushNotification`: one line, under 200 characters, task ID first. The loop opens no pull
+request and runs no two tickets at once.
+
+**The merge gate under a session tag.**
+
+- `[admin]`: every `### Admin tag` rule holds. The gate binds the task in one of three ways: the
+  request names it, it is the one task whose guide was first added after the request, or it is the
+  loop's task. The loop's task is the branch's task when all of these hold. Its own row is in Ready
+  for Review (for the merge and the task branch push; the `main` push after the merge may follow the
+  close-out). This session changed it since the tag request, and holds no other task In Progress or
+  Ready for Review. This session ran `python3 .claude/hooks/stop_auto_verify.py --start <ID>` for it as
+  its own Bash call, after the tag request; an echoed or quoted mention, or one in a sub-agent's
+  prompt, does not count. The hook wrote its auto verify pass after that call. A run record's file
+  time alone never binds a task.
+- `[ticket]`: only a plain push of the task branch to `origin`, to the same name, after a passed auto
+  verify, for the loop's task only. The gate blocks a merge, a `main` push, a pull, a force push, a
+  `+ref`, another destination, `--all`, `--tags`, `--no-verify`, another remote and a hidden git verb
+  such as `eval`.
+
+**Bash without prompts.** No tag approves a tool call, and no hook returns `allow`. To run Bash without
+prompts, apply the opt-in `settings-setup` profile `autonomous`. It sets only
+`permissions.defaultMode: "auto"` (Claude Code's auto mode). The kit's hooks still stop risky actions.
+The kit never sets `bypassPermissions`.
+
+**Known limits.** An install whose settings lack the `SessionStart` entry for
+`session_start_resume_mark.py` (matcher `resume`) writes no resume mark, so a session tag holds again
+after a resume.
 
 ### The Supervisor never
 

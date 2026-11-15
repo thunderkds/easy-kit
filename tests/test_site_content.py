@@ -1564,10 +1564,15 @@ def _expanded_page_preset(catalog, preset):
     return out
 
 
+# `autonomous` is not on the site: an opt-in Stage 1 skill profile; the site settings tool
+# keeps its T201 AC 7 defaultMode ban (T317 Auto decision 7).
+_NOT_ON_PAGE = {"autonomous"}
+
+
 def test_page_profiles_match_profiles_json_ids_in_order():
     """T201 AC1/AC3: same ids, same order; safe-baseline is gone."""
     page_ids = [p["id"] for p in _settings_catalog()["presets"]]
-    assert page_ids == [p["id"] for p in _profiles()]
+    assert page_ids == [p["id"] for p in _profiles() if p["id"] not in _NOT_ON_PAGE]
     assert "safe-baseline" not in page_ids
 
 
@@ -1576,6 +1581,8 @@ def test_page_profiles_values_label_and_for_equal_profiles_json():
     catalog = _settings_catalog()
     page = {p["id"]: p for p in catalog["presets"]}
     for profile in _profiles():
+        if profile["id"] in _NOT_ON_PAGE:
+            continue
         preset = page[profile["id"]]
         assert preset["label"] == profile["label"], profile["id"]
         assert preset.get("for") == profile["for"], f"{profile['id']} for text drifted"

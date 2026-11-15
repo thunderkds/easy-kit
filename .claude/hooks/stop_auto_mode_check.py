@@ -30,7 +30,8 @@ can never disagree about which tasks are in auto mode. Skipped as finished: a ta
 Done, and a review file whose `verify` row has `☑ pass` in its Result cell. A board row counts as
 auto mode when its report is marked as above, or the task's files changed while a request carrying
 `[auto]` or `[admin]` (T284; outside code spans) was the latest user request — up to the next request
-without it (T229).
+without it (T229). T317: under a session tag (`[admin]` or `[ticket]`, `docs/claude-md/tracks.md`
+`### Session tags`) the window stays open across untagged requests, until `[stop]` or `[auto]` alone.
 T250: that last rule also needs this session's own work on the task (`lib/session_work.py`): an edit,
 a writing `Bash` command or a spawn for it, by the session or its sub-agents. A parallel session's task
 whose files changed in the same window is not checked. Ownership that cannot be read keeps the check.
@@ -165,10 +166,12 @@ def auto_windows(transcript_path):
     """(start, end) spans the session's `[auto]` requests cover (T229). A request carrying `[auto]`
     (or `[admin]`, T284) outside code spans opens a span; the next request without it closes the
     span (end None: still open). Before T229 the first `[auto]` request covered the rest of the session, so a task done
-    in normal mode later was checked as an auto-mode task."""
+    in normal mode later was checked as an auto-mode task. T317: a session tag (`[admin]`, `[ticket]`)
+    keeps the span open across untagged requests until `[stop]` or `[auto]` alone
+    (`am.request_session_tag`); the resume mark is not read here (a wider span checks more)."""
     if not transcript_path or not os.path.isfile(transcript_path):
         return []
-    spans, start = [], None
+    spans, start, held = [], None, False
     try:
         with open(transcript_path, encoding="utf-8") as f:
             for line in f:
@@ -182,7 +185,9 @@ def auto_windows(transcript_path):
                 ts = parse_ts(entry.get("timestamp"))
                 if ts is None:
                     continue
-                if am.auto_tagged(text):  # T284: `[admin]` opens the window as `[auto]` does
+                tag = am.request_session_tag(text)
+                held = tag in ("admin", "ticket") or (held and tag is None)
+                if am.auto_tagged(text) or held:  # T284: `[admin]` opens the window as `[auto]` does
                     if start is None:
                         start = ts
                 elif start is not None:
