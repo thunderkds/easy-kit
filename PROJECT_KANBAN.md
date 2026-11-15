@@ -8,7 +8,7 @@
 ## Board
 
 ### Todo
-- [ ] **T314** — in board mode `online`, the sensitive-path hook asks once per path per task, not once per call | common-infrastructure | C2 | Risk: High | P1
+- [ ] **T315** — a setup choice makes the sensitive-path hook warn instead of ask | common-infrastructure | C2 | Risk: High | P1 | Depends on: T314 | Registered 2026-11-15, user: "yes, start and continue" (setup choice instead of a tag bypass)
 - [ ] **T313** — `[admin]` hand-back offers an unsafe bypass: when auto verify cannot start (easy-note-mcp HUN-251: board mode `online`, Linear team HUN has no "In Review" status, so the row cannot reach Ready for Review), the Supervisor handed the user `! git -C … merge --no-ff spike/HUN-251-client-launch …` + `! git … push origin main` ("hooks don't apply to commands you run with !"), which skips the verify gate and the review file's own "merge HUN-252 first" note. Under `[admin]` (and `[auto]`), a paused merge must name the real blocker and the one user fix (here: add an `In Review` status to the Linear team), and must never suggest a `!` merge/push that bypasses the merge gate; consider a `wake`/preflight check that an `online` board has a review status | Supervisor | C1 | Risk: Medium | P1 | Registered 2026-11-15, user: "yes" (to opening a kit task after the HUN-251 hand-back) | Evidence: easy-note-mcp `tasks/TASK_REVIEW_HUN-251.md` lines 54, 57
 - [ ] **T304** — The docs layout puts `general-agent-template.md` in `templates/`, not `agents/` | Supervisor | C0 | Risk: Low | P3 | Registered 2026-11-10, user: "yes, do both" (follow-up named in T303) | Started 2026-11-10: branch `fix/t304-docs-agents-row`, worktree `../wt-t304` | Track: minimal | Record: tasks/MINIMAL_LOG.md | Moved back to Todo 2026-11-14 by the user ("Move it back to Todo"): no branch, worktree or record existed
 - [ ] **T300** — Measure the effort table: 6 C0/C1 tasks on the current table and on a strong-model-at-low-effort table with `scripts/token_meter.py` (cost) and the `verify` results (pass rate); keep the proposed model cells only if cost is lower and no pass is lost, else record a DDR and stop | common-infrastructure | C2 | Risk: Medium | P2 | Depends on: T297, T298 | Registered 2026-11-09 [auto] from the plan doc `easy-kit — update plan (base)`; not started in auto mode: it spends real tokens on 6 real tasks per arm and needs the user's go-ahead; guide at pickup
@@ -91,6 +91,7 @@
 
 
 ### In Progress
+- [ ] **T314** — in board mode `online`, the sensitive-path hook asks once per path per task, not once per call | common-infrastructure | C2 | Risk: High | P1 | Started 2026-11-15: branch `feat/t314-online-approval`, worktree `../wt-t314` | Track: extended
 
 
 
