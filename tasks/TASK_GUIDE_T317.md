@@ -124,3 +124,7 @@ python3 -m pytest .claude/hooks/tests/ tests/ -q
 - `AGENTS.md`
 - `skills/settings-setup/profiles.json`
 - `skills/settings-setup/SKILL.md`
+
+## Supervisor decisions during Stage 3
+
+1. 2026-11-15 [admin], Debate (3 Advocates): a session tag survives `/compact` (the raw typed request stays in the transcript; the compact summary never counts) and ends at any resume, continue or fork (a `SessionStart` hook with matcher `resume` records a resume time; `session_tag` ignores tags typed before it). While a tag is on, the Supervisor names it in the first line of each reply. New AC 8: a transcript with `[admin]` typed before a compact summary → `admin`; `[admin]` only inside the summary → `none`; `[admin]` typed before a recorded resume → `none`. The implementer checks one real compacted transcript's shape before relying on it.
