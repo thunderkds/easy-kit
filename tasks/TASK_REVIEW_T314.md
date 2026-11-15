@@ -55,8 +55,9 @@ Mode: auto
 4. Residuals kept out of this task (a programmatic permission host answering the ask; task switching via the active-task state file; interpreter strings) — RULE: AGENTS.md § Karpathy Engineering Principles (Surgical Changes: "Touch only code required by the task"); each exists on `main` or outside the kit and is recorded in the guide, decision 3
 Checks: tests `python3 -m pytest .claude/hooks/tests/ tests/ -q` — 7316 passed, 5 skipped; reviews code-review — P0 0 / P1 1 / P2 4 / P3 2, fixed in d778e406; security-review — P1 2 / P3 2, fixed cf180bc4; Skill `security-review` re-check — 1 Medium, fixed e5ad4a5c
 Memory: nothing new yet (pass runs at merge)
-Not done: auto verify: running (T182); merge (admin: after the auto verify pass)
+Not done: auto verify: ☑ pass (session 70c5a40b-cfb3-46d2-a439-83528c32ddef, commit 4caba42edec4c84edd367a93a06c46d1cda90c25, log .claude/verify-runs/T314-4caba42edec4.log); merge (admin: after the auto verify pass)
 Paused: auto-mode check failed — Risk High, but the trace has no `security-review` Skill call [report daed3491afef]
+Closed: row moved to Done 2026-11-15 — auto verify pass (session 70c5a40b-cfb3-46d2-a439-83528c32ddef, commit 4caba42edec4c84edd367a93a06c46d1cda90c25); Gates 5 and 6 checked
 
 ## Evidence
 
@@ -65,7 +66,7 @@ Paused: auto-mode check failed — Risk High, but the trace has no `security-rev
 | **New test(s) cover Acceptance Criteria (file paths pasted)** | ☑ pass | `.claude/hooks/tests/test_t314_online_approval.py`, `test_t314_fix_round.py`, `test_t314_security_round.py`, `test_t314_backslash_key.py` (locked oracles by qa-expert: 16fea0bb, 524efaa5, 8fb26c53, 61151dfe); run at e5ad4a5c: `110 passed, 87 subtests passed in 14.32s` |
 | Verification command run | ☑ pass | `python3 -m pytest .claude/hooks/tests/test_t314_backslash_key.py .claude/hooks/tests/test_t314_online_approval.py .claude/hooks/tests/test_t314_fix_round.py .claude/hooks/tests/test_t314_security_round.py .claude/hooks/tests/test_pre_tool_sensitive_path.py -q -p no:cacheprovider` → `110 passed, 87 subtests passed in 14.32s`; `python3 -m pytest .claude/hooks/tests/ -q` → `5031 passed, 5 skipped, 87 subtests passed in 195.73s` |
 | Negative cases hold | ☑ pass | Red runs before each fix: oracle 1 `41 failed, 9 passed` (at 92daec34); fix round `27 failed, 5 passed` (7e5a6824); decision-4 re-lock `27 failed, 53 passed` (58d4c46c); backslash `10 failed, 7 passed` (cf180bc4). Each red set went green only after its fix commit (541c456b, d778e406, cf180bc4, e5ad4a5c) |
-| verify | ☐ pass / ☐ fail / ☐ N/A | [leave it: the auto verify hook writes this row, with its run record. If you ran /verify yourself, tick pass and make the whole Notes cell "/verify by the user, session <id>, commit <sha>" (the full 40-character commit). The merge gate counts no other row, even with the word "pass" in it] |
+| verify | ☑ pass | auto-run by hook, session 70c5a40b-cfb3-46d2-a439-83528c32ddef, commit 4caba42edec4c84edd367a93a06c46d1cda90c25, log .claude/verify-runs/T314-4caba42edec4.log — pass |
 | Review scope bounded to the change's blast radius (affected set, not whole repo) | ☑ pass | `git diff main...HEAD`: the two sensitive-path hooks, their wiring (`.claude/settings.json`, `hooks/hooks.json`, `plugin/hooks/hooks.json`), `.gitignore`, the tracks.md paragraph, site hook row and count pins. code-review (P0 0 / P1 1 / P2 4 / P3 2, fixed d778e406); security-review agent (P1 2 / P3 2, fixed per decision 4 in cf180bc4); Skill `security-review` re-check (1 Medium, confirmed 8/10, fixed e5ad4a5c). Local-mode backslash gap out of scope → T319 |
 | Full smoke suite still green (no regression) | ☑ pass | `python3 -m pytest .claude/hooks/tests/ tests/ -q -p no:cacheprovider` at 22bde9d2 → `7316 passed, 5 skipped, 87 subtests passed in 340.14s (0:05:40)` |
 | **Companion score (easy-verifier)** | ☑ N/A | easy-verifier MCP server failed to connect this session (ECONNREFUSED); not run |
