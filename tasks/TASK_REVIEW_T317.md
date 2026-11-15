@@ -52,6 +52,7 @@ Mode: auto
 Checks: tests pending (locked oracle being written)
 Memory: nothing new yet (pass runs at merge)
 Not done: implementation; code-review; security-review; auto verify: not started; merge (admin: after the auto verify pass)
+Paused: auto-mode check failed — Risk High, but the trace has no `security-review` Skill call [report a9360b2a0cd9]
 
 ## Evidence
 
@@ -77,8 +78,28 @@ Not done: implementation; code-review; security-review; auto verify: not started
 > **before any implementation commit exists**; if it does not (docs, templates, skill-instruction
 > text), BEFORE is the **verbatim prior content** of what changed — a quoted excerpt, not a command.
 
-**BEFORE**: [pasted timestamped command output showing the thing absent/failing, captured before the
-first implementation commit] OR [verbatim excerpt of the prior content, for non-executable changes]
+**BEFORE**: captured by `qa-expert` on the unchanged code (branch `feat/t317-session-tags` at `fc1e69c8`; `git diff --stat e76d0e44..HEAD` touches only `tasks/TASK_GUIDE_T317.md` and `tasks/TASK_REVIEW_T317.md`, so no implementation commit exists). Driver: the gate's real `main()` with constructed boards, repos and transcripts, through the oracle's own fixtures (`tagged_session`, `not_passed`, `auto_verified` in `.claude/hooks/tests/test_t317_session_tags.py`). Today an `[admin]` request followed by one untagged request falls back to the gate with no tag: the `[admin]` rule is gone, both its allowance and its limits. The merge with no auto verify is blocked, but by the normal `Pipeline gate`, not by `[admin]`. With a passed verify, a force push and a push to `main` go through; `[ticket]` is not read at all.
+
+```
+captured 2026-11-15T10:21:16Z on fc1e69c8 (feat/t317-session-tags, no implementation commit)
+$ python3 -c 'import auto_mode; auto_mode.session_tag(...)'
+AttributeError: module 'auto_mode' has no attribute 'session_tag'
+transcript: human 'run the board [admin]' (-900s), then 'thanks', 'go on', 'and the next one' (no tag)
+latest request: 'and the next one' | admin_request: None
+[no auto verify]  git merge feat/t900-x  -> BLOCKED: [hook:pre_bash] Pipeline gate failed — cannot push/merge: | • Tasks in Ready for Review missing Stage 5 verify evidence: T900 (no evidence row)
+[no auto verify]  git push origin feat/t900-x  -> BLOCKED: [hook:pre_bash] Pipeline gate failed — cannot push/merge: | • Tasks in Ready for Review missing Stage 5 verify evidence: T900 (no evidence row)
+[no auto verify]  git push --force origin feat/t900-x  -> BLOCKED: [hook:pre_bash] Pipeline gate failed — cannot push/merge: | • Tasks in Ready for Review missing Stage 5 verify evidence: T900 (no evidence row)
+transcript: human 'work the tickets [ticket]' (-900s), then 3 untagged requests; T900 auto verify passed
+[ticket]  git merge feat/t900-x  -> ALLOWED (no block)
+captured 2026-11-15T10:21:29Z on fc1e69c8
+transcript: same [admin]-then-3-untagged session; T900 auto verify passed
+[admin earlier]  git push --force origin feat/t900-x  -> ALLOWED (no block)
+[admin earlier]  git push origin feat/t900-x:main  -> ALLOWED (no block)
+[admin earlier]  git push --tags  -> ALLOWED (no block)
+captured 2026-11-15T10:21:39Z on fc1e69c8
+$ python3 -m pytest .claude/hooks/tests/test_t317_session_tags.py -q -p no:cacheprovider
+118 failed, 19 passed in 26.45s
+```
 
 **AFTER**: [same command, post-change] OR [verbatim excerpt of the new content]
 
