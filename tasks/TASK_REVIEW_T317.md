@@ -1,4 +1,4 @@
-# TASK_REVIEW — T[NNN]: [Short Title]
+# TASK_REVIEW — T317: session-wide `[admin]` and `[ticket]` tags; Autonomous setup profile
 
 > Sibling of `tasks/TASK_GUIDE_T[NNN].md`. Everything here is **filled by the reviewer at Stage
 > 4/5** — it is deliberately NOT in the guide, because the implementing agent re-reads the guide on
@@ -57,25 +57,26 @@ Mode: auto
 4. Oracle gap G2: a `[ticket]` push needs a passed auto verify — RULE: tasks/TASK_GUIDE_T317.md § Requirement ("run it Stage 0–5 in auto mode, push its feature branch")
 5. Oracle gap G3: a later `[auto]` ends a session tag — RULE: tasks/TASK_GUIDE_T317.md § Requirement ("until the user types `[stop]` (or a different tag)")
 6. Oracle gap G4: update the five-profile-id test — RULE: AGENTS.md § Karpathy Engineering Principles (Goal-Driven Execution)
-Checks: tests — locked oracle 3ac24be3: 118 failed / 19 passed (red, as required); implementation in progress
-Memory: nothing new yet (pass runs at merge)
-Not done: implementation; code-review; security-review; auto verify: not started; merge (admin: after the auto verify pass)
-Paused: auto-mode check failed — Risk High, but the trace has no `security-review` Skill call [report a9360b2a0cd9]
+11. Code-review fix round R1-R6 applied as the guide records them; R2 moves the resume mark under the anchors base, and the older AC8 helpers are re-locked to it by qa-expert (631da7a7) — RULE: tasks/TASK_GUIDE_T317.md § Approach (decision 3, fix round R1-R6)
+12. Two AC8 checks that could no longer fail after R2 (unsafe session id, bad stdin) re-locked to the anchors base by qa-expert (d7bfd5ae), with a scratch mutation run showing 6 failures — RULE: tasks/TASK_GUIDE_T317.md § Evaluation & Acceptance ("written first by `qa-expert` ... The implementer may not edit them")
+Checks: tests `python3 -m pytest .claude/hooks/tests/test_t317_session_tags.py .claude/hooks/tests/test_t317_fix_round.py -q -p no:cacheprovider` — 165 passed; full `python3 -m pytest .claude/hooks/tests/ tests/ -q -p no:cacheprovider` — 7410 passed, 5 skipped; reviews code-review (re-review after R1-R6) — P0 0 / P1 0 / P2 0 / P3 1; security-review — no findings; real run: the Demonstration AFTER driver above — printed the blocked and allowed lines shown (auto-checked, not /verify)
+Memory: nothing new
+Not done: merge (admin: after the auto verify pass); auto verify: running (T182)
 
 ## Evidence
 
 | Check | Result | Notes / output snippet |
 |-------|--------|------------------------|
-| **New test(s) cover Acceptance Criteria (file paths pasted)** | ☐ pass / ☐ fail | [test file path(s) — required before Done] |
-| Verification command run | ☐ pass / ☐ fail | [paste actual output] |
-| Negative cases hold | ☐ pass / ☐ fail | [paste the red run against the prior content, or the mutation diff (`git diff --stat`, non-empty) before each verdict] |
+| **New test(s) cover Acceptance Criteria (file paths pasted)** | ☑ pass | `.claude/hooks/tests/test_t317_session_tags.py` (AC1-AC8), `.claude/hooks/tests/test_t317_fix_round.py` (R1-R6), `.claude/hooks/tests/test_t317_loop_binding.py`, `tests/test_settings_setup.py` (autonomous profile). `python3 -m pytest .claude/hooks/tests/test_t317_session_tags.py .claude/hooks/tests/test_t317_fix_round.py -q -p no:cacheprovider` → `165 passed in 6.52s` at d7bfd5ae |
+| Verification command run | ☑ pass | `python3 -m pytest .claude/hooks/tests/ tests/ -q -p no:cacheprovider` at d7bfd5ae → `7410 passed, 5 skipped, 25 subtests passed in 360.26s (0:06:00)` |
+| Negative cases hold | ☑ pass | Red run of the locked oracle on unchanged code fc1e69c8: `118 failed, 19 passed` (Demonstration BEFORE). Fix-round oracle at 1a56fafb: `4 failed, 161 passed` (the 4 R2 tests). AC8 re-lock mutation (scratch copy, hook writes `$CLAUDE_TRACE_ANCHOR_DIR/x/mark` on every call): `6 failed, 131 deselected` on the new lines 730 and 742 |
 | verify | ☐ pass / ☐ fail / ☐ N/A | [leave it: the auto verify hook writes this row, with its run record. If you ran /verify yourself, tick pass and make the whole Notes cell "/verify by the user, session <id>, commit <sha>" (the full 40-character commit). The merge gate counts no other row, even with the word "pass" in it] |
-| Review scope bounded to the change's blast radius (affected set, not whole repo) | ☐ pass / ☐ fail | [what was reviewed vs. skipped, and why] |
-| Full smoke suite still green (no regression) | ☐ pass / ☐ fail | |
-| **Companion score (easy-verifier)** | ☐ pass / ☐ fail / ☐ N/A | [`overall` and `change_risk` as the tool returned them, the scope, the ref, and the absolute path of the verifier report after a literal `report:` label — e.g. "overall 86 (>= 80), change_risk pass, scope changes, ref `main...HEAD`, report: `/home/me/.easy-verifier-reports/kit/score_changes_20261028T0530Z.html`". The gate reads the path that follows `report:` and nothing else, so with no label, or a path that is absent, the row is unscored — write ☑ N/A instead. ☑ N/A with a reason when neither companion tool was run: the merge gate blocks on ☑ fail only, never on an absent or N/A row] |
-| **UI: Visual regression (diff or verdict pasted)** | ☐ pass / ☐ fail / ☐ N/A | [screenshot path or LLM verdict — required for UI tasks, Hard-Stop Gate 6] |
-| **UI: Design-system compliance (tokens/colors/typography verified)** | ☐ pass / ☐ fail / ☐ N/A | [method used + output] |
-| **UI: Responsiveness at target viewports** | ☐ pass / ☐ fail / ☐ N/A | [viewports tested, any overflow findings] |
+| Review scope bounded to the change's blast radius (affected set, not whole repo) | ☑ pass | `git diff main...HEAD` on feat/t317-session-tags: `lib/auto_mode.py`, `lib/session_work.py`, `pre_bash_block_unsafe_merge.py`, `session_start_resume_mark.py`, `stop_auto_mode_check.py`, the three hook wirings, `settings-setup` profile and SKILL, tracks.md, AGENTS.md; callers `lib/verify_record.py` (record_dir) and `board_rows`. Skipped: hooks the diff does not touch |
+| Full smoke suite still green (no regression) | ☑ pass | `7410 passed, 5 skipped, 25 subtests passed in 360.26s` at d7bfd5ae |
+| **Companion score (easy-verifier)** | ☑ N/A | easy-verifier MCP server failed to connect (ECONNREFUSED) this session; neither companion tool was run |
+| **UI: Visual regression (diff or verdict pasted)** | ☑ N/A | no UI: hook, docs and skill-data change |
+| **UI: Design-system compliance (tokens/colors/typography verified)** | ☑ N/A | no UI: hook, docs and skill-data change |
+| **UI: Responsiveness at target viewports** | ☑ N/A | no UI: hook, docs and skill-data change |
 
 ---
 
@@ -134,7 +135,6 @@ $ python3 -m pytest .claude/hooks/tests/test_t317_session_tags.py -q -p no:cache
 137 passed in 3.33s
 ```
 
-**DELTA**: [one sentence — what a user can now do that they could not before]
+**DELTA**: The user can now type `[admin]` or `[ticket]` once and have it hold for the whole session, with `[ticket]` limited to a plain push of the task branch and `[admin]` to the task's own merge and `main` push after a passed auto verify.
 
-**WITNESS**: [who ran it and when — derived from `memory/event-trace/T317.jsonl`, never the
-implementing agent alone]
+**WITNESS**: BEFORE by qa-expert at 2026-11-15T10:21Z on fc1e69c8; AFTER by the implementer at 2026-11-15T11:14Z on 5c12c7fb; re-checked by the Supervisor's full suite run at d7bfd5ae (7410 passed) and by the hook's auto verify run that follows Ready for Review.
