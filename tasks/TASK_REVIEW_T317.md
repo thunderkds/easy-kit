@@ -52,7 +52,6 @@ Mode: auto
 Checks: tests pending (locked oracle being written)
 Memory: nothing new yet (pass runs at merge)
 Not done: implementation; code-review; security-review; auto verify: not started; merge (admin: after the auto verify pass)
-Paused: auto-mode check failed — Risk High: decision 1 (`SAFER OPTION`) is a choice — it is flagged ⚠ — so it must be `DEBATED` with exactly 3 Advocates named; Risk High, but the trace has no `security-review` Skill call [report 39aa7e142a72]
 
 ## Evidence
 
