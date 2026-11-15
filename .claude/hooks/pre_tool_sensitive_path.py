@@ -381,10 +381,12 @@ def is_state_key(key):
 
 def file_key(path, cwd, root):
     """The one approval key of a file: root-relative under the root, else its absolute
-    realpath. None for a directory or anything under `.claude/state` (never approvable)."""
-    absolute = os.path.normpath(os.path.join(cwd, os.path.expanduser(path.replace("\\", "/"))))
-    real = os.path.realpath(absolute)
-    if os.path.isdir(real):
+    realpath. None for a directory or anything under `.claude/state` (never approvable).
+    Built from the path as the OS sees it: no `\\` rewrite and no lexical `normpath` first,
+    because on Linux `\\` is a file-name character (`a\\..\\b` is one new file, not `b`).
+    None for a key that holds a `\\`: such a file is never approvable, it always asks."""
+    real = os.path.realpath(os.path.join(cwd, path))
+    if os.path.isdir(real) or "\\" in real:
         return None
     key = _within(real, os.path.realpath(root)) or real.replace(os.sep, "/")
     return None if is_state_key(key) else key
@@ -412,8 +414,9 @@ def sensitive_hits(tool_name, tool_input, cwd, roots, patterns):
 
 
 def written_key(path, cwd, root):
-    """The path as written, in key form but unresolved: shows when a symlink moves the key."""
-    absolute = os.path.normpath(os.path.join(cwd, os.path.expanduser(path.replace("\\", "/"))))
+    """The path as written, in key form but unresolved: shows when a symlink moves the key.
+    No `\\` rewrite, as in `file_key`."""
+    absolute = os.path.normpath(os.path.join(cwd, path))
     return _within(absolute, root) or absolute.replace(os.sep, "/")
 
 
