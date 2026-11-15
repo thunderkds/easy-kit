@@ -31,7 +31,7 @@ User, 2026-11-15, in easy-note-mcp (board mode `online`, Linear), a backend-deve
 
 **Out of scope** (what this task explicitly does NOT do):
 - Any change to local board mode: the guide's `## Files to Change (Predicted)` stays its only exemption.
-- Any change to `.claude/sensitive-paths.txt` patterns, except adding the approval file's own path.
+- Any change to `.claude/sensitive-paths.txt` patterns.
 - Approval across tasks, or with no active task: no task id → every call asks, as today.
 - The merge gate and the T313 hand-back text.
 
@@ -65,7 +65,7 @@ User, 2026-11-15, in easy-note-mcp (board mode `online`, Linear), a backend-deve
 | 3 | Board `online`, task T, every sensitive path of the call is approved for T → no output, exit 0 (no decision, never `allow`), as for a predicted path in local mode | no prompt per call |
 | 4 | A call touching an approved path plus an unapproved sensitive path asks, naming only the unapproved one | per path |
 | 5 | An approval for task T never exempts a call under task U, nor a call with no active task | per task |
-| 6 | The approval file lives under `.claude/` outside the repo's tracked files (gitignored), and its own path is a sensitive path, so an agent's Edit, Write or Bash call that touches it asks | no forged approval |
+| 6 | The approval file lives under `.claude/` outside the repo's tracked files (gitignored), and its own path is always sensitive, protected inside the hook itself (not by a new line in `.claude/sensitive-paths.txt`, so `test_ac1_shipped_list_carries_the_default_patterns` stays unchanged and a project cannot drop the protection by editing its list), so an agent's Edit, Write or Bash call that touches it asks, even when the file lists itself | no forged approval |
 | 7 | An unreadable, malformed or non-object approval file counts as empty (asks); the recorder never crashes the session: any recorder error exits 0 with no output | fail toward the human |
 | 8 | Local board mode is unchanged: the approval file is neither read nor written; all existing tests in `.claude/hooks/tests/test_pre_tool_sensitive_path.py` pass unchanged | out of scope kept |
 | 9 | `docs/claude-md/tracks.md` (or the doc that states NFR-005 for this hook) and the hook docstring say in one short paragraph how online approval works | the user knows the rule |
@@ -127,6 +127,24 @@ python3 -m pytest .claude/hooks/tests/ tests/ -q
 - `.claude/hooks/lib/` (shared helpers, if moved)
 - `.claude/hooks/tests/test_t314_online_approval.py` (new, qa-expert, locked)
 - `.claude/settings.json`
-- `.claude/sensitive-paths.txt`
 - `.gitignore`
 - `docs/claude-md/tracks.md` or the doc that states NFR-005 for this hook
+
+## Supervisor decisions during Stage 3
+
+1. 2026-11-15, qa-expert question (AC6 vs AC8): the approval file is protected inside the hook, not by a pattern-list line — RULE: AGENTS.md § Karpathy Engineering Principles (Surgical Changes: AC8 keeps the existing tests unchanged) and SAFER OPTION (a project's list edit cannot remove it). Folder stays `.claude/state/` as pinned by the locked oracle; add it to `.gitignore`.
+2. 2026-11-15, Stage 4 fix round (code-review P0 0 / P1 1 / P2 4 / P3 2, plus fact-check P1). Decisions:
+   - F1 (P1, confirmed by probe): the recorder records only what PreToolUse asked. Pre writes a pending entry `.claude/state/pending/<tool_use_id>.json` = `{task_id, keys}` when it asks in online mode with a task; Post promotes only that entry's keys under that task id, then deletes it. No pending entry → record nothing. Covers the P2 "task id re-resolved at Post". RULE: guide trust source "the user's own approval".
+   - F2 (P1, fact check): record only when the PostToolUse event's `permission_mode` is `default` or `auto` (the modes where the docs say a hook `ask` shows the prompt). Any other value or missing → record nothing. SAFER OPTION (docs silent on acceptEdits / bypassPermissions / plan; dontAsk auto-denies).
+   - F3 (P2): one canonical key per path: root-relative when under root, else absolute realpath; never the cwd-relative form.
+   - F4 (P2): protect `.claude/state/**` (the directory and everything under it), not only the file; `read_approvals` returns `{}` when `.claude/state` or the file is a symlink or its realpath is not under `<root>/.claude/state`.
+   - F5 (P2, per path any action): record file keys only, never a directory key; the ask sentence says later calls on these files, including writes and deletes, will not ask again. SAFER OPTION.
+   - F6 (P3): remove the tmp file in a `finally`; `site/docs.html` recorder row uses the `inert` tag.
+   - Out of this task: `.claude/sensitive-paths.txt` is not in its own list (existing gap, reviewer finding) → registered as its own task.
+3. 2026-11-15, security-review round (P0 0 / P1 2 / P2 0 / P3 2 on d778e406). Decisions, all SAFER OPTION:
+   - S1 (P1, approval follows the basename across `cd`): a Bash call honours no approval when its command can change the directory a path resolves against: `cd`, `pushd`, `popd`, `chdir`, any `-C`/`--directory`, `env -C`, `sh -c`/`bash -c`/`zsh -c`, `eval`, `exec`, `source`/`.`. Such a call asks for every sensitive path, as on `main`. Edit/Write (`file_path` is exact) are unaffected.
+   - S2 (P1, forge the approval file via `cd .claude` / `-C .claude`): the basename `sensitive-approvals.json` (and `sensitive-approvals.json.*`) is sensitive in any directory; a token that resolves to `<root>/.claude` or `<root>/.claude/state` in a Bash call that changes directory (S1 list) or uses `-C` asks. Never approvable.
+   - S3 (P3, trailing `/` on an approved file key): a token ending in `/` never matches an approval.
+   - S4 (P3, symlink key differs from the written path): when the recorded key differs from the path as written, the ask names both (`config/prod.json → .env`).
+   - Residuals recorded, not fixed here: (a) a programmatic permission host (Agent SDK `canUseTool`) answering the ask under `permission_mode` `default` records an approval with no human — the kit ships no such host; (b) an agent can switch the active task via `.claude/hooks/.state/active_task.d/<session>` and borrow that task's approvals — pre-existing task-scope trust, same as predicted paths in local mode; (c) interpreter strings (`python3 -c "open('.env','w')"`) are unresolved, as on `main`.
+4. 2026-11-15 [admin], Debate (3 Advocates, unanimous on honouring): approvals are recorded and honoured for Edit and Write only. Every Bash call that touches a sensitive path asks, as on `main`; the Bash ask reason says a later Edit or Write of an approved file will not ask again. Replaces S1 (directory-change list) and S3 (trailing `/`, Bash-only). S2's basename guard (`sensitive-approvals.json*` sensitive in any directory) and S4 (name the resolved file) stay. Locked-oracle assertions that expect a silent Bash call after an approval change to expect `ask` — re-locked by qa-expert under this decision.

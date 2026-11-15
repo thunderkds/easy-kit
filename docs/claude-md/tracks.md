@@ -147,6 +147,19 @@ In board mode `online` the record still goes to `tasks/MINIMAL_LOG.md`. The boar
 `scripts/board_sync.py` as today. If the board's render drops the `Track: minimal` marker, the stop reminder
 lists the row for Stage 4. That is a wrong reminder, not a weaker gate.
 
+Sensitive paths (T314, NFR-005). In board mode `online` a guide comes from the board, so its
+`## Files to Change (Predicted)` never exempts a sensitive path: `pre_tool_sensitive_path.py` asks. Approvals
+apply to Edit and Write only. Every Bash call that touches a sensitive path asks, approved or not. The user
+approves a file once per task. The hook records only what it asked: on each online ask about an Edit or Write
+with an active task, it writes a pending entry under `.claude/state/pending/`. If the user says yes, the call
+runs and `post_tool_sensitive_approval.py` moves that entry's files to `.claude/state/sensitive-approvals.json`
+(gitignored), only when the permission mode is `default` or `auto`. Approval covers files only, never a
+folder. A later Edit or Write of an approved file in that task gets no prompt from the hook. When a symlink
+makes the file differ from the path as written, the ask names both (`config/prod.json → .env`). With no active
+task, every call asks. `.claude/state`, everything in it, and any file named `sensitive-approvals.json*` are
+always sensitive. To withdraw all approvals, delete the file. Board mode `local` does not read or write any of
+it.
+
 ---
 
 ## Auto mode

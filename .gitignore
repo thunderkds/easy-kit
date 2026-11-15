@@ -55,6 +55,8 @@ memory/event-trace/
 .claude/verify-runs/
 # T214: old background-spawn markers (.pid/.done/.exit/prompt), runtime only
 .claude/markers/
+# T314: online sensitive-path approvals, per user and machine
+.claude/state/
 
 # ============================================================
 # Section 7: Vercel CLI local auth/link state (T084)
