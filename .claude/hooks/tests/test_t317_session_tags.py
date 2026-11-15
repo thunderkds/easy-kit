@@ -576,9 +576,10 @@ def test_ac7_mutation_control_prose_about_allow_is_not_counted():
 # ══ AC 8 (Supervisor decision 1, Stage 3) — a session tag survives `/compact`, ends at a resume ═
 # Pinned: the resume hook `.claude/hooks/session_start_resume_mark.py`, wired in
 # `.claude/settings.json` as a `SessionStart` hook with matcher `resume`. It writes one ISO UTC time
-# to `<project root>/.claude/hooks/.state/resume_at.d/<session_id>`; the project root is
-# `lib/project_root.py`'s `project_root()`, read at call time (`$CLAUDE_PROJECT_DIR` honoured), by
-# the hook and by `session_tag`. `session_tag` ignores every tag typed before that time. The session
+# to `am.resume_mark_path(<session_id>)`, under the anchors base (`$CLAUDE_TRACE_ANCHOR_DIR`, else
+# `~/.claude/harness-anchors`) since T317 R2 (re-locked; the path itself is pinned in
+# `test_t317_fix_round.py`). The project root is `lib/project_root.py`'s `project_root()`, read at
+# call time (`$CLAUDE_PROJECT_DIR` honoured), by the hook and by `session_tag`. `session_tag` ignores every tag typed before that time. The session
 # ID is the transcript file's stem (a path) or the entries' `sessionId` (a list of events).
 from datetime import datetime, timedelta, timezone  # noqa: E402
 
@@ -607,11 +608,15 @@ def project(tmp_path, monkeypatch):
     (root / ".claude" / "hooks" / ".state").mkdir(parents=True)
     (root / "PROJECT_KANBAN.md").write_text("# PROJECT_KANBAN\n", encoding="utf-8")
     monkeypatch.setenv("CLAUDE_PROJECT_DIR", str(root))
+    monkeypatch.setenv("CLAUDE_TRACE_ANCHOR_DIR", str(tmp_path / "anchors"))  # no mark carries over
     return root
 
 
 def mark_path(root, session_id=SID):
-    return root / ".claude" / "hooks" / ".state" / "resume_at.d" / session_id
+    """The mark `session_tag` reads (`root` is the project the fixture set in the environment)."""
+    path = am.resume_mark_path(session_id)
+    assert path is not None, session_id
+    return type(root)(path)
 
 
 def write_mark(root, offset_s, session_id=SID):
