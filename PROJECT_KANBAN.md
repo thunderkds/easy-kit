@@ -8,7 +8,6 @@
 ## Board
 
 ### Todo
-- [ ] **T317** — session-wide `[admin]` and `[ticket]` tags run the board on their own; an "Autonomous" setup profile turns on auto mode | common-infrastructure | C3 | Risk: High | P1 | Depends on: T314, T315 | Registered 2026-11-15, user: "1, all look good / 2, i mean auto run, not ask me for bash execute"
 - [ ] **T316** — `.claude/sensitive-paths.txt` is not in its own list: an Edit of it gets no ask (`Edit .claude/sensitive-paths.txt: <silent>`), so an agent can drop any protection with no prompt; make the hook treat its own pattern list as always sensitive (like the T314 approval dir) | common-infrastructure | C1 | Risk: High | P1 | Registered 2026-11-15 from the T314 Stage 4 code review (P2 finding, outside T314 scope)
 - [ ] **T315** — a setup choice makes the sensitive-path hook warn instead of ask | common-infrastructure | C2 | Risk: High | P1 | Depends on: T314 | Registered 2026-11-15, user: "yes, start and continue" (setup choice instead of a tag bypass)
 - [ ] **T313** — `[admin]` hand-back offers an unsafe bypass: when auto verify cannot start (easy-note-mcp HUN-251: board mode `online`, Linear team HUN has no "In Review" status, so the row cannot reach Ready for Review), the Supervisor handed the user `! git -C … merge --no-ff spike/HUN-251-client-launch …` + `! git … push origin main` ("hooks don't apply to commands you run with !"), which skips the verify gate and the review file's own "merge HUN-252 first" note. Under `[admin]` (and `[auto]`), a paused merge must name the real blocker and the one user fix (here: add an `In Review` status to the Linear team), and must never suggest a `!` merge/push that bypasses the merge gate; consider a `wake`/preflight check that an `online` board has a review status | Supervisor | C1 | Risk: Medium | P1 | Registered 2026-11-15, user: "yes" (to opening a kit task after the HUN-251 hand-back) | Evidence: easy-note-mcp `tasks/TASK_REVIEW_HUN-251.md` lines 54, 57
@@ -93,6 +92,7 @@
 
 
 ### In Progress
+- [ ] **T317** — session-wide `[admin]` and `[ticket]` tags run the board on their own; an "Autonomous" setup profile turns on auto mode | common-infrastructure | C3 | Risk: High | P1 | Depends on: T314, T315 | Registered 2026-11-15, user: "1, all look good / 2, i mean auto run, not ask me for bash execute" | Started 2026-11-15 [admin]: branch `feat/t317-session-tags`, worktree `../wt-t317` | Track: extended
 - [ ] **T314** — in board mode `online`, the sensitive-path hook asks once per path per task, not once per call | common-infrastructure | C2 | Risk: High | P1 | Started 2026-11-15: branch `feat/t314-online-approval`, worktree `../wt-t314` | Track: extended
 
 
