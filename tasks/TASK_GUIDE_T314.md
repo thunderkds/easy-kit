@@ -31,7 +31,7 @@ User, 2026-11-15, in easy-note-mcp (board mode `online`, Linear), a backend-deve
 
 **Out of scope** (what this task explicitly does NOT do):
 - Any change to local board mode: the guide's `## Files to Change (Predicted)` stays its only exemption.
-- Any change to `.claude/sensitive-paths.txt` patterns, except adding the approval file's own path.
+- Any change to `.claude/sensitive-paths.txt` patterns.
 - Approval across tasks, or with no active task: no task id → every call asks, as today.
 - The merge gate and the T313 hand-back text.
 
@@ -65,7 +65,7 @@ User, 2026-11-15, in easy-note-mcp (board mode `online`, Linear), a backend-deve
 | 3 | Board `online`, task T, every sensitive path of the call is approved for T → no output, exit 0 (no decision, never `allow`), as for a predicted path in local mode | no prompt per call |
 | 4 | A call touching an approved path plus an unapproved sensitive path asks, naming only the unapproved one | per path |
 | 5 | An approval for task T never exempts a call under task U, nor a call with no active task | per task |
-| 6 | The approval file lives under `.claude/` outside the repo's tracked files (gitignored), and its own path is a sensitive path, so an agent's Edit, Write or Bash call that touches it asks | no forged approval |
+| 6 | The approval file lives under `.claude/` outside the repo's tracked files (gitignored), and its own path is always sensitive, protected inside the hook itself (not by a new line in `.claude/sensitive-paths.txt`, so `test_ac1_shipped_list_carries_the_default_patterns` stays unchanged and a project cannot drop the protection by editing its list), so an agent's Edit, Write or Bash call that touches it asks, even when the file lists itself | no forged approval |
 | 7 | An unreadable, malformed or non-object approval file counts as empty (asks); the recorder never crashes the session: any recorder error exits 0 with no output | fail toward the human |
 | 8 | Local board mode is unchanged: the approval file is neither read nor written; all existing tests in `.claude/hooks/tests/test_pre_tool_sensitive_path.py` pass unchanged | out of scope kept |
 | 9 | `docs/claude-md/tracks.md` (or the doc that states NFR-005 for this hook) and the hook docstring say in one short paragraph how online approval works | the user knows the rule |
@@ -127,6 +127,9 @@ python3 -m pytest .claude/hooks/tests/ tests/ -q
 - `.claude/hooks/lib/` (shared helpers, if moved)
 - `.claude/hooks/tests/test_t314_online_approval.py` (new, qa-expert, locked)
 - `.claude/settings.json`
-- `.claude/sensitive-paths.txt`
 - `.gitignore`
 - `docs/claude-md/tracks.md` or the doc that states NFR-005 for this hook
+
+## Supervisor decisions during Stage 3
+
+1. 2026-11-15, qa-expert question (AC6 vs AC8): the approval file is protected inside the hook, not by a pattern-list line — RULE: AGENTS.md § Karpathy Engineering Principles (Surgical Changes: AC8 keeps the existing tests unchanged) and SAFER OPTION (a project's list edit cannot remove it). Folder stays `.claude/state/` as pinned by the locked oracle; add it to `.gitignore`.
