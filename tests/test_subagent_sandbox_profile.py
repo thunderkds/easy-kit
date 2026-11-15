@@ -174,7 +174,7 @@ def test_sc5_supervisor_settings_have_no_permissions_or_sandbox():
         # T314: one PostToolUse hook entry (the online sensitive-path approval recorder).
         allowed |= {'"description": "T314: record sensitive paths the user approved (board mode '
                     'online) for the active task"',
-                    '"matcher": "Edit|Write|Bash"',
+                    '"matcher": "Edit|Write"',
                     '"command": "python3 \\"$CLAUDE_PROJECT_DIR\\"/.claude/hooks/'
                     'post_tool_sensitive_approval.py"'}
         assert set(changed) <= allowed, set(changed) - allowed

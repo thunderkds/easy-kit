@@ -54,6 +54,7 @@ Mode: auto
 Checks: tests pending (security-round fix in progress); reviews code-review — P0 0 / P1 1 / P2 4 / P3 2, fixed in d778e406; security-review — P1 2 / P3 2, fix in progress
 Memory: nothing new yet (pass runs at merge)
 Not done: security-review re-check (Skill `security-review`, after the decision-4 fix); auto verify: not started; merge (admin: after the auto verify pass)
+Paused: auto-mode check failed — Risk High, but the trace has no `security-review` Skill call [report daed3491afef]
 
 ## Evidence
 
@@ -94,25 +95,23 @@ exit=0
 
 Both calls print `ask`: in board mode `online` there is no way to approve the path once for T314.
 
-**AFTER**: captured by common-infrastructure after the Stage 4 fix round (worktree `wt-t314`, working tree on `524efaa5` plus the F1–F6 fix, before its commit). Same temp project `$S` (shipped `.claude/sensitive-paths.txt`, `PROJECT_KANBAN.md`, online `.claude/board.json` `{"board": "fake", "fake_board": "board.json", "id_pattern": "ENG-\\d+"}`) and the same call, fed twice to the PreToolUse hook. Between the two runs the PostToolUse recorder gets the same call with the same `tool_use_id` and `permission_mode` `default`, which stands in for "the user said yes and the call ran":
+**AFTER**: captured by common-infrastructure after the decision-4 round (worktree `wt-t314`, working tree on `92835beb` plus the decision-4 fix, before its commit). Same temp project `$S` (shipped `.claude/sensitive-paths.txt`, `PROJECT_KANBAN.md`, online `.claude/board.json` `{"board": "fake", "fake_board": "board.json", "id_pattern": "ENG-\\d+"}`). A Write of `tests/fixtures/secrets/x.json` asks. Then the PostToolUse recorder gets the same call with the same `tool_use_id` and `permission_mode` `default`, which stands in for "the user said yes and the call ran". Then the same Write is silent, and a Bash `cat` of the file still asks (approvals are Edit/Write only):
 
 ```
-$ PRE='{"tool_name":"Bash","hook_event_name":"PreToolUse","tool_use_id":"toolu_demo1","permission_mode":"default","cwd":"'$S'","tool_input":{"command":"cat tests/fixtures/secrets/x.json"}}'
-$ POST='{"tool_name":"Bash","hook_event_name":"PostToolUse","tool_use_id":"toolu_demo1","permission_mode":"default","cwd":"'$S'","tool_input":{"command":"cat tests/fixtures/secrets/x.json"},"tool_response":{"stdout":"","stderr":"","interrupted":false}}'
-$ PRE2='{"tool_name":"Bash","hook_event_name":"PreToolUse","tool_use_id":"toolu_demo2","permission_mode":"default","cwd":"'$S'","tool_input":{"command":"cat tests/fixtures/secrets/x.json"}}'
-$ echo "--- call 1 $(date -u +%Y-%m-%dT%H:%M:%SZ)"; echo "$PRE" | CLAUDE_PROJECT_DIR=$S CLAUDE_ACTIVE_TASK=T314 python3 .claude/hooks/pre_tool_sensitive_path.py; echo "exit=$?"; echo "pending:"; cat $S/.claude/state/pending/toolu_demo1.json
-$ echo "--- recorder (PostToolUse, same tool_use_id, permission_mode default: the user said yes)"; echo "$POST" | CLAUDE_PROJECT_DIR=$S CLAUDE_ACTIVE_TASK=T314 python3 .claude/hooks/post_tool_sensitive_approval.py; echo "exit=$?"; ls $S/.claude/state/pending/; cat $S/.claude/state/sensitive-approvals.json
-$ echo "--- call 2 $(date -u +%Y-%m-%dT%H:%M:%SZ)"; echo "$PRE2" | CLAUDE_PROJECT_DIR=$S CLAUDE_ACTIVE_TASK=T314 python3 .claude/hooks/pre_tool_sensitive_path.py; echo "exit=$?"
---- call 1 2026-11-15T08:48:35Z
-{"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "ask", "permissionDecisionReason": "[hook:sensitive-path] This Bash call touches a sensitive path: tests/fixtures/secrets/x.json (pattern `**/secrets/**`). Listed in .claude/sensitive-paths.txt and board mode is online, where guides come from the board and cannot pre-authorise a sensitive path. After you approve, later calls in T314 that touch only these files, including writes and deletes, will not ask again."}}
+$ cat run3.sh
+W1='{"tool_name":"Write","hook_event_name":"PreToolUse","tool_use_id":"toolu_demo1","permission_mode":"default","cwd":"'$S'","tool_input":{"file_path":"tests/fixtures/secrets/x.json","content":"{}"}}'
+P1='{"tool_name":"Write","hook_event_name":"PostToolUse","tool_use_id":"toolu_demo1","permission_mode":"default","cwd":"'$S'","tool_input":{"file_path":"tests/fixtures/secrets/x.json","content":"{}"},"tool_response":{"success":true}}'
+W2='{"tool_name":"Write","hook_event_name":"PreToolUse","tool_use_id":"toolu_demo2","permission_mode":"default","cwd":"'$S'","tool_input":{"file_path":"tests/fixtures/secrets/x.json","content":"{}"}}'
+B3='{"tool_name":"Bash","hook_event_name":"PreToolUse","tool_use_id":"toolu_demo3","permission_mode":"default","cwd":"'$S'","tool_input":{"command":"cat tests/fixtures/secrets/x.json"}}'
+run() { echo "$2" | CLAUDE_PROJECT_DIR=$S CLAUDE_ACTIVE_TASK=T314 python3 .claude/hooks/$1; echo "exit=$?"; }
+echo "--- Write, call 1 $(date -u +%Y-%m-%dT%H:%M:%SZ)"; run pre_tool_sensitive_path.py "$W1"
+echo "--- recorder (PostToolUse, same tool_use_id, permission_mode default: the user said yes)"; run post_tool_sensitive_approval.py "$P1"; cat $S/.claude/state/sensitive-approvals.json
+echo "--- Write, call 2 $(date -u +%Y-%m-%dT%H:%M:%SZ)"; run pre_tool_sensitive_path.py "$W2"
+echo "--- Bash cat of the same file $(date -u +%Y-%m-%dT%H:%M:%SZ)"; run pre_tool_sensitive_path.py "$B3"
+$ bash run3.sh
+--- Write, call 1 2026-11-15T10:20:29Z
+{"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "ask", "permissionDecisionReason": "[hook:sensitive-path] This Write call touches a sensitive path: tests/fixtures/secrets/x.json (pattern `**/secrets/**`). Listed in .claude/sensitive-paths.txt and board mode is online, where guides come from the board and cannot pre-authorise a sensitive path. After you approve, a later Edit or Write of these files in T314 will not ask again."}}
 exit=0
-pending:
-{
-  "keys": [
-    "tests/fixtures/secrets/x.json"
-  ],
-  "task_id": "T314"
-}
 --- recorder (PostToolUse, same tool_use_id, permission_mode default: the user said yes)
 exit=0
 {
@@ -120,11 +119,14 @@ exit=0
     "tests/fixtures/secrets/x.json"
   ]
 }
---- call 2 2026-11-15T08:48:35Z
+--- Write, call 2 2026-11-15T10:20:30Z
+exit=0
+--- Bash cat of the same file 2026-11-15T10:20:30Z
+{"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "ask", "permissionDecisionReason": "[hook:sensitive-path] This Bash call touches a sensitive path: tests/fixtures/secrets/x.json (pattern `**/secrets/**`). Listed in .claude/sensitive-paths.txt and board mode is online, where guides come from the board and cannot pre-authorise a sensitive path. A Bash call always asks; after you approve an Edit or Write of these files in T314, a later Edit or Write of them will not ask again."}}
 exit=0
 ```
 
-Call 1 asks, with the approve-once sentence, and writes the pending entry. The recorder promotes that entry's key under T314 and deletes the entry (the `ls` of `pending/` prints nothing). Call 2 prints nothing (no decision, not `allow`).
+The first Write asks, with the Edit-or-Write sentence. The recorder records the file under T314. The second Write prints nothing (no decision, not `allow`). The Bash `cat` of the approved file still asks.
 
 **DELTA**: [one sentence — what a user can now do that they could not before]
 

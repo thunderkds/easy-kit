@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """
-PostToolUse recorder (T314) — fires after every Edit, Write and Bash tool call.
+PostToolUse recorder (T314) — fires after every Edit and Write tool call.
 
-It records an approval only for what `pre_tool_sensitive_path.py` asked. When that hook
-asks in board mode `online` with an active task, it writes
+Approvals are Edit/Write only: a Bash event records nothing. It records an approval only
+for what `pre_tool_sensitive_path.py` asked. When that hook
+asks about an Edit or Write in board mode `online` with an active task, it writes
 `.claude/state/pending/<tool_use_id>.json` = `{"task_id": T, "keys": [...]}`. A PostToolUse
 event with the same `tool_use_id` means the call ran, so the user said yes: that yes is the
 only trust source (NFR-005 stays — board text approves nothing). This recorder then moves
@@ -28,6 +29,8 @@ def record(event):
 
     if hook.IMPORT_ERROR is not None:
         return
+    if event.get("tool_name") not in hook.APPROVABLE_TOOLS:
+        return  # decision 4: approvals are Edit/Write only; Bash always asks
     root = hook.project_dir()
     pending = hook.pending_file(root, event.get("tool_use_id"))
     if pending is None:

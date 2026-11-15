@@ -33,7 +33,7 @@
       },
       {
         "description": "T314: record sensitive paths the user approved (board mode online) for the active task",
-        "matcher": "Edit|Write|Bash",
+        "matcher": "Edit|Write",
         "hooks": [
           {
             "type": "command",

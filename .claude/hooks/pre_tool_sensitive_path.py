@@ -22,20 +22,24 @@ with workspace access can write, so no guide's prediction exempts a sensitive pa
 always asks. An unusable `.claude/board.json` counts as online here (the safe side).
 
 Online approve-once (T314): the trust source is the user's own yes, never board text.
-Approval is recorded only for what this hook asked. When it asks in online mode with
-an active task, it writes `.claude/state/pending/<tool_use_id>.json` =
-`{"task_id": T, "keys": [...]}`. If the user says yes, the call runs and the PostToolUse
-recorder `post_tool_sensitive_approval.py` moves exactly those keys under T into
+Approvals apply to Edit and Write only: their `file_path` is exact. Every Bash call
+that touches a sensitive path asks, as before, approved or not. When this hook asks
+about an Edit or Write in online mode with an active task, it writes
+`.claude/state/pending/<tool_use_id>.json` = `{"task_id": T, "keys": [...]}`. If the
+user says yes, the call runs and the PostToolUse recorder
+`post_tool_sensitive_approval.py` moves exactly those keys under T into
 `.claude/state/sensitive-approvals.json` (gitignored), but only when the event's
 `permission_mode` is `default` or `auto` (the modes where an `ask` shows the prompt).
 Keys are files only, never a directory: one key per file, root-relative under the
-project root, else its absolute realpath. A later call in T that touches only
-approved files gets no output (no decision, never `allow`), for any action on them,
-writes and deletes included; any other sensitive path still asks, naming only that
-path. No active task -> no approval, every call asks. `.claude/state` and everything
-under it are always sensitive (hard-coded below, not in the pattern list) and never
-approvable; a symlinked or bad approval file counts as empty. Local mode neither
-reads nor writes any of it. To withdraw every approval, delete the file.
+project root, else its absolute realpath. A later Edit or Write in T of an approved
+file gets no output (no decision, never `allow`). When the key differs from the path
+as written (a symlink), the ask names both: `config/prod.json → .env`. No active task
+-> no approval, every call asks. Always sensitive and never approvable (hard-coded
+below, not in the pattern list): `.claude/state` and everything under it, any file
+named `sensitive-approvals.json*`, and `.claude` or `.claude/state` named in a Bash
+call that changes directory or uses `-C`. A symlinked or bad approval file counts as
+empty. Local mode neither reads nor writes any of it. To withdraw every approval,
+delete the file.
 
 Bash: the command's heredoc bodies and its *data* quoted spans are removed with
 `lib/shell_data.py` first — the only sanctioned way to separate command text from
@@ -70,6 +74,15 @@ STATE_RELDIR = ".claude/state"
 STATE_PATTERN = STATE_RELDIR + "/**"
 APPROVALS_RELPATH = STATE_RELDIR + "/sensitive-approvals.json"
 PENDING_RELDIR = STATE_RELDIR + "/pending"
+# S2: the approval file's name is sensitive in any directory (a `cd .claude` call can
+# write it under a relative path no root-anchored pattern sees).
+APPROVALS_NAME_PATTERNS = ("sensitive-approvals.json", "sensitive-approvals.json.*")
+PROTECTED_PATTERNS = (STATE_PATTERN,) + APPROVALS_NAME_PATTERNS
+# S2: a Bash token naming `.claude` or `.claude/state` asks when the call changes
+# directory or uses `-C`, because then a relative path may land in the state folder.
+DIR_CHANGE_TOKENS = {"cd", "pushd", "-C", "--directory"}
+STATE_PARENTS = (".claude", STATE_RELDIR)
+APPROVABLE_TOOLS = ("Edit", "Write")
 TOOL_USE_ID_PATTERN = re.compile(r"[A-Za-z0-9_-]{1,200}\Z")
 
 # Guarded like pre_bash_block_unsafe_merge.py: an unguarded ImportError exits 1
@@ -91,7 +104,8 @@ except Exception as exc:  # pragma: no cover - exercised via subprocess test
 
 # Where a shell token ends. Quote characters are separators too, because a
 # quoted span T099 keeps as code (`bash -c "cat > .env"`) arrives with its quotes.
-TOKEN_SPLIT_PATTERN = re.compile(r"[\s;&|<>()`'\"=]+")
+# `:` too (T314): `git show :.env` and `HEAD:.env` read the file; splitting only adds asks.
+TOKEN_SPLIT_PATTERN = re.compile(r"[\s;&|<>()`'\"=:]+")
 GLOB_CHARS = re.compile(r"[*?\[]")
 MAX_GLOB_MATCHES = 200
 BACKTICK_SPAN_PATTERN = re.compile(r"`([^`]+)`")
@@ -359,7 +373,10 @@ def read_approvals(root):
 
 
 def is_state_key(key):
-    return key == STATE_RELDIR or key.startswith(STATE_RELDIR + "/")
+    """Never approvable: anything under `.claude/state`, or a `sensitive-approvals.json*` file."""
+    name = key.rsplit("/", 1)[-1]
+    return (key == STATE_RELDIR or key.startswith(STATE_RELDIR + "/")
+            or name == "sensitive-approvals.json" or name.startswith("sensitive-approvals.json."))
 
 
 def file_key(path, cwd, root):
@@ -379,14 +396,25 @@ def sensitive_hits(tool_name, tool_input, cwd, roots, patterns):
     `.claude/state/**` is appended as the last pattern, so no `!` line in the
     project's list can unmark it (last match wins).
     """
-    patterns = patterns + parse_patterns(STATE_PATTERN)
+    patterns = patterns + parse_patterns("\n".join(PROTECTED_PATTERNS))
+    paths = candidate_paths(tool_name, tool_input, cwd)
+    changes_dir = tool_name == "Bash" and any(t in DIR_CHANGE_TOKENS for t in paths)
     hits = []
-    for path in candidate_paths(tool_name, tool_input, cwd):
+    for path in paths:
         forms = path_forms(path, cwd, roots)
         pattern = matching_pattern(forms, patterns)
+        if not pattern and changes_dir and any(
+                anchored and f in STATE_PARENTS for anchored, f in forms):
+            pattern = STATE_PATTERN
         if pattern:
             hits.append((path, forms, pattern))
     return hits
+
+
+def written_key(path, cwd, root):
+    """The path as written, in key form but unresolved: shows when a symlink moves the key."""
+    absolute = os.path.normpath(os.path.join(cwd, os.path.expanduser(path.replace("\\", "/"))))
+    return _within(absolute, root) or absolute.replace(os.sep, "/")
 
 
 def is_online(roots):
@@ -473,20 +501,24 @@ def main():
             task_id, [os.path.join(root, "tasks"), os.path.join(cwd, "tasks")]
         )
         online_task = board_text and task_id
-        approved = set(read_approvals(root).get(task_id, [])) if online_task else set()
+        approvable = tool_name in APPROVABLE_TOOLS
+        approved = (set(read_approvals(root).get(task_id, []))
+                    if online_task and approvable else set())
         unpredicted, keys = [], []
         for p, forms, pat in hits:
-            key = None if pat == STATE_PATTERN else file_key(p, cwd, root)
-            if is_predicted(forms, predicted) and pat != STATE_PATTERN:
+            protected = pat in PROTECTED_PATTERNS
+            key = None if protected else file_key(p, cwd, root)
+            if is_predicted(forms, predicted) and not protected:
                 continue
             if key and key in approved:
                 continue
-            unpredicted.append((p, pat))
+            shown = p if not key or key == written_key(p, cwd, root) else f"{p} \u2192 {key}"
+            unpredicted.append((shown, pat))
             if key and key not in keys:
                 keys.append(key)
         if not unpredicted:
             sys.exit(0)
-        if online_task and keys:
+        if online_task and keys and approvable:
             record_pending(root, event.get("tool_use_id"), task_id, keys)
     except SystemExit:
         raise
@@ -500,9 +532,12 @@ def main():
     if board_text:
         owner = ("board mode is online, where guides come from the board and cannot "
                  "pre-authorise a sensitive path")
-        if task_id and keys:
-            owner += (f". After you approve, later calls in {task_id} that touch only these "
-                      "files, including writes and deletes, will not ask again")
+        if task_id and keys and tool_name in APPROVABLE_TOOLS:
+            owner += (f". After you approve, a later Edit or Write of these files in {task_id} "
+                      "will not ask again")
+        elif task_id and keys:
+            owner += (f". A Bash call always asks; after you approve an Edit or Write of these "
+                      f"files in {task_id}, a later Edit or Write of them will not ask again")
     ask(f"This {tool_name} call touches a sensitive path: {listed}. "
         f"Listed in .claude/sensitive-paths.txt and {owner}.")
 
