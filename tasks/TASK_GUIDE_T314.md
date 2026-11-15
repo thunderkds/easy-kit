@@ -133,3 +133,11 @@ python3 -m pytest .claude/hooks/tests/ tests/ -q
 ## Supervisor decisions during Stage 3
 
 1. 2026-11-15, qa-expert question (AC6 vs AC8): the approval file is protected inside the hook, not by a pattern-list line — RULE: AGENTS.md § Karpathy Engineering Principles (Surgical Changes: AC8 keeps the existing tests unchanged) and SAFER OPTION (a project's list edit cannot remove it). Folder stays `.claude/state/` as pinned by the locked oracle; add it to `.gitignore`.
+2. 2026-11-15, Stage 4 fix round (code-review P0 0 / P1 1 / P2 4 / P3 2, plus fact-check P1). Decisions:
+   - F1 (P1, confirmed by probe): the recorder records only what PreToolUse asked. Pre writes a pending entry `.claude/state/pending/<tool_use_id>.json` = `{task_id, keys}` when it asks in online mode with a task; Post promotes only that entry's keys under that task id, then deletes it. No pending entry → record nothing. Covers the P2 "task id re-resolved at Post". RULE: guide trust source "the user's own approval".
+   - F2 (P1, fact check): record only when the PostToolUse event's `permission_mode` is `default` or `auto` (the modes where the docs say a hook `ask` shows the prompt). Any other value or missing → record nothing. SAFER OPTION (docs silent on acceptEdits / bypassPermissions / plan; dontAsk auto-denies).
+   - F3 (P2): one canonical key per path: root-relative when under root, else absolute realpath; never the cwd-relative form.
+   - F4 (P2): protect `.claude/state/**` (the directory and everything under it), not only the file; `read_approvals` returns `{}` when `.claude/state` or the file is a symlink or its realpath is not under `<root>/.claude/state`.
+   - F5 (P2, per path any action): record file keys only, never a directory key; the ask sentence says later calls on these files, including writes and deletes, will not ask again. SAFER OPTION.
+   - F6 (P3): remove the tmp file in a `finally`; `site/docs.html` recorder row uses the `inert` tag.
+   - Out of this task: `.claude/sensitive-paths.txt` is not in its own list (existing gap, reviewer finding) → registered as its own task.
