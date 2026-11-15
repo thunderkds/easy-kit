@@ -38,6 +38,10 @@ Mode: auto
 3. <what was decided> — DEBATED: <option> (Advocate 1: <its proposal>; Advocate 2: <its proposal>) ⚠ decided for you — please review
 4. <what was decided> — SAFER OPTION: <why> ⚠ decided for you — please review
 Paused: <only when a stop that stays paused the task: which one, and why>
+7. Site settings-tool parity tests exclude `autonomous` (opt-in Stage 1 skill profile; the site tool and its `defaultMode` ban stay unchanged) — RULE: AGENTS.md § Karpathy Engineering Principles (Surgical Changes: "Touch only code required by the task"); no UI change keeps Hard-Stop Gate 6 out of scope
+8. G1 binding narrowed: the loop binding also needs the hook's pass record written after the tag request, so the T284 P1 "work that merely names a task does not bind it" tests pass unchanged — RULE: `.claude/hooks/lib/auto_mode.py:91` "Any doubt is \"not admin\""
+9. Remaining build steps go to a fresh implementer run after the first hit the step limit — RULE: docs/claude-md/tracks.md § Stops that stay ("the same sub-agent hitting the step limit twice"): first hit, different run
+10. `T317` added to `AUTHORISED_TASKS` in `.claude/hooks/tests/merge_gate_guard.py` after Claude Code's classifier blocked the agent's edit — RULE: the user's answer, 2026-11-15 "yes [admin]" — RULE: tasks/TASK_REVIEW_T317.md § Auto decisions (pause on the safety-hook block, answered by the user)
 Checks: tests `<command>` — <result>; reviews <skill — result>; real run `<command>` — printed `<what it printed>` (auto-checked, not /verify)
 Memory: <each entry the memory pass wrote, as `file — entry` | nothing new>
 Not done: merge (yours); <auto verify: running (T182) | auto verify: <result> | /verify (yours), with [admin] only after the one retry also ended blocked>
@@ -105,7 +109,30 @@ $ python3 -m pytest .claude/hooks/tests/test_t317_session_tags.py -q -p no:cache
 118 failed, 19 passed in 26.45s
 ```
 
-**AFTER**: [same command, post-change] OR [verbatim excerpt of the new content]
+**AFTER**: same driver, through the oracle's fixtures, on the T317 implementation (`5c12c7fb`). Now an `[admin]` request holds for the later untagged requests (`session_tag` returns `admin`), and with it every `[admin]` limit: no auto verify blocks with the `[admin]` reason, and a force push, a push to `main` from the task branch and `--tags` are blocked. `[ticket]` allows only the plain push of the task branch to `origin`, never a merge. After the session's own merge, a plain `git push origin main` goes through; a force push of `main` does not.
+
+```
+captured 2026-11-15T11:14:16Z on 5c12c7fb (feat/t317-session-tags, T317 implementation)
+$ python3 -m pytest .../scratchpad/test_demo_after.py -s -q -p no:cacheprovider
+transcript: human 'run the board [admin]' (-900s), then 'thanks', 'go on', 'and the next one' (no tag)
+session_tag: 'admin' | admin_request: None
+[no auto verify]  git merge feat/t900-x  -> BLOCKED: [hook:pre_bash] Auto-mode gate — cannot push/merge: | • `[admin]` does not allow this command: T900 has no passed auto verify committed on feat/t900-x (a hook-written `auto-run by hook` row with its run record for that commit)
+[no auto verify]  git push origin feat/t900-x  -> BLOCKED: [hook:pre_bash] Auto-mode gate — cannot push/merge: | • `[admin]` does not allow this command: T900 has no passed auto verify committed on feat/t900-x (a hook-written `auto-run by hook` row with its run record for that commit)
+[no auto verify]  git push --force origin feat/t900-x  -> BLOCKED: [hook:pre_bash] Auto-mode gate — cannot push/merge: | • `[admin]` does not allow this command: `[admin]` allows only a plain push of the task branch, or of `main` after the task's own merge, to the same branch: no force, no other destination
+transcript: human 'work the tickets [ticket]' (-900s), then 3 untagged requests; T900 auto verify passed
+[ticket]  git merge feat/t900-x  -> BLOCKED: [hook:pre_bash] Auto-mode gate — cannot push/merge: | • `[ticket]` does not allow this command: `[ticket]` allows no merge: only a plain push of the task branch to `origin`
+[ticket]  git push origin feat/t900-x  -> ALLOWED (no block)
+transcript: same [admin]-then-3-untagged session; T900 auto verify passed
+[admin earlier]  git push --force origin feat/t900-x  -> BLOCKED: [hook:pre_bash] Auto-mode gate — cannot push/merge: | • `[admin]` does not allow this command: `[admin]` allows only a plain push of the task branch, or of `main` after the task's own merge, to the same branch: no force, no other destination
+[admin earlier]  git push origin feat/t900-x:main  -> BLOCKED: [hook:pre_bash] Auto-mode gate — cannot push/merge: | • `[admin]` does not allow this command: `[admin]` allows only a plain push of the task branch, or of `main` after the task's own merge, to the same branch: no force, no other destination
+[admin earlier]  git push --tags  -> BLOCKED: [hook:pre_bash] Auto-mode gate — cannot push/merge: | • `[admin]` does not allow this command: `[admin]` allows only a plain push of the task branch, or of `main` after the task's own merge, to the same branch: no force, no other destination
+transcript: same [admin] session, then this session's own merge of feat/t900-x into main and one more untagged request; T900 auto verify passed
+[admin earlier]  git push origin main  -> ALLOWED (no block)
+[admin earlier]  git push --force origin main  -> BLOCKED: [hook:pre_bash] Auto-mode gate — cannot push/merge: | • `[admin]` does not allow this command: `[admin]` allows only a plain push of the task branch, or of `main` after the task's own merge, to the same branch: no force, no other destination
+4 passed in 0.38s
+$ python3 -m pytest .claude/hooks/tests/test_t317_session_tags.py -q -p no:cacheprovider
+137 passed in 3.33s
+```
 
 **DELTA**: [one sentence — what a user can now do that they could not before]
 
