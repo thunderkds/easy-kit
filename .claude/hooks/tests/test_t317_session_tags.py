@@ -724,15 +724,22 @@ def test_ac8_a_bad_session_id_writes_nothing_outside_the_mark_dir(tmp_path, proj
     written = [p for p in state.rglob("*") if p.is_file()]
     assert written == [], written
     assert not (project / ".claude" / "hooks" / "escape").exists()
+    # Re-locked for T317 R2: the mark base is the fixture's `CLAUDE_TRACE_ANCHOR_DIR`.
+    anchors = tmp_path / "anchors"
+    written = [p for p in anchors.rglob("*") if p.is_file()] if anchors.exists() else []
+    assert written == [], written
 
 
-def test_ac8_the_hook_survives_bad_stdin(project):
+def test_ac8_the_hook_survives_bad_stdin(tmp_path, project):
     env = {**os.environ, "CLAUDE_PROJECT_DIR": str(project)}
     done = subprocess.run([sys.executable, RESUME_HOOK], input="not json", cwd=str(project),
                           capture_output=True, text=True, timeout=30, env=env)
     assert done.returncode == 0, done.stderr
     assert not (project / ".claude" / "hooks" / ".state" / "resume_at.d").exists() or \
         not any((project / ".claude" / "hooks" / ".state" / "resume_at.d").iterdir())
+    # Re-locked for T317 R2: no mark under the fixture's `CLAUDE_TRACE_ANCHOR_DIR` either.
+    anchors = tmp_path / "anchors"
+    assert not anchors.exists() or not [p for p in anchors.rglob("*") if p.is_file()]
 
 
 def test_ac8_the_resume_hook_is_wired_on_session_start_with_matcher_resume():
