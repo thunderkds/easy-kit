@@ -339,6 +339,7 @@
 - [Check `main` before filing a Stage 5 defect](learnings.md) — "found while verifying X" ≠ "caused by X"
 
 
+- [T314 merged: online sensitive-path approve-once](decisions.md) — Edit/Write only, per path per task; Bash always asks; approvals in gitignored `.claude/state/`
 - [T122 merged: CI is green again](decisions.md) — validate.sh read MANIFEST `!` exclusions as paths; red since 2026-09-22. 0 Stage-4 findings.
 - [T116 merged: packs ship as a dormant catalog](decisions.md) — `packs` in MANIFEST with no dest pair; install_pack/SUPERVISOR_PATH gone, 130 lines removed
 - [A syntax extension reaches some consumers and stops](learnings.md) — T113 taught 3 of 5 MANIFEST readers about `!`
