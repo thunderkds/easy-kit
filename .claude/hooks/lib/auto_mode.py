@@ -185,20 +185,27 @@ def admin_request(transcript_path):
 # `[auto]` alone (G3), ends it. In one request `[stop]` beats `[ticket]`, and `[ticket]` (the
 # narrower tag) beats `[admin]`. The compact summary never counts (`request_text`), so a tag typed
 # before `/compact` survives it. A resume ends it: `session_start_resume_mark.py` writes the resume
-# time to `<project root>/.claude/hooks/.state/resume_at.d/<session id>`, and every tag typed before
-# that time is ignored. Any doubt (no transcript, an unreadable mark) is "none".
+# time to `resume_mark_path(<session id>)`, beside the auto verify run records under the anchors base
+# (agents are denied writes there, T317 R2), and every tag typed before that time is ignored. Any
+# doubt (no transcript, an unreadable mark) is "none".
 TICKET_TAG = "[ticket]"
 STOP_TAG = "[stop]"
-RESUME_MARK_DIR = os.path.join(".claude", "hooks", ".state", "resume_at.d")
 SESSION_ID = re.compile(r"[A-Za-z0-9_-]+")
 
 
 def resume_mark_path(session_id):
-    """The resume mark file of `session_id` under the project root, or None for an unsafe ID."""
+    """T317 R2: `<$CLAUDE_TRACE_ANCHOR_DIR or ~/.claude/harness-anchors>/<repo slug>/resume-at-<id>`,
+    the folder of the run records (`verify_record.record_dir`), which `.claude/settings.json` denies
+    agents write access to. None for an unsafe ID or a base that is not absolute."""
     if not isinstance(session_id, str) or not SESSION_ID.fullmatch(session_id):
         return None
     from project_root import project_root  # read at call time: `$CLAUDE_PROJECT_DIR` may change
-    return os.path.join(project_root(), RESUME_MARK_DIR, session_id)
+    import verify_record  # here, not at the top: verify_record imports this module
+    try:
+        folder = os.path.dirname(verify_record.record_dir(project_root()))
+    except OSError:
+        return None
+    return os.path.join(folder, f"resume-at-{session_id}")
 
 
 def _resume_mark(session_id):

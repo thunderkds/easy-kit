@@ -4,8 +4,11 @@
 `[admin]` and `[ticket]` hold for a whole session (`lib/auto_mode.py` `session_tag`). A resume,
 continue or fork carries the old transcript into a new run, so a tag typed there must not hold
 again. On a `SessionStart` event whose `source` is `resume`, this hook writes the current UTC time
-(ISO 8601) to `<project root>/.claude/hooks/.state/resume_at.d/<session_id>`. `session_tag` then
-ignores every tag typed before that time; the user types the tag again to turn it back on.
+(ISO 8601) to `auto_mode.resume_mark_path(<session_id>)`:
+`<$CLAUDE_TRACE_ANCHOR_DIR or ~/.claude/harness-anchors>/<repo slug>/resume-at-<session_id>`, beside
+the auto verify run records, which `.claude/settings.json` denies agents write access to (T317 R2).
+`session_tag` then ignores every tag typed before that time; the user types the tag again to turn it
+back on.
 
 It writes nothing for any other source (`startup`, `clear`, `compact`: a tag survives `/compact`),
 for a session ID that is not a plain name, or for input it cannot read. It never blocks and never

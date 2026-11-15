@@ -876,8 +876,9 @@ counts. `.claude/hooks/lib/auto_mode.py` `session_tag` is the one reader.
 **Compact and resume.** A session tag survives `/compact`: the request you typed stays in the
 transcript, and the compact summary never counts. A resume, continue or fork ends the tag. The
 `SessionStart` hook `session_start_resume_mark.py` (matcher `resume`) writes the resume time to
-`.claude/hooks/.state/resume_at.d/<session id>`. `session_tag` ignores every tag typed before that
-time. Type the tag again to turn it back on.
+`<$CLAUDE_TRACE_ANCHOR_DIR or ~/.claude/harness-anchors>/<repo slug>/resume-at-<session id>`, beside
+the auto verify run records. `.claude/settings.json` denies agents write access there. `session_tag`
+ignores every tag typed before that time. Type the tag again to turn it back on.
 
 **First line.** While a session tag holds, the Supervisor names it in the first line of every reply,
 for example `Session tag: [admin] — type [stop] to end it.`
