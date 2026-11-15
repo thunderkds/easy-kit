@@ -95,7 +95,6 @@
 
 ### In Progress
 - [ ] **T317** — session-wide `[admin]` and `[ticket]` tags run the board on their own; an "Autonomous" setup profile turns on auto mode | common-infrastructure | C3 | Risk: High | P1 | Depends on: T314, T315 | Registered 2026-11-15, user: "1, all look good / 2, i mean auto run, not ask me for bash execute" | Started 2026-11-15 [admin]: branch `feat/t317-session-tags`, worktree `../wt-t317` | Track: extended
-- [ ] **T314** — in board mode `online`, the sensitive-path hook asks once per path per task, not once per call | common-infrastructure | C2 | Risk: High | P1 | Started 2026-11-15: branch `feat/t314-online-approval`, worktree `../wt-t314` | Track: extended
 
 
 
@@ -109,6 +108,7 @@
 
 
 ### Ready for Review
+- [ ] **T314** — in board mode `online`, the sensitive-path hook asks once per path per task, not once per call | common-infrastructure | C2 | Risk: High | P1 | Started 2026-11-15: branch `feat/t314-online-approval`, worktree `../wt-t314` | Track: extended | Stage 4 2026-11-15 [admin]: code-review P1 1 / P2 4 / P3 2 (fixed d778e406); security-review P1 2 / P3 2 (fixed cf180bc4, decision 4 Debate); Skill security-review re-check 1 Medium (fixed e5ad4a5c) | Ready for Review 2026-11-15: full suite 7316 passed
 
 
 
