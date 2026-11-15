@@ -54,7 +54,6 @@ Mode: auto
 Checks: tests pending (security-round fix in progress); reviews code-review — P0 0 / P1 1 / P2 4 / P3 2, fixed in d778e406; security-review — P1 2 / P3 2, fix in progress
 Memory: nothing new yet (pass runs at merge)
 Not done: security-review re-check (Skill `security-review`, after the decision-4 fix); auto verify: not started; merge (admin: after the auto verify pass)
-Paused: auto-mode check failed — Risk High: decision 2 (`SAFER OPTION`) is a choice — a safer-option pick is a choice — so it must be `DEBATED` with exactly 3 Advocates named; Risk High: decision 4 (`SAFER OPTION`) is a choice — it is flagged ⚠ — so it must be `DEBATED` with exactly 3 Advocates named; Risk High, but the trace has no `security-review` Skill call [report e54ff7fcc336]
 
 ## Evidence
 
