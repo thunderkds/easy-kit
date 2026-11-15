@@ -171,6 +171,12 @@ def test_sc5_supervisor_settings_have_no_permissions_or_sandbox():
                     '"matcher": "Edit|Write|MultiEdit|NotebookEdit"',
                     '"command": "python3 \\"$CLAUDE_PROJECT_DIR\\"/.claude/hooks/'
                     'pre_tool_locked_oracle.py"'}
+        # T314: one PostToolUse hook entry (the online sensitive-path approval recorder).
+        allowed |= {'"description": "T314: record sensitive paths the user approved (board mode '
+                    'online) for the active task"',
+                    '"matcher": "Edit|Write|Bash"',
+                    '"command": "python3 \\"$CLAUDE_PROJECT_DIR\\"/.claude/hooks/'
+                    'post_tool_sensitive_approval.py"'}
         assert set(changed) <= allowed, set(changed) - allowed
 
 

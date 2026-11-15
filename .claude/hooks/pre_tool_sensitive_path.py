@@ -21,6 +21,18 @@ Board mode `online` (T157, NFR-005): guides are pulled from the board, whose tex
 with workspace access can write, so no guide's prediction exempts a sensitive path — it
 always asks. An unusable `.claude/board.json` counts as online here (the safe side).
 
+Online approve-once (T314): the trust source is the user's own yes, never board text.
+After the user approves a call that this hook asked about, the call runs and the
+PostToolUse recorder `post_tool_sensitive_approval.py` writes each sensitive path of
+the call, for the active task, to `.claude/state/sensitive-approvals.json`
+(`{"<task_id>": ["<path>", ...]}`, gitignored). In online mode a later call in the
+same task that touches only approved paths gets no output (no decision, never
+`allow`); any unapproved sensitive path still asks, naming only that path. No
+active task -> no approval, every call asks. The approval file itself is always
+sensitive (hard-coded below, not in the pattern list) and can never approve
+itself; a bad file counts as empty. Local mode neither reads nor writes it. To
+withdraw every approval, delete the file.
+
 Bash: the command's heredoc bodies and its *data* quoted spans are removed with
 `lib/shell_data.py` first — the only sanctioned way to separate command text from
 data (T099's three fail-opens came from fresh regexes). Quoted spans T099 classes
@@ -47,6 +59,9 @@ PREDICTED_HEADING = "Files to Change (Predicted)"
 # qualifier, so the bare prefix resolves `## Files to Change (Predicted)`.
 PREDICTED_LOOKUP = "Files to Change"
 TAG = "[hook:sensitive-path]"
+# T314: the online approval file. Always sensitive, protected here rather than by a
+# line in `.claude/sensitive-paths.txt`, so a project's list edit cannot drop it.
+APPROVALS_RELPATH = ".claude/state/sensitive-approvals.json"
 
 # Guarded like pre_bash_block_unsafe_merge.py: an unguarded ImportError exits 1
 # with empty stdout, which the harness treats as a non-blocking error and lets
@@ -268,6 +283,58 @@ def is_predicted(forms, predicted):
     return any(anchored and path_string in predicted for anchored, path_string in forms)
 
 
+# --- Online approvals (T314) -------------------------------------------------
+
+def approvals_file(root):
+    return os.path.join(root, *APPROVALS_RELPATH.split("/"))
+
+
+def read_approvals(root):
+    """The approval file as `{task_id: [path, ...]}`. Anything unusable -> `{}` (asks)."""
+    try:
+        with open(approvals_file(root), encoding="utf-8") as f:
+            data = json.load(f)
+    except Exception:
+        return {}
+    if not isinstance(data, dict):
+        return {}
+    return {task: [p for p in paths if isinstance(p, str)]
+            for task, paths in data.items()
+            if isinstance(task, str) and isinstance(paths, list)}
+
+
+def approval_keys(forms):
+    """The project-relative forms a path is approved under (floating forms never count)."""
+    return sorted({path_string for anchored, path_string in forms if anchored})
+
+
+def is_approved(forms, approved):
+    """Every anchored form approved: a symlink re-pointed elsewhere asks again."""
+    keys = approval_keys(forms)
+    return bool(keys) and all(k in approved for k in keys)
+
+
+def sensitive_hits(tool_name, tool_input, cwd, roots, patterns):
+    """`[(path, forms, pattern), ...]` for every sensitive path of the call.
+
+    The approval file is appended as the last pattern, so no `!` line in the
+    project's list can unmark it (last match wins).
+    """
+    patterns = patterns + parse_patterns(APPROVALS_RELPATH)
+    hits = []
+    for path in candidate_paths(tool_name, tool_input, cwd):
+        forms = path_forms(path, cwd, roots)
+        pattern = matching_pattern(forms, patterns)
+        if pattern:
+            hits.append((path, forms, pattern))
+    return hits
+
+
+def is_online(roots):
+    """Board mode online for any root; an unusable board.json counts as online (T157)."""
+    return any(board_mode(r) != "local" for r in roots)
+
+
 # --- Hook protocol -----------------------------------------------------------
 
 def ask(reason):
@@ -325,21 +392,19 @@ def main():
         cwd = event.get("cwd") if isinstance(event.get("cwd"), str) else None
         cwd = cwd or os.getcwd()
         roots = [root, cwd]
-        hits = []
-        for path in candidate_paths(tool_name, tool_input, cwd):
-            forms = path_forms(path, cwd, roots)
-            pattern = matching_pattern(forms, patterns)
-            if pattern:
-                hits.append((path, forms, pattern))
+        hits = sensitive_hits(tool_name, tool_input, cwd, roots, patterns)
         if not hits:
             sys.exit(0)
 
         task_id = resolve_task_id(event)
-        board_text = any(board_mode(r) != "local" for r in roots)
+        board_text = is_online(roots)
         predicted = set() if board_text else predicted_paths(
             task_id, [os.path.join(root, "tasks"), os.path.join(cwd, "tasks")]
         )
-        unpredicted = [(p, pat) for p, forms, pat in hits if not is_predicted(forms, predicted)]
+        approved = set(read_approvals(root).get(task_id, [])) if board_text and task_id else set()
+        unpredicted = [(p, pat) for p, forms, pat in hits
+                       if pat == APPROVALS_RELPATH
+                       or not (is_predicted(forms, predicted) or is_approved(forms, approved))]
         if not unpredicted:
             sys.exit(0)
     except SystemExit:
@@ -354,6 +419,9 @@ def main():
     if board_text:
         owner = ("board mode is online, where guides come from the board and cannot "
                  "pre-authorise a sensitive path")
+        if task_id:
+            owner += (f". After you approve, later calls in {task_id} that touch only "
+                      "these paths will not ask again")
     ask(f"This {tool_name} call touches a sensitive path: {listed}. "
         f"Listed in .claude/sensitive-paths.txt and {owner}.")
 

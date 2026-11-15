@@ -1,0 +1,1 @@
+../../../.claude/hooks/post_tool_sensitive_approval.py

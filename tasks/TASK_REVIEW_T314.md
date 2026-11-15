@@ -83,7 +83,28 @@ exit=0
 
 Both calls print `ask`: in board mode `online` there is no way to approve the path once for T314.
 
-**AFTER**: [same command, post-change] OR [verbatim excerpt of the new content]
+**AFTER**: captured by common-infrastructure on the changed hooks (worktree `wt-t314`, working tree on `92daec34` plus the T314 implementation, before its commit). Same temp project `$S` (shipped `.claude/sensitive-paths.txt`, `PROJECT_KANBAN.md`, online `.claude/board.json` `{"board": "fake", "fake_board": "board.json", "id_pattern": "ENG-\\d+"}`) and the same event, fed twice; between the two runs the same event goes to the PostToolUse recorder, which stands in for "the user said yes and the call ran":
+
+```
+$ EV='{"tool_name":"Bash","cwd":"'$S'","tool_input":{"command":"cat tests/fixtures/secrets/x.json"}}'
+$ echo "--- call 1 $(date -u +%Y-%m-%dT%H:%M:%SZ)"; echo "$EV" | CLAUDE_PROJECT_DIR=$S CLAUDE_ACTIVE_TASK=T314 python3 .claude/hooks/pre_tool_sensitive_path.py; echo "exit=$?"
+$ echo "--- recorder (PostToolUse, the user said yes)"; echo "$EV" | CLAUDE_PROJECT_DIR=$S CLAUDE_ACTIVE_TASK=T314 python3 .claude/hooks/post_tool_sensitive_approval.py; echo "exit=$?"; cat $S/.claude/state/sensitive-approvals.json
+$ echo "--- call 2 $(date -u +%Y-%m-%dT%H:%M:%SZ)"; echo "$EV" | CLAUDE_PROJECT_DIR=$S CLAUDE_ACTIVE_TASK=T314 python3 .claude/hooks/pre_tool_sensitive_path.py; echo "exit=$?"
+--- call 1 2026-11-15T08:06:40Z
+{"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "ask", "permissionDecisionReason": "[hook:sensitive-path] This Bash call touches a sensitive path: tests/fixtures/secrets/x.json (pattern `**/secrets/**`). Listed in .claude/sensitive-paths.txt and board mode is online, where guides come from the board and cannot pre-authorise a sensitive path. After you approve, later calls in T314 that touch only these paths will not ask again."}}
+exit=0
+--- recorder (PostToolUse, the user said yes)
+exit=0
+{
+  "T314": [
+    "tests/fixtures/secrets/x.json"
+  ]
+}
+--- call 2 2026-11-15T08:06:40Z
+exit=0
+```
+
+Call 1 asks, with the approve-once sentence. Call 2, after the recorder, prints nothing (no decision, not `allow`).
 
 **DELTA**: [one sentence — what a user can now do that they could not before]
 

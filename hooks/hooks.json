@@ -29,6 +29,15 @@
         ]
       },
       {
+        "matcher": "Edit|Write|Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "grep -qsF '$CLAUDE_PROJECT_DIR\\\"/.claude/hooks/post_tool_sensitive_approval.py' \"$CLAUDE_PROJECT_DIR/.claude/settings.json\" || python3 \"${CLAUDE_PLUGIN_ROOT}/.claude/hooks/post_tool_sensitive_approval.py\""
+          }
+        ]
+      },
+      {
         "matcher": ".*",
         "hooks": [
           {
