@@ -62,16 +62,16 @@ Paused: auto-mode check failed — Risk High, but the trace has no `security-rev
 
 | Check | Result | Notes / output snippet |
 |-------|--------|------------------------|
-| **New test(s) cover Acceptance Criteria (file paths pasted)** | ☐ pass / ☐ fail | [test file path(s) — required before Done] |
-| Verification command run | ☐ pass / ☐ fail | [paste actual output] |
-| Negative cases hold | ☐ pass / ☐ fail | [paste the red run against the prior content, or the mutation diff (`git diff --stat`, non-empty) before each verdict] |
+| **New test(s) cover Acceptance Criteria (file paths pasted)** | ☑ pass | `.claude/hooks/tests/test_t314_online_approval.py`, `test_t314_fix_round.py`, `test_t314_security_round.py`, `test_t314_backslash_key.py` (locked oracles by qa-expert: 16fea0bb, 524efaa5, 8fb26c53, 61151dfe); run at e5ad4a5c: `110 passed, 87 subtests passed in 14.32s` |
+| Verification command run | ☑ pass | `python3 -m pytest .claude/hooks/tests/test_t314_backslash_key.py .claude/hooks/tests/test_t314_online_approval.py .claude/hooks/tests/test_t314_fix_round.py .claude/hooks/tests/test_t314_security_round.py .claude/hooks/tests/test_pre_tool_sensitive_path.py -q -p no:cacheprovider` → `110 passed, 87 subtests passed in 14.32s`; `python3 -m pytest .claude/hooks/tests/ -q` → `5031 passed, 5 skipped, 87 subtests passed in 195.73s` |
+| Negative cases hold | ☑ pass | Red runs before each fix: oracle 1 `41 failed, 9 passed` (at 92daec34); fix round `27 failed, 5 passed` (7e5a6824); decision-4 re-lock `27 failed, 53 passed` (58d4c46c); backslash `10 failed, 7 passed` (cf180bc4). Each red set went green only after its fix commit (541c456b, d778e406, cf180bc4, e5ad4a5c) |
 | verify | ☐ pass / ☐ fail / ☐ N/A | [leave it: the auto verify hook writes this row, with its run record. If you ran /verify yourself, tick pass and make the whole Notes cell "/verify by the user, session <id>, commit <sha>" (the full 40-character commit). The merge gate counts no other row, even with the word "pass" in it] |
-| Review scope bounded to the change's blast radius (affected set, not whole repo) | ☐ pass / ☐ fail | [what was reviewed vs. skipped, and why] |
+| Review scope bounded to the change's blast radius (affected set, not whole repo) | ☑ pass | `git diff main...HEAD`: the two sensitive-path hooks, their wiring (`.claude/settings.json`, `hooks/hooks.json`, `plugin/hooks/hooks.json`), `.gitignore`, the tracks.md paragraph, site hook row and count pins. code-review (P0 0 / P1 1 / P2 4 / P3 2, fixed d778e406); security-review agent (P1 2 / P3 2, fixed per decision 4 in cf180bc4); Skill `security-review` re-check (1 Medium, confirmed 8/10, fixed e5ad4a5c). Local-mode backslash gap out of scope → T319 |
 | Full smoke suite still green (no regression) | ☐ pass / ☐ fail | |
-| **Companion score (easy-verifier)** | ☐ pass / ☐ fail / ☐ N/A | [`overall` and `change_risk` as the tool returned them, the scope, the ref, and the absolute path of the verifier report after a literal `report:` label — e.g. "overall 86 (>= 80), change_risk pass, scope changes, ref `main...HEAD`, report: `/home/me/.easy-verifier-reports/kit/score_changes_20261028T0530Z.html`". The gate reads the path that follows `report:` and nothing else, so with no label, or a path that is absent, the row is unscored — write ☑ N/A instead. ☑ N/A with a reason when neither companion tool was run: the merge gate blocks on ☑ fail only, never on an absent or N/A row] |
-| **UI: Visual regression (diff or verdict pasted)** | ☐ pass / ☐ fail / ☐ N/A | [screenshot path or LLM verdict — required for UI tasks, Hard-Stop Gate 6] |
-| **UI: Design-system compliance (tokens/colors/typography verified)** | ☐ pass / ☐ fail / ☐ N/A | [method used + output] |
-| **UI: Responsiveness at target viewports** | ☐ pass / ☐ fail / ☐ N/A | [viewports tested, any overflow findings] |
+| **Companion score (easy-verifier)** | ☑ N/A | easy-verifier MCP server failed to connect this session (ECONNREFUSED); not run |
+| **UI: Visual regression (diff or verdict pasted)** | ☑ N/A | hook-only change, no UI (guide: UI section not applicable) |
+| **UI: Design-system compliance (tokens/colors/typography verified)** | ☑ N/A | hook-only change, no UI (guide: UI section not applicable) |
+| **UI: Responsiveness at target viewports** | ☑ N/A | hook-only change, no UI (guide: UI section not applicable) |
 
 ---
 
