@@ -25,12 +25,12 @@
      run; read them there. The enforced gate is the whole-file character budget above. -->
 
 ### Decisions
-- [T322: session tags on `site/docs.html`](decisions.md) — says `origin`; T321 must update it
+- [T322: session tags on site; T321 updates `origin`](decisions.md)
 - [T311–T312: kit data and Explorer on `site/docs.html`](decisions.md) — `39ab138e`
 - [T310: `[admin]` stops when unsure](decisions.md) — `Paused: unsure`; `d839663d`
 - [T306–T308: `[admin]` end to end](decisions.md) — T309 gate hole
 - [T309: hand-typed `verify` pass row counts for nothing](decisions.md) — only the hook row or the user's `/verify` passes; merged `0310dd7`
-- [T297–T299: effort per Complexity, passed at spawn](decisions.md) — `## CLI Effort Table`; raise one step on move up or `fail`; T300: opus·low 4.1x cost, lost a pass (DDR-0010)
+- [T297–T299: effort per Complexity, passed at spawn](decisions.md) — `## CLI Effort Table`; raise one step on move up or `fail`; T300 (DDR-0010)
 - [T301: security-finding rules in `security-reviewer.md`](decisions.md) — `confirmed`/`needs_validation`/`rejected`; `code-review/SKILL.md` is at the 8 KB cap
 - [T232–T236, T239, T240: plugin, init, Stage 0–5, repo `easy-kit`](decisions.md) — never reuse old repo name
 - [Anonymous GitHub check: block SSH](learnings.md) — T236
@@ -45,7 +45,7 @@
 - [T199: site `#mcps` lists easy-memory-mcp as a third OPTIONAL companion card](decisions.md) — README facts only; Open: T194 + T199 both edit the `#mcps`
 - [T198: `wake` prints Decisions + Learning Records via `memory_sections.py`, never all of MEMORY.md](decisions.md) — **add new index lines at a section's TOP**
 - [T195: easy-memory installed; sub-agents use memory_search/read and the spawn slice](decisions.md) — OPTIONAL; `memory/` NOT replaced
-- [T182: auto verify — Stop hook runs real `/verify` headless for `[auto]` tasks](decisions.md) — gate trusts the row only with the anchor-dir run record; $2 cap per commit
+- [T182: auto verify — Stop hook runs real `/verify` headless for `[auto]` tasks](decisions.md) — row needs its run record; $2 cap
 - [T203: auto verify for every task — Supervisor runs `stop_auto_verify.py --start <ID>` at Ready for Review](decisions.md) — `CLAUDE_AUTO_VERIFY=off` = `[auto]`-only
 - [T180: auto mode — `[auto]` runs either track; Debate size by Risk; auto-mode Stop hook](decisions.md) — Low decides, Medium 2 / High 3 Advocates; merge/push
 - [T221-2: Advocates frame What/Why/How; strict count](decisions.md)
@@ -159,10 +159,10 @@
 - [T215: Done rows are one-line; full text in docs/archive/KANBAN_DONE_DETAIL.md](decisions.md) — logs moved to docs/brainstorming, docs/prd; write new Done rows short
 
 ### Patterns & Gotchas
-- [`[admin]` binds by task ID, new guide, or `--start` after the tag](learnings.md) — T322: "yes [admin]" failed; `main` push blocked by extra board commits
+- [`[admin]` binds by ID, new guide or post-tag `--start`](learnings.md) — T322/T323
 - [A text gate over shell input: allowlist plain shapes; author fuzz proves little](learnings.md) — T294/T296: 12 then 11 bypass classes; stop at documented limits
 - [Never switch the main checkout mid auto-verify run](learnings.md) — verdict write crashes; use a worktree; state file needs ID + timestamp lines
-- [Merge gate after T210/T211](learnings.md) — verify row committed on the branch; any `git <global opts> push|merge|pull|rebase` and `-c alias.` gated; open: `echo … | sh`
+- [Merge gate after T210/T211](learnings.md) — verify row committed on the branch; any `git <global opts> push|merge|pull|rebase` gated
 - [Parallel sessions overwrite the shared active-task file](learnings.md) — rerun a task's tests under its own state file; smooth scroll breaks CDP clicks
 - [Task IDs: scan the whole board for the highest ID before registering](learnings.md) — `git log` and `tasks/` filenames miss Todo rows with no guide (T119
 - [Open T111/T115 follow-ups](learnings.md) — `.claude/hooks/` user entry silently dropped by the ownership rule
@@ -274,7 +274,7 @@
 - [skill promotion: code block only](learnings.md) — never auto-save SKILL.md stub; output fenced block and stop; user saves + registers manually
 - [A rule keyed on an input needs a "no input" case](learnings.md) — T136: 9 ACs covered named CLIs; no CLI named silently fell back to claude
 - [A "must not appear" test must skip record files](learnings.md) — T136: AC8 tripped on the KANBAN row quoting the verify result
-- [Claude sandbox Bash dies under Ubuntu nested-userns restriction](learnings.md) — `apparmor_restrict_unprivileged_userns=1` breaks every Bash; probe nested, not bare bwrap
+- [Claude sandbox Bash dies under Ubuntu nested-userns restriction](learnings.md) — `apparmor_restrict_unprivileged_userns=1`
 - [Hook `ask` = deny in headless runs; `slice_section` misses `…)` headings](learnings.md) — over-asking kills headless sub-agent work
 - [Four agents at once: verify is user-only; stale active_task misattributes the Supervisor](learnings.md) — plan the `/verify` hand-off
 - [A dirty worktree is not proof of a dead agent](learnings.md) — T150: a concurrent session may be live
