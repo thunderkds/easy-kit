@@ -96,6 +96,7 @@
 
 
 ### In Progress
+- [ ] **T324** — a test run in a task's worktree is not work on the task (Stop check false positive) | common-infrastructure | C2 | Risk: High | P1 | Guide: `tasks/TASK_GUIDE_T324.md` | Registered and started 2026-11-16 [admin], user: "yes [admin]" (log the stop-hook false positive): branch `fix/t324-test-run-not-work`, worktree `../wt-t324` | Track: extended
 - [ ] **T321** — the `[admin]`/`[ticket]` push remote is a setting (`EASY_KIT_ADMIN_REMOTE`), not the hard-coded `origin` | common-infrastructure | C2 | Risk: High | P1 | Started 2026-11-15 [admin]: branch `feat/t321-admin-remote`, worktree `../wt-t321` | Track: extended
 
 
