@@ -52,9 +52,9 @@ Not done: merge (yours); <auto verify: running (T182) | auto verify: <result> | 
 | Verification command run | ☑ pass | `python3 -m pytest .claude/hooks/tests/ tests/ -q` — 7497 passed, 5 skipped, 87 subtests passed in 386.65s |
 | Negative cases hold | ☑ pass | red run 4 failed against prior content (no Session tags p); diff +8 lines in site/docs.html |
 | verify | ☐ pass / ☐ fail / ☐ N/A | [leave it: the auto verify hook writes this row, with its run record. If you ran /verify yourself, tick pass and make the whole Notes cell "/verify by the user, session <id>, commit <sha>" (the full 40-character commit). The merge gate counts no other row, even with the word "pass" in it] |
-| Review scope bounded to the change's blast radius (affected set, not whole repo) | ☐ pass / ☐ fail | [what was reviewed vs. skipped, and why] |
+| Review scope bounded to the change's blast radius (affected set, not whole repo) | ☑ pass | `git diff main...HEAD`: site/docs.html (one new <p> in #tracks details), tests/test_t322_session_tags_docs.py, this file, the guide's pin row. Wording checked line by line against `docs/claude-md/tracks.md` 877–937. Nothing else in scope (no code, no hook) |
 | Full smoke suite still green (no regression) | ☑ pass | 7497 passed, 5 skipped |
-| **Companion score (easy-verifier)** | ☐ pass / ☐ fail / ☐ N/A | [`overall` and `change_risk` as the tool returned them, the scope, the ref, and the absolute path of the verifier report after a literal `report:` label — e.g. "overall 86 (>= 80), change_risk pass, scope changes, ref `main...HEAD`, report: `/home/me/.easy-verifier-reports/kit/score_changes_20261028T0530Z.html`". The gate reads the path that follows `report:` and nothing else, so with no label, or a path that is absent, the row is unscored — write ☑ N/A instead. ☑ N/A with a reason when neither companion tool was run: the merge gate blocks on ☑ fail only, never on an absent or N/A row] |
+| **Companion score (easy-verifier)** | ☑ N/A | not run: C1 / Risk Low docs-only change; optional tool |
 | **UI: Visual regression (diff or verdict pasted)** | ☑ pass | ux-evaluate (formal, no UX rows: baseline checks only), #tracks Details open, screenshots /tmp/claude-1000/-home-hungnguyenhuu-workspace-pets-personal-agentic-claude/8147f53b-32a0-4c0c-9272-6a5901bdfcc0/scratchpad/ux/t-375.png, /tmp/claude-1000/-home-hungnguyenhuu-workspace-pets-personal-agentic-claude/8147f53b-32a0-4c0c-9272-6a5901bdfcc0/scratchpad/ux/t-1280.png (375 is a real 375px-wide capture with scrollbars kept; 1280 hidden scrollbars). U1 pass at 375 and 1280: Session tags p has the same type, spacing and code style as the Close-out p above it. B-a/B-b/B-c/B-e/B-i pass; B-f/B-g not applicable (static text). ux-evaluate: 9 baseline pass (B-f, B-g n/a), 0 fail. Overall: pass |
 | **UI: Design-system compliance (tokens/colors/typography verified)** | ☑ pass | U2 pass: diff has only p, strong, code; 0 class=/style= additions. B-i pass: same accent and code style as neighbours. B-d pass: tap_probe run (/tmp/claude-1000/-home-hungnguyenhuu-workspace-pets-personal-agentic-claude/8147f53b-32a0-4c0c-9272-6a5901bdfcc0/scratchpad/ux/open-probe.html, shot p-375.png); the block has no tap target besides the Details summary, no red box in the block |
 | **UI: Responsiveness at target viewports** | ☑ pass | U3 pass: 375 real viewport (--window-size=375, scrollbars kept): no horizontal scrollbar at the bottom of t-375.png; long code strings (settings-setup, permissions.defaultMode: "auto") wrap. 1280: paragraph stays in the 650px text column, no overflow. B-h pass |
@@ -72,11 +72,23 @@ Not done: merge (yours); <auto verify: running (T182) | auto verify: <result> | 
 
 **AFTER**: the `#tracks` details block gains `<p><strong>Session tags</strong>: <code>[ticket]</code> and <code>[admin]</code> hold for the whole session. … The kit never sets <code>bypassPermissions</code>.</p>` (8 lines, see `git diff site/docs.html`).
 
-**DELTA**: [one sentence — what a user can now do that they could not before]
+**DELTA**: a reader of `site/docs.html` can now learn that `[ticket]` and `[admin]` last the whole session, how `[stop]` ends them, what the board loop pushes or merges after a pass, and that Bash without prompts needs the `autonomous` profile; before, no site page named `[ticket]` or `[stop]`.
 
-**WITNESS**: [who ran it and when — derived from `memory/event-trace/T322.jsonl`, never the
-implementing agent alone]
+**WITNESS**: Supervisor, 2026-11-16, read `git diff main...HEAD -- site/docs.html` (commits e2cc4089, 4dd257f6) against tracks.md `### Session tags`; frontend-developer ran the tests and ux-evaluate (above).
 
 ### Re-run after review fixes (2026-11-16)
 
 `python3 -m pytest tests/test_t322_session_tags_docs.py tests/test_site_visual_first.py tests/test_site_story.py tests/test_site_content.py -q -p no:cacheprovider` — 217 passed in 0.87s
+
+## Stage 4 — code-review (Supervisor, 2026-11-16)
+
+lane: C1, 3 files, 54 lines, FITS; unpredicted: tasks/TASK_GUIDE_T322.md (the pin-test row the guide asks the implementer to fill — expected)
+Entry point `site/docs.html#tracks` Details: found. Stale-reference sweep: no other page or doc lists the tags.
+
+| Sev | File:line | Finding | Conf | Outcome |
+|---|---|---|---|---|
+| P1 (process) | agent report | `Startup reads:` misses `PROJECT_SPEC.md` and `agents/frontend.md` (Permanent Rule reads), on both passes | 100 | recorded; no effect on a docs-only <p> checked line by line by the Supervisor |
+| P2 | site/docs.html:473 | "The Supervisor then works the board" read as starting after the tag ends | 100 | fixed in 4dd257f6 ("While a session tag holds, …") |
+| P2 | UI Evidence | ux-evaluate not run formally; 375px read from a ~485px window | 75 | fixed in 4dd257f6 (formal ux-evaluate, real 375 viewport) |
+
+Totals: P0 0 · P1 1 (process) · P2 2 (both fixed) · P3 0. security-review: not required (Risk Low).
