@@ -64,24 +64,32 @@ Not applicable — no UI. All three UI Evidence rows are ☐ N/A: hook-only chan
 ### Diagnosis Gates (Pillar 1 — must pass before any fix)
 - [x] Phase 1 feedback loop built and running (the `worked_on` repro above)
 - [x] Bug reproduces deterministically on the loop
-- [ ] 3–5 ranked falsifiable hypotheses listed (consistent with confirmed mental model)
-- [ ] Correct hypothesis identified via Phase 4 instrumentation
+- [x] 3–5 ranked falsifiable hypotheses listed (consistent with confirmed mental model)
+- [x] Correct hypothesis identified via Phase 4 instrumentation
 
 ### Attempts Log (filled live during diagnosis — required if >1 hypothesis tested)
 | # | Hypothesis | Predicted signal | Actual result | Verdict |
 |---|---|---|---|---|
+| 1 | `_read_only` is False for the test segment because its head (`timeout`, then `python3 -m pytest`) is not in `READ_ONLY_COMMANDS` | per-segment probe of the incident command: the test segment has `runs_in=True`, `read_only=False`; `_read_only(['timeout','300','python3','-m','pytest'])` is False | segment `['timeout','300','python3','-m','pytest',…,'2','>&','1']` → `read_only= False`; bare head probe → `False` | confirmed |
+| 2 | the `2>&1` redirect (tokens `2`, `>&`, `1`) trips the redirect guard | `_read_only(['tail','2','>&','1'])` is False | `True` (`1` matches `HARMLESS_TARGET`) | falsified |
+| 3 | the piped `tail -40` segment, run in the worktree, is counted as work | probe: `['tail','-40']` `read_only=False` | `read_only= True` | falsified |
+| 4 | the Stop hook decides ownership by another path than `worked_on` | `session_owner` does not call `session_work.worked_on` | `stop_auto_mode_check.py:455` calls `sw.worked_on(...)` | falsified |
 
 ### Fix Gates (Pillar 2)
-- [ ] Regression test written before the fix (or no-seam documented)
-- [ ] Fix applied; regression test passes
-- [ ] Phase 1 loop no longer reproduces the bug
-- [ ] Fix matches the "correct behaviour" definition from the mental model
+- [x] Regression test written before the fix (or no-seam documented)
+- [x] Fix applied; regression test passes
+- [x] Phase 1 loop no longer reproduces the bug
+- [x] Fix matches the "correct behaviour" definition from the mental model
 
 ### Cleanup Checklist (Pillar 3)
-- [ ] All [DEBUG-...] instrumentation removed (grep verified)
-- [ ] Throwaway prototypes deleted
-- [ ] Correct hypothesis stated in commit message
-- [ ] Post-mortem: what would have prevented this?
+- [x] All [DEBUG-...] instrumentation removed (grep verified)
+- [x] Throwaway prototypes deleted
+- [x] Correct hypothesis stated in commit message
+- [x] Post-mortem: what would have prevented this?
+  T250 asked one question ("did this session change the task?") for two callers with different
+  costs of a wrong yes: the merge gate (a wrong yes is safe: it blocks) and the Stop check (a wrong
+  yes blocks the stop and writes into another session's report). A test case for "the session only
+  ran the task's tests" in `test_t250_session_ownership.py`, pinned per caller, would have shown it.
 
 ### Evidence (filled by reviewer at Stage 4/5)
 

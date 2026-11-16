@@ -67,7 +67,24 @@ Advocates`, no test run in the trace, no `code-review`, no `security-review`, no
 the spy sees `worked_on` called with no keyword (`('worked_on', [{}])`), and the Debate window opens at
 the test run, so the `before the task's first change` hint is missing.
 
-**AFTER**: [same command, post-change] OR [verbatim excerpt of the new content]
+**AFTER**: captured by common-infrastructure at 2026-11-16T04:11:03Z (UTC) in
+`/home/hungnguyenhuu/workspace/pets/wt-t324`, with the fix applied on top of `ffdbdd04` (working tree,
+before its commit). Same Phase 1 repro (incident command, cwd = main checkout, worktree `../wt-t321`):
+
+```
+incident test run (default) -> True
+incident test run (test_runs_count=False) -> False
+grep of the review -> False
+```
+
+Locked oracle, green:
+
+```
+$ python3 -m pytest .claude/hooks/tests/test_t324_test_run_not_work.py -q -p no:cacheprovider
+149 passed in 1.28s
+```
+
+`git diff main -- .claude/hooks/pre_bash_block_unsafe_merge.py | wc -l` → `0` (merge gate unchanged).
 
 **DELTA**: [one sentence — what a user can now do that they could not before]
 

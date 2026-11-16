@@ -25,7 +25,7 @@ import shlex
 
 import auto_mode
 from shell_data import strip_heredoc_bodies
-from task_context import _task_id_from_spawn_prompt
+from task_context import PYTHON_FLAGS, _task_id_from_spawn_prompt
 
 COMMAND_NAME = re.compile(r"<command-name>\s*/verify\s*</command-name>")
 COMMAND_ARGS = re.compile(r"<command-args>(.*?)</command-args>", re.S)
@@ -90,6 +90,8 @@ def verify_typed(transcript_path, task_id, after=None, before=None):
 # its command line are not seen as work. A `Bash` token holding whitespace is code or a message, not
 # a file argument, unless the whole token is a path into the worktree; an `Edit`/`Write` path is
 # always a path. Worktree paths are compared as written and resolved (`os.path.realpath`).
+# With `test_runs_count=False` (T324), a file that code run by a test run writes (a conftest, a
+# plugin, an option such as `--junitxml`) is not seen as work — the same accepted limit as `python3 -c`.
 
 WRITE_TOOLS = {"Edit": "file_path", "Write": "file_path", "MultiEdit": "file_path",
                "NotebookEdit": "notebook_path"}
@@ -287,14 +289,21 @@ def _segments(command):
     return [s for s in segments if s]
 
 
-def _read_only(tokens):
-    """True only for a command that cannot change a file: an allowlisted reader, a read-only `git`
-    subcommand, or `sed` without in-place editing — and no output redirect to a real file."""
+def _file_redirect(tokens):
+    """True when `tokens` redirect output to a real file (not `/dev/null` or a file descriptor)."""
     for index, token in enumerate(tokens):
         if REDIRECT.fullmatch(token) and ">" in token:
             target = tokens[index + 1] if index + 1 < len(tokens) else ""
             if not HARMLESS_TARGET.fullmatch(target):
-                return False
+                return True
+    return False
+
+
+def _read_only(tokens):
+    """True only for a command that cannot change a file: an allowlisted reader, a read-only `git`
+    subcommand, or `sed` without in-place editing — and no output redirect to a real file."""
+    if _file_redirect(tokens):
+        return False
     head, args = os.path.basename(tokens[0]), tokens[1:]
     if head in READ_ONLY_COMMANDS:
         return True
@@ -313,7 +322,28 @@ def _read_only(tokens):
     return args[:2] == ["worktree", "list"]
 
 
-def _bash_works(command, cwd, task, depth=0):
+def _test_run(tokens):
+    """T324: True for one test run with no output redirect to a real file: `pytest`, `py.test`, or
+    `python`/`python3` [`PYTHON_FLAGS`] `-m pytest|unittest`, behind at most one `timeout <n>`.
+    The same forms as `task_context._allowed_command`."""
+    if _file_redirect(tokens):
+        return False
+    words = tokens
+    if words[0] == "timeout":
+        if len(words) < 3 or not re.fullmatch(r"\d+[smhd]?", words[1]):
+            return False
+        words = words[2:]
+    if words[0] in ("pytest", "py.test"):
+        return True
+    if words[0] not in ("python", "python3"):
+        return False
+    args = words[1:]
+    while args and args[0] in PYTHON_FLAGS:
+        args = args[1:]
+    return len(args) > 1 and args[0] == "-m" and args[1] in ("pytest", "unittest")
+
+
+def _bash_works(command, cwd, task, depth=0, test_runs_count=True):
     segments = _segments(command)
     if segments is None:  # unparsable: any mention of the task's paths is work
         return any(task.named(t, cwd) for t in strip_heredoc_bodies(command).split())
@@ -333,36 +363,42 @@ def _bash_works(command, cwd, task, depth=0):
             if _bash_works(code, directory, task, depth + 1):
                 return True
         runs_in = isinstance(directory, str) and task.inside(directory)
-        if (runs_in or any(task.named(t, directory) for t in tokens)) and not _read_only(tokens):
+        if ((runs_in or any(task.named(t, directory) for t in tokens)) and not _read_only(tokens)
+                and (test_runs_count or not _test_run(tokens))):
             return True
     return False
 
 
-def _works(task, name, tool_input, cwd):
-    """True when one call changed `task` (a `_Task`)."""
+def _works(task, name, tool_input, cwd, test_runs_count=True):
+    """True when one call changed `task` (a `_Task`); a test run counts only if `test_runs_count`."""
     if name in WRITE_TOOLS:
         path = tool_input.get(WRITE_TOOLS[name])
         return isinstance(path, str) and task.names_path(path, cwd)
     if name in SPAWN_TOOLS:
         return _task_id_from_spawn_prompt(tool_input.get("prompt")) == task.task_id
-    return isinstance(tool_input.get("command"), str) and _bash_works(tool_input["command"], cwd,
-                                                                      task)
+    return isinstance(tool_input.get("command"), str) and _bash_works(
+        tool_input["command"], cwd, task, test_runs_count=test_runs_count)
 
 
-def worked_on(calls, task_id, worktrees):
+def worked_on(calls, task_id, worktrees, *, test_runs_count=True):
     """True when one of `calls` (from `load_work`) changed task `task_id`, whose live worktrees are
-    `worktrees` (absolute paths). Read-only calls never count."""
+    `worktrees` (absolute paths). Read-only calls never count. T324: with `test_runs_count=False`,
+    a test run (`_test_run`) does not count either; only the Stop check (`stop_auto_mode_check.py`
+    `session_owner`) passes False — the merge gate keeps the default."""
     task = _Task(task_id, worktrees)
-    return any(_works(task, name, tool_input, cwd) for name, tool_input, cwd in calls)
+    return any(_works(task, name, tool_input, cwd, test_runs_count)
+               for name, tool_input, cwd in calls)
 
 
-def work_start(entries, task_id, worktrees):
+def work_start(entries, task_id, worktrees, *, test_runs_count=True):
     """T293: the start of task `task_id`'s change window in this session: the earliest date of a
     call in `entries` (from `work_entries`) that `worked_on` counts, or None when no call that
-    changed the task has a readable date. Same test as `worked_on`, so the two never disagree."""
+    changed the task has a readable date. Same test as `worked_on`, so the two never disagree;
+    `test_runs_count` (T324) means the same as there, and only `stop_auto_mode_check.py`
+    `session_window` passes False."""
     task = _Task(task_id, worktrees)
     times = [ts for ts, name, tool_input, cwd in entries
-             if ts is not None and _works(task, name, tool_input, cwd)]
+             if ts is not None and _works(task, name, tool_input, cwd, test_runs_count)]
     return min(times) if times else None
 
 
