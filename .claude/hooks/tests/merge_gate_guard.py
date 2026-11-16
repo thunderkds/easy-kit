@@ -94,8 +94,12 @@ GATE_REL = ".claude/hooks/pre_bash_block_unsafe_merge.py"
 #          `[admin]` keeps every `[admin]` rule; `[ticket]` allows only a plain push of its task branch
 #          to `origin` after a passed auto verify; both may bind the task by the loop (G1)
 #          (`tasks/TASK_GUIDE_T317.md`, AC 2). User sign-off, 2026-11-15 ("yes [admin]").
+#   T323 — a short yes, answering the Supervisor's immediately preceding visible question naming
+#          exactly one task, binds that task for `[admin]` (never `[ticket]`)
+#          (`tasks/TASK_GUIDE_T323.md`, AC 1-9). Supervisor sign-off under session `[admin]`,
+#          2026-11-16 (user: "[admin] let completes all tasks").
 AUTHORISED_TASKS = ("T182", "T188", "T190", "T197", "T196", "T210", "T211", "T232", "T250", "T284",
-                    "T289", "T291", "T296", "T295", "T308", "T309", "T317")
+                    "T289", "T291", "T296", "T295", "T308", "T309", "T317", "T323")
 
 
 def _git(root, *args):
