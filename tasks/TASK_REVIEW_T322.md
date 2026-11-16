@@ -44,6 +44,17 @@ Not done: merge (yours); <auto verify: running (T182) | auto verify: <result> | 
 
 -->
 
+## Auto decisions
+
+Mode: auto
+1. merge `feat/t322-session-tags-docs` into `main` and push `main` after the auto verify pass — RULE: `docs/claude-md/tracks.md` `### Admin tag` (user: "yes [admin]", 2026-11-16)
+2. the paragraph says pushes go to `origin`, not the T321 remote setting — FACT: docs/claude-md/tracks.md:637 "on the remote `origin` only"
+3. both code-review P2 findings sent back to the implementer and fixed in 4dd257f6 — RULE: `skills/code-review/SKILL.md` § Phase 4
+4. P1 process finding (two startup reads skipped) recorded, not re-run — RULE: `skills/code-review/SKILL.md` § Phase 0.5 (process finding; docs-only text checked line by line against tracks.md 877–937)
+Checks: tests `python3 -m pytest .claude/hooks/tests/ tests/ -q` — 7497 passed, 5 skipped; site tests 217 passed after 4dd257f6; reviews code-review — P0 0/P1 1 process/P2 2 fixed/P3 0; ux-evaluate — pass at 375 and 1280 (auto-checked, not /verify)
+Memory: memory/decisions.md — 2026-11-16 T322 session tags on `site/docs.html`; memory/MEMORY.md — T322 index line
+Not done: merge (admin: after the auto verify pass); auto verify: running (T182)
+
 ## Evidence
 
 | Check | Result | Notes / output snippet |
