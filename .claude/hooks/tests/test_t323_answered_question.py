@@ -313,3 +313,62 @@ def test_regression_ticket_naming_the_id_still_does_not_bind(verified, tmp_path)
 def test_regression_a_plain_yes_with_no_question_does_not_bind(verified, tmp_path):
     path = transcript(tmp_path, [answer("yes [admin]")])
     refused_unbound(reason(MERGE + " " + BRANCH, verified.main, path))
+
+
+# ── AC 9 — under a session tag the answered-question check reads the latest human request ───
+# The tag request is dated after the guide's commit (`TAG_AT`), so no guide binds; the latest human
+# request is an untagged yes. Every other binding keeps reading the tag request's `(when, text)`.
+TAG_AT = ASK_AT - 40
+
+
+def session_then_yes(tmp_path, tag_request, question=T322_QUESTION, before=(), between=()):
+    """`before`, the tag request, `between`, the Supervisor's question, then an untagged "yes"."""
+    return transcript(tmp_path, list(before) + [human(tag_request, TAG_AT)] + list(between)
+                      + [said(question), human("yes", ASK_AT)])
+
+
+def test_ac9_an_untagged_yes_binds_under_a_session_admin_tag(verified, tmp_path):
+    path = session_then_yes(tmp_path, "[admin] run the board")
+    assert am.session_tag(path) == "admin"
+    assert reason(MERGE + " " + BRANCH, verified.main, path) is None
+
+
+def test_ac9_an_untagged_yes_does_not_bind_under_a_session_ticket_tag(verified, tmp_path):
+    path = session_then_yes(tmp_path, "[ticket] run the board",
+                            question="Shall I push `feat/t900-x` to `origin`?")
+    assert am.session_tag(path) == "ticket"
+    text = reason(PUSH + " origin " + BRANCH, verified.wt, path)
+    assert text is not None and "T900" in text and "[ticket]" in text, text
+
+
+def test_ac9_after_stop_an_untagged_yes_opens_no_admin_path(verified, tmp_path):
+    """`[stop]` ends the session tag: no `[admin]` rule (and so no answered-question binding)
+    applies. The gate then answers exactly as for the same transcript with no tag ever typed."""
+    path = session_then_yes(tmp_path, "[admin] run the board", between=[human("[stop]", TAG_AT + 10)])
+    assert am.session_tag(path) == "none"
+    assert merge_gate.auto_mode_blocker(MERGE + " " + BRANCH, verified.main, path) is None
+    control = transcript(tmp_path, [human("run the board", TAG_AT), said(T322_QUESTION),
+                                    human("yes", ASK_AT)], name="cccccccc-1111-2222-3333-444444444444")
+    text = reason(MERGE + " " + BRANCH, verified.main, path)
+    assert text == reason(MERGE + " " + BRANCH, verified.main, control), text
+    assert text is None or "[admin]" not in text, text
+
+
+def test_ac9_only_the_question_directly_before_the_latest_yes_binds(verified, tmp_path):
+    """An older tagged "yes [admin]" answered a question naming T901; a later untagged yes answers
+    one naming T900. Only T900 binds: the older question is never read."""
+    git(verified.main, "branch", "feat/t901-y")
+    older = said("Do you want me to merge `feat/t901-y` into `main`?", offset_s=TAG_AT - 10)
+    path = session_then_yes(tmp_path, "yes [admin]", before=[older])
+    assert am.session_tag(path) == "admin"
+    t901 = reason(MERGE + " feat/t901-y", verified.main, path)
+    assert t901 is not None and "T901 is not the task" in t901, t901
+    assert reason(MERGE + " " + BRANCH, verified.main, path) is None
+
+
+def test_ac9_a_yes_typed_before_the_tag_request_does_not_bind(verified, tmp_path):
+    """The yes came first; the later tag request is the latest human request and is not a yes."""
+    path = transcript(tmp_path, [said(T322_QUESTION, offset_s=TAG_AT - 10), human("yes", TAG_AT - 5),
+                                 human("[admin] keep going", TAG_AT)])
+    assert am.session_tag(path) == "admin"
+    refused_unbound(reason(MERGE + " " + BRANCH, verified.main, path))
