@@ -95,7 +95,6 @@
 
 
 ### In Progress
-- [ ] **T322** — `site/docs.html` explains the session tags `[ticket]`, `[admin]` and `[stop]` | frontend-developer | C1 | Risk: Low | P1 | Registered 2026-11-16, user: "should add it, cause it will affect to the workflow" | Started 2026-11-16: branch `feat/t322-session-tags-docs`, worktree `../wt-t322` | Track: extended
 - [ ] **T321** — the `[admin]`/`[ticket]` push remote is a setting (`EASY_KIT_ADMIN_REMOTE`), not the hard-coded `origin` | common-infrastructure | C2 | Risk: High | P1 | Started 2026-11-15 [admin]: branch `feat/t321-admin-remote`, worktree `../wt-t321` | Track: extended
 
 
@@ -110,6 +109,7 @@
 
 
 ### Ready for Review
+- [ ] **T322** — `site/docs.html` explains the session tags `[ticket]`, `[admin]` and `[stop]` | frontend-developer | C1 | Risk: Low | P1 | Registered 2026-11-16, user: "should add it, cause it will affect to the workflow" | Started 2026-11-16: branch `feat/t322-session-tags-docs`, worktree `../wt-t322` | Track: extended | Ready for Review 2026-11-16: code-review P0 0/P1 1 (process)/P2 2 fixed/P3 0, site tests 217 passed at 4dd257f6, full suite 7497 passed, Evidence fff1e744
 
 
 
