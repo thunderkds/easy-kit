@@ -68,6 +68,7 @@ User, 2026-11-16. The Supervisor asked: "Do you want me to merge `feat/t322-sess
 | 6 | Any exception or unreadable transcript → None (fail closed); the refusal text adds one hint: "a bare yes binds only when the Supervisor's last message asked about exactly one task; else reply with the task ID and `[admin]`" | fail closed, clear hint |
 | 7 | Doctrine: `docs/claude-md/tracks.md` `### Admin tag` item 3 and `### Session tags` "The merge gate" bullet name the fourth binding in one or two sentences, and add: when the Supervisor asks to merge, it names exactly one task and asks for `merge <ID> [admin]` or a yes | doctrine fallback |
 | 8 | Tests (written first, by `qa-expert`, locked) cover: the T322 transcript shape binds; yes with extra words; two IDs in the question; a negated ID; ID only in thinking; ID only in tool_use input; sidechain assistant entry; a human request between question and yes; question not ending in `?`; question naming T1 while the command merges T2; `[ticket]` unchanged; row not in Ready for Review under a session tag; malformed transcript → refusal | Gate 5 |
+| 9 | Under a session `[admin]` tag, the answered-question check (only this check) reads the latest human request (`auto_mode.latest_request`), which may carry no tag, dated at or after the session tag request; the tag and every other binding (`_named_tasks`, `_guides_added_since`, `_own_start_since`, `_session_admin_merges`) keep reading the tag request's `(when, text)`. An untagged yes binds under session `[admin]`; never under `[ticket]`; never after `[stop]`; with an older tagged request followed by an untagged yes, only the question directly before the yes is read | Debate 2 (tracks.md:879 "hold for the whole session") |
 
 ---
 
@@ -153,6 +154,7 @@ Risk: High. The gate decides what may reach `main`. Every doubt must fail closed
 ## Questions Log
 
 - 2026-11-16 DEBATE how should a "yes [admin]" reply bind the task the Supervisor asked about → strict gate path "answered question" + doctrine fallback (Advocate 1: doctrine only, ask for the ID; Advocate 2: gate path 4 with bare-yes list, text blocks only, exactly one ID, Ready for Review, plus doctrine; Advocate 3: same gate path with a full-match yes regex, plus doctrine) — RULE: necessary per `PROJECT_KANBAN.md:11` (reports/question_T323_20261116T112957.html) ⚠ decided for you — please review
+- 2026-11-16 DEBATE under a session `[admin]` tag, does an untagged "yes" answer the Supervisor's merge question? → yes: the answered-question check reads the latest human request; tag and other bindings keep the tag request (Advocate 1: read latest request, narrow, separate argument; Advocate 2: read latest request, tag from session_request; Advocate 3: same, plus 4 oracle cases) — all three agree; RULE: docs/claude-md/tracks.md:879 "`[ticket]` and `[admin]` hold for the whole session"
 
 ---
 

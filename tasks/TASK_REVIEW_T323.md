@@ -44,6 +44,15 @@ Not done: merge (yours); <auto verify: running (T182) | auto verify: <result> | 
 
 -->
 
+## Auto decisions
+
+Mode: auto
+1. a short yes to the Supervisor's own one-task question binds that task (strict gate path) plus the doctrine fallback — DEBATED: gate path + doctrine (Advocate 1: doctrine only, ask for the ID; Advocate 2: gate path 4, bare-yes list, text blocks only, exactly one ID, plus doctrine; Advocate 3: same gate path with a full-match yes regex, plus doctrine) ⚠ decided for you — please review
+2. under a session `[admin]`, an untagged yes is read from the latest human request for this check only — DEBATED: read the latest request (Advocate 1: separate `latest` argument, tag request kept for other bindings; Advocate 2: same, tag from `session_request`; Advocate 3: same, plus 4 oracle cases) — all three agree; docs/claude-md/tracks.md:879 "`[ticket]` and `[admin]` hold for the whole session"
+Checks: tests `python3 -m pytest .claude/hooks/tests/test_t323_answered_question.py -q` — 50 failed, 10 passed (oracle red, 95cfadca); implementation pending
+Memory: nothing new yet (memory pass runs at close-out)
+Not done: implementation, code-review, security-review, auto verify, merge (admin: after the auto verify pass)
+
 ## Evidence
 
 | Check | Result | Notes / output snippet |
