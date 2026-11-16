@@ -115,4 +115,4 @@ python3 -m pytest .claude/hooks/tests/ tests/ -q
 **Cut list**: removing the false `Paused:` line already written to `../wt-t321/tasks/TASK_REVIEW_T321.md` (another session's file; reported to the user); `sh -c`/`eval` test runs (stay work); conftest/plugin writes made by a test run (known limit, as `python3 -c`).
 
 ## Questions Log
-- 2026-11-16 DEBATE how should the fix stop a read-only test run from making a session own another session's auto task? → D: a `test_runs_count` keyword in `session_work`, off only in the Stop hook (Advocate 1: D, flag for `worked_on` and `work_start`; Advocate 2: D, flag for `worked_on` only; Advocate 3: A, test runs are not work for every caller) ⚠ decided for you — please review
+- 2026-11-16 DEBATE how should the fix stop a read-only test run from making a session own another session's auto task? → D: a `test_runs_count` keyword in `session_work`, off only in the Stop hook (Advocate 1: D, flag for `worked_on` and `work_start`; Advocate 2: D, flag for `worked_on` only; Advocate 3: A, test runs are not work for every caller) ⚠ decided for you — please review (reports/question_T324_20261116T105659.html)
