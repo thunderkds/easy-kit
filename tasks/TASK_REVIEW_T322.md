@@ -55,9 +55,9 @@ Not done: merge (yours); <auto verify: running (T182) | auto verify: <result> | 
 | Review scope bounded to the change's blast radius (affected set, not whole repo) | ☐ pass / ☐ fail | [what was reviewed vs. skipped, and why] |
 | Full smoke suite still green (no regression) | ☑ pass | 7497 passed, 5 skipped |
 | **Companion score (easy-verifier)** | ☐ pass / ☐ fail / ☐ N/A | [`overall` and `change_risk` as the tool returned them, the scope, the ref, and the absolute path of the verifier report after a literal `report:` label — e.g. "overall 86 (>= 80), change_risk pass, scope changes, ref `main...HEAD`, report: `/home/me/.easy-verifier-reports/kit/score_changes_20261028T0530Z.html`". The gate reads the path that follows `report:` and nothing else, so with no label, or a path that is absent, the row is unscored — write ☑ N/A instead. ☑ N/A with a reason when neither companion tool was run: the merge gate blocks on ☑ fail only, never on an absent or N/A row] |
-| **UI: Visual regression (diff or verdict pasted)** | ☑ pass | headless Chrome, Details forced open: new p has the same style as neighbouring p (U1); only closed page text unchanged (inside details) |
-| **UI: Design-system compliance (tokens/colors/typography verified)** | ☑ pass | grep of diff for class=/style= : 0 hits; only p, strong, code |
-| **UI: Responsiveness at target viewports** | ☑ pass | 375 and 1280: no sideways scroll (scrollWidth == clientWidth); long code wraps. Headless Chrome floors the window near 485px, so 375 layout was read from the screenshot |
+| **UI: Visual regression (diff or verdict pasted)** | ☑ pass | ux-evaluate (formal, no UX rows: baseline checks only), #tracks Details open, screenshots /tmp/claude-1000/-home-hungnguyenhuu-workspace-pets-personal-agentic-claude/8147f53b-32a0-4c0c-9272-6a5901bdfcc0/scratchpad/ux/t-375.png, /tmp/claude-1000/-home-hungnguyenhuu-workspace-pets-personal-agentic-claude/8147f53b-32a0-4c0c-9272-6a5901bdfcc0/scratchpad/ux/t-1280.png (375 is a real 375px-wide capture with scrollbars kept; 1280 hidden scrollbars). U1 pass at 375 and 1280: Session tags p has the same type, spacing and code style as the Close-out p above it. B-a/B-b/B-c/B-e/B-i pass; B-f/B-g not applicable (static text). ux-evaluate: 9 baseline pass (B-f, B-g n/a), 0 fail. Overall: pass |
+| **UI: Design-system compliance (tokens/colors/typography verified)** | ☑ pass | U2 pass: diff has only p, strong, code; 0 class=/style= additions. B-i pass: same accent and code style as neighbours. B-d pass: tap_probe run (/tmp/claude-1000/-home-hungnguyenhuu-workspace-pets-personal-agentic-claude/8147f53b-32a0-4c0c-9272-6a5901bdfcc0/scratchpad/ux/open-probe.html, shot p-375.png); the block has no tap target besides the Details summary, no red box in the block |
+| **UI: Responsiveness at target viewports** | ☑ pass | U3 pass: 375 real viewport (--window-size=375, scrollbars kept): no horizontal scrollbar at the bottom of t-375.png; long code strings (settings-setup, permissions.defaultMode: "auto") wrap. 1280: paragraph stays in the 650px text column, no overflow. B-h pass |
 
 ---
 
@@ -76,3 +76,7 @@ Not done: merge (yours); <auto verify: running (T182) | auto verify: <result> | 
 
 **WITNESS**: [who ran it and when — derived from `memory/event-trace/T322.jsonl`, never the
 implementing agent alone]
+
+### Re-run after review fixes (2026-11-16)
+
+`python3 -m pytest tests/test_t322_session_tags_docs.py tests/test_site_visual_first.py tests/test_site_story.py tests/test_site_content.py -q -p no:cacheprovider` — 217 passed in 0.87s

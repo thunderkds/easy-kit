@@ -470,7 +470,7 @@
 <p>
   <strong>Session tags</strong>: <code>[ticket]</code> and <code>[admin]</code> hold for the whole session. <code>[auto]</code> holds for one request only.
   <code>[stop]</code>, or a request with another tag, ends a session tag. A resume, continue or fork ends it too. <code>/compact</code> does not.
-  The Supervisor then works the board one ready ticket at a time, highest Priority first. It runs each ticket in auto mode, starts its auto verify and waits.
+  While a session tag holds, the Supervisor works the board one ready ticket at a time, highest Priority first. It runs each ticket in auto mode, starts its auto verify and waits.
   After a pass, <code>[ticket]</code> pushes only the task branch to <code>origin</code>. <code>[admin]</code> merges the task branch into <code>main</code> and pushes <code>main</code>.
   After <code>blocked</code> or <code>fail</code>, it pushes and merges nothing. It opens no pull request.
   No tag approves a tool call. To run Bash without prompts, apply the <code>settings-setup</code> profile <code>autonomous</code> (<code>permissions.defaultMode: "auto"</code>). The kit never sets <code>bypassPermissions</code>.
