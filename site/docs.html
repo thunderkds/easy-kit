@@ -466,6 +466,14 @@
   A task that changes only docs, task files, memory or tests has no runtime surface: when the run answers <code>skip</code>, the hook checks the changed paths in git and records a pass, so you need not type <code>/verify</code>. One path outside that list keeps the result <code>blocked</code>.
   A force push or a push of any other branch stays blocked. With <code>[admin]</code>, <code>ship</code> runs as a plan only, never a deploy.
   The <code>[admin]</code> merge and push also refuse when the repo config holds a key that can run code or reach another host, such as a merge driver, a filter or <code>core.hooksPath</code>; the refusal names the key.
+</p>
+<p>
+  <strong>Session tags</strong>: <code>[ticket]</code> and <code>[admin]</code> hold for the whole session. <code>[auto]</code> holds for one request only.
+  <code>[stop]</code>, or a request with another tag, ends a session tag. A resume, continue or fork ends it too. <code>/compact</code> does not.
+  The Supervisor then works the board one ready ticket at a time, highest Priority first. It runs each ticket in auto mode, starts its auto verify and waits.
+  After a pass, <code>[ticket]</code> pushes only the task branch to <code>origin</code>. <code>[admin]</code> merges the task branch into <code>main</code> and pushes <code>main</code>.
+  After <code>blocked</code> or <code>fail</code>, it pushes and merges nothing. It opens no pull request.
+  No tag approves a tool call. To run Bash without prompts, apply the <code>settings-setup</code> profile <code>autonomous</code> (<code>permissions.defaultMode: "auto"</code>). The kit never sets <code>bypassPermissions</code>.
 </p></details>
 </section>
 
