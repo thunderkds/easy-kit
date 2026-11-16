@@ -4,6 +4,11 @@
 
 ## Architecture
 
+### 2026-11-16 — T323: a short yes to the Supervisor's one-task question binds that task for `[admin]`
+**Decision**: The merge gate gains a fourth `[admin]` binding (`_answered_task`): the latest human request is only a short yes (`SHORT_YES`, ≤ 40 chars, without code spans, `>` quotes and `[admin]`), and the newest non-sidechain assistant entry with `text` blocks before it ends with `?` and names exactly one task. Under a session tag this one check reads the latest request (it may carry no tag, dated at or after the tag request); every other binding keeps the tag request. Never under `[ticket]`. Unbound refusals add `ANSWER_HINT`. Doctrine: the Supervisor's merge question names one task and asks for `merge <ID> [admin]` or a yes.
+**Why**: User 2026-11-16: "yes [admin]" to "merge T322?" was refused. Debate 1 (3 Advocates) chose gate path + doctrine (RULE: the registered requirement); Debate 2 (3 Advocates, all agree) chose the latest-request reading (tracks.md:879). P2 open: the question need not be about merging (T325).
+**Files**: .claude/hooks/pre_bash_block_unsafe_merge.py, .claude/hooks/tests/merge_gate_guard.py, docs/claude-md/tracks.md, .claude/hooks/tests/test_t323_answered_question.py
+
 ### 2026-11-16 — T322: `site/docs.html` names the session tags; its push wording says `origin`
 **Decision**: The `#tracks` Details block of `site/docs.html` gains one `<p><strong>Session tags</strong>` paragraph: `[ticket]`/`[admin]` hold for the session, `[auto]` for one request, `[stop]` or another tag ends it, resume/continue/fork ends it, `/compact` does not; the board loop; `[ticket]` pushes only the task branch to `origin`, `[admin]` merges and pushes `main`; no tag approves a tool call, Bash without prompts needs the `settings-setup` profile `autonomous`. `site/index.html` stays tag-free (landing page, T231). Pinned by `tests/test_t322_session_tags_docs.py`.
 **Why**: User 2026-11-16: "should add it, cause it will affect to the workflow" — no site page named `[ticket]` or `[stop]` after T317. The text says `origin` because that is `main` today; T321 (configurable push remote) must update this paragraph when it lands.

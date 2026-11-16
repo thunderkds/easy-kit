@@ -8,6 +8,7 @@
 ## Board
 
 ### Todo
+- [ ] **T325** — `[admin]` answered-question binding (T323) binds a task named in ANY one-task question, not only a merge question ("T900 passed verify. Should I wait?" + "yes" binds T900); require a merge/push verb in the same clause as the task ID | common-infrastructure | C1 | Risk: High | P2 | Depends on: T323 | Registered 2026-11-16 [admin] from the T323 code review (P2, conf 75) and security review (below the bar, 4/10)
 - [ ] **T320** — The merge gate does not block `gh pr merge` or `gh api … /merges` in any mode (not in `BLOCKED_PATTERNS`); with session-wide `[admin]`/`[ticket]` (T317) and the `autonomous` profile this runs with no prompt; add them to the gate as merges | common-infrastructure | C1 | Risk: High | P1 | Registered 2026-11-15 [admin] from the T317 code review (needs-validation lead, pre-existing)
 - [ ] **T319** — Local-mode `path_forms` turns `\` into `/` before `is_predicted`, so with a guide predicting `infra/main.tf`, a Write of `infra/evil\..\main.tf` or `infra\main.tf` is silent and creates a new literal file in a sensitive folder (on `main` today; pinned by `test_t314_backslash_key.py::test_local_predicted_guide_unchanged`); build the predicted-path match from the path as the OS sees it | common-infrastructure | C1 | Risk: High | P1 | Registered 2026-11-15 [admin] from the T314 security review (out of T314 scope: local mode)
 - [ ] **T318** — `stop_auto_mode_check.py` reads its own `Paused: auto-mode check failed — …` line as a decision: the line quotes earlier report text holding `⚠`, so at Risk High the next fire reports "`Paused: auto-mode check failed — Risk Hi` (`⚠`) is a choice … must be DEBATED"; skip `Paused:` (and other `STAMP_SKIPS`) lines when collecting decisions | common-infrastructure | C1 | Risk: Medium | P2 | Registered 2026-11-15 [admin] from the T314/T317 run
@@ -95,7 +96,6 @@
 
 
 ### In Progress
-- [ ] **T323** — `[admin]` given as a reply to the Supervisor's own "merge Txxx?" question ("yes [admin]") does not bind Txxx: the merge gate needs the task ID in the request text, a guide added after it, or a loop task whose `--start` ran after the tag (impossible when the pass predates the tag: `--start` refuses "already filled"); bind the task the Supervisor's immediately preceding question named | common-infrastructure | C2 | Risk: High | P1 | Registered 2026-11-16 [admin], user: "why using the admin but got this one" / "let do what my expected" (T322 merge blocked) | Started 2026-11-16 [admin]: branch `feat/t323-answered-question`, worktree `../wt-t323` | Track: extended
 - [ ] **T324** — a test run in a task's worktree is not work on the task (Stop check false positive) | common-infrastructure | C2 | Risk: High | P1 | Guide: `tasks/TASK_GUIDE_T324.md` | Registered and started 2026-11-16 [admin], user: "yes [admin]" (log the stop-hook false positive): branch `fix/t324-test-run-not-work`, worktree `../wt-t324` | Track: extended
 - [ ] **T321** — the `[admin]`/`[ticket]` push remote is a setting (`EASY_KIT_ADMIN_REMOTE`), not the hard-coded `origin` | common-infrastructure | C2 | Risk: High | P1 | Started 2026-11-15 [admin]: branch `feat/t321-admin-remote`, worktree `../wt-t321` | Track: extended
 
@@ -111,6 +111,7 @@
 
 
 ### Ready for Review
+- [ ] **T323** — `[admin]` given as a reply to the Supervisor's own "merge Txxx?" question ("yes [admin]") does not bind Txxx: the merge gate needs the task ID in the request text, a guide added after it, or a loop task whose `--start` ran after the tag (impossible when the pass predates the tag: `--start` refuses "already filled"); bind the task the Supervisor's immediately preceding question named | common-infrastructure | C2 | Risk: High | P1 | Registered 2026-11-16 [admin], user: "why using the admin but got this one" / "let do what my expected" (T322 merge blocked) | Started 2026-11-16 [admin]: branch `feat/t323-answered-question`, worktree `../wt-t323` | Track: extended | Ready for Review 2026-11-16: oracle 65 passed, admin+session 401 passed, code-review P0 0/P1 0/P2 1 (T325)/P3 0, security-review no findings ≥ 8, Evidence 30a851bf
 
 
 
