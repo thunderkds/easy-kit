@@ -25,6 +25,7 @@
      run; read them there. The enforced gate is the whole-file character budget above. -->
 
 ### Decisions
+- [T322: session tags on `site/docs.html`](decisions.md) — says `origin`; T321 must update it
 - [T311–T312: kit data and Explorer on `site/docs.html`](decisions.md) — `39ab138e`
 - [T310: `[admin]` stops when unsure](decisions.md) — `Paused: unsure`; `d839663d`
 - [T306–T308: `[admin]` end to end](decisions.md) — T309 gate hole
