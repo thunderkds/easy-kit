@@ -51,7 +51,7 @@ Not done: merge (yours); <auto verify: running (T182) | auto verify: <result> | 
 | **New test(s) cover Acceptance Criteria (file paths pasted)** | ☑ pass | tests/test_t322_session_tags_docs.py: 4 failed (red, before the paragraph), then 4 passed in 0.02s |
 | Verification command run | ☑ pass | `python3 -m pytest .claude/hooks/tests/ tests/ -q` — 7497 passed, 5 skipped, 87 subtests passed in 386.65s |
 | Negative cases hold | ☑ pass | red run 4 failed against prior content (no Session tags p); diff +8 lines in site/docs.html |
-| verify | ☐ pass / ☐ fail / ☐ N/A | [leave it: the auto verify hook writes this row, with its run record. If you ran /verify yourself, tick pass and make the whole Notes cell "/verify by the user, session <id>, commit <sha>" (the full 40-character commit). The merge gate counts no other row, even with the word "pass" in it] |
+| verify | ☑ pass | auto-run by hook, session 17d92b9f-8bd4-4dc7-b501-59605bd349df, commit fff1e7446fbe335b4f43e24c95926ccaee6c9a30, log .claude/verify-runs/T322-fff1e7446fbe.log — pass |
 | Review scope bounded to the change's blast radius (affected set, not whole repo) | ☑ pass | `git diff main...HEAD`: site/docs.html (one new <p> in #tracks details), tests/test_t322_session_tags_docs.py, this file, the guide's pin row. Wording checked line by line against `docs/claude-md/tracks.md` 877–937. Nothing else in scope (no code, no hook) |
 | Full smoke suite still green (no regression) | ☑ pass | 7497 passed, 5 skipped |
 | **Companion score (easy-verifier)** | ☑ N/A | not run: C1 / Risk Low docs-only change; optional tool |
