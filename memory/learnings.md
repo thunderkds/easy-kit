@@ -1664,7 +1664,7 @@ argument. The control's failure mode is a confident wrong inference, not lazines
 that was never needed — and the answer differs task to task.
 
 ### 2026-11-16 — `[admin]` binds a task only by ID, new guide, or a `--start` after the tag
-**Learning**: "yes [admin]" in reply to the Supervisor's "merge T322?" did not bind T322: the request named no ID, and the auto verify pass was written before the tag, so `--start T322` refused ("already filled") and the loop binding could not hold. Also `git push origin main` under `[admin]` is blocked when local `main` carries commits other than the one merge (board commits from this or another session). Ask for `merge Txxx [admin]` up front, and start `--start` only after the tag when an `[admin]` merge is expected. Fix tracked as T323.
+**Learning**: "yes [admin]" in reply to the Supervisor's "merge T322?" did not bind T322: the request named no ID, and the auto verify pass was written before the tag, so `--start T322` refused ("already filled") and the loop binding could not hold. Also `git push origin main` under `[admin]` is blocked when local `main` carries commits other than the one merge (board commits from this or another session). Fixed by T323 (merged 2026-11-16): a short yes to the Supervisor's question naming exactly one task now binds it; still ask "merge Txxx?" with one task only. The `main` push rule is unchanged: push the backlog yourself first.
 **Files**: .claude/hooks/pre_bash_block_unsafe_merge.py, docs/claude-md/tracks.md
 
 ### 2026-08-24 — A doc pointer that names a check still does not get the check run
