@@ -129,7 +129,7 @@ Source of truth: `docs/claude-md/tracks.md` lines 877–937 (`### Session tags`)
 |------|--------|
 | `site/docs.html` | one new paragraph inside the `#tracks` Details block |
 | `tests/test_t322_session_tags_docs.py` | new |
-| Pre-existing pin tests | List each test that pins text, size, word count, line count or hash of `site/docs.html`, and its handling. Grep `tests/` and `.claude/hooks/tests/` for `docs.html`. **Filled by the implementer:** |
+| Pre-existing pin tests | List each test that pins text, size, word count, line count or hash of `site/docs.html`, and its handling. Grep `tests/` and `.claude/hooks/tests/` for `docs.html`. **Filled by the implementer:** Grep found 22 files naming `docs.html`. Pinned and run green after the change: `test_site_story.py` (sentence hashes of existing `<p>`: untouched, new `<p>` added), `test_site_visual_first.py` (word cap: text is inside `<details>`), `test_site_content.py`, `test_kit_explorer_data.py`, `test_site_explorer.py`. Full suite 7497 passed. |
 
 ## Files Must NOT Touch
 
