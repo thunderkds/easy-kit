@@ -689,6 +689,11 @@ command, from this session's transcript. It allows a `git merge` or `git push` o
    record of the commit, and a commit dated more than 60 seconds in the future is ignored. A negation
    after the ID in the same clause ("T900 is not ready", "T900 must wait") also leaves it out. Work that
    only names an existing task (an edit, a `touch`, an `Agent` spawn) does not make it the request's task.
+   Or (T323) the request is only a short yes (`yes`, `ok`, `sure`, `go ahead`, `do it`, `merge it`, at
+   most 40 characters besides the tag), and the Supervisor's message directly before it asked a question
+   that names exactly this one task: only that message's visible text counts, and its last line ends
+   with `?`. When the Supervisor asks to merge, it names exactly one task and asks for `merge <ID>
+   [admin]` or a yes.
 4. The branch tip commits the hook-written `auto-run by hook` verify result for the task, with its run
    record for that commit, and the result says pass. A hand-typed pass row does not count. A `skip-pass`
    record counts only because the gate repeats the docs-only path check from git.
@@ -915,9 +920,12 @@ request and runs no two tickets at once.
 
 **The merge gate under a session tag.**
 
-- `[admin]`: every `### Admin tag` rule holds. The gate binds the task in one of three ways: the
-  request names it, it is the one task whose guide was first added after the request, or it is the
-  loop's task. The loop's task is the branch's task when all of these hold. Its own row is in Ready
+- `[admin]`: every `### Admin tag` rule holds. The gate binds the task in one of four ways: the
+  request names it, it is the one task whose guide was first added after the request, the latest
+  request is a short yes to the Supervisor's question directly before it that named this one task
+  (`### Admin tag` item 3; the yes may carry no tag, and the row is in Ready for Review except for the
+  `main` push), or it is the loop's task. When the Supervisor asks to merge, it names exactly one task
+  and asks for `merge <ID> [admin]` or a yes. The loop's task is the branch's task when all of these hold. Its own row is in Ready
   for Review (for the merge and the task branch push; the `main` push after the merge may follow the
   close-out). This session changed it since the tag request, and holds no other task In Progress or
   Ready for Review. This session ran `python3 .claude/hooks/stop_auto_verify.py --start <ID>` for it as

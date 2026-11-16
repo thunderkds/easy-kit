@@ -1405,7 +1405,8 @@ def session_owned_in_progress(rows, command, cwd, transcript_path):
 #     to the same branch name: no force flag, no `+refspec`, no other destination, no `--no-verify`;
 #   * every branch names the same one task, and that task is the request's: the request names it
 #     with no negation in its clause, or it is the one task whose guide was first added after the
-#     request (`_named_tasks`, `_guides_added_since`);
+#     request (`_named_tasks`, `_guides_added_since`), or (T323) the latest request is a short yes
+#     to the Supervisor's question directly before it, which named that one task (`_answered_task`);
 #   * a push of `main` (round 2): the remote's real `main` comes from `git ls-remote origin`, the
 #     local `main` is that sha plus only this session's merge of the task branch (run with `main`
 #     checked out), and the merge commit's tree is `git merge-tree --write-tree`'s result;
@@ -2245,6 +2246,74 @@ def _named_tasks(text, id_regex):
     return named
 
 
+# T323: a reply that is only a short yes (AC 2), and the hint every unbound `[admin]` refusal carries.
+SHORT_YES = re.compile(r"\s*(?:yes|y|ok|okay|sure|go(?: ahead)?|do it|merge(?: it)?)\W*", re.I)
+SHORT_YES_MAX = 40
+ANSWER_HINT = ("a bare yes binds only when the Supervisor's last message asked about exactly one "
+               "task; else reply with the task ID and `[admin]`")
+
+
+def _short_yes(text):
+    """T323 AC 2: True when request `text`, without code spans, `>` quoted lines and `[admin]`, is
+    only a short yes."""
+    plain = auto_mode.QUOTED_LINE.sub(" ", auto_mode.CODE.sub(" ", text or ""))
+    plain = plain.replace(auto_mode.ADMIN_TAG, " ")
+    return len(plain.strip()) <= SHORT_YES_MAX and SHORT_YES.fullmatch(plain) is not None
+
+
+def _answered_task(transcript_path, request_entry, id_regex):
+    """T323: the one task ID that the Supervisor's question directly before `request_entry` (the
+    session's latest human request, a short yes) named, or None. The question is the newest
+    non-sidechain assistant entry with a `text` block after the previous human request; only its
+    `text` blocks are read. It names exactly one task (`_named_tasks`, so a negated ID drops out) and
+    its last non-empty line ends with `?`. A compact summary, an unreadable line or a malformed
+    assistant entry after the previous request leaves no question. Never raises: any doubt is None."""
+    try:
+        if (not isinstance(transcript_path, str) or not os.path.isabs(transcript_path)
+                or not isinstance(request_entry, dict)
+                or not _short_yes(auto_mode.request_text(request_entry))):
+            return None
+        question, answered, last = None, None, None
+        with open(transcript_path, encoding="utf-8") as f:
+            for line in f:
+                try:
+                    entry = json.loads(line)
+                except Exception:
+                    entry = None
+                if not isinstance(entry, dict):
+                    question = False  # an unreadable line may be the question: fail closed
+                    continue
+                if entry.get("isSidechain"):
+                    continue
+                if entry.get("isCompactSummary"):
+                    question = False
+                elif entry.get("type") == "assistant":
+                    message = entry.get("message")
+                    content = message.get("content") if isinstance(message, dict) else None
+                    if not isinstance(content, list):
+                        question = False
+                        continue
+                    texts = [b.get("text") for b in content
+                             if isinstance(b, dict) and b.get("type") == "text"]
+                    if texts:
+                        question = ("\n".join(texts) if all(isinstance(t, str) for t in texts)
+                                    else False)
+                elif entry.get("type") == "user":
+                    origin = entry.get("origin")
+                    if (auto_mode.request_text(entry) is not None and isinstance(origin, dict)
+                            and origin.get("kind") == "human"):
+                        answered, last, question = question, entry, None
+        if last != request_entry or not isinstance(answered, str):
+            return None
+        lines = [l.strip() for l in answered.splitlines() if l.strip()]
+        if not lines or not lines[-1].endswith("?"):
+            return None
+        named = _named_tasks(answered, id_regex)
+        return named.pop() if len(named) == 1 else None
+    except Exception:
+        return None
+
+
 def _guides_added_since(directory, when):
     """P1: the task IDs whose `tasks/TASK_GUIDE_<ID>.md` was first added, on any ref, at or after
     `when`. None when git cannot be read."""
@@ -2458,8 +2527,19 @@ def admin_refusal(command, cwd, transcript_path, admin, tag=None):
         if len(task_ids) != 1:
             return "an `[admin]` command covers one task only"
         task_id = task_ids.pop()
+
+        def answered():
+            # T323: a short yes answering the Supervisor's one-task question. Under a session tag the
+            # latest human request (it may carry no tag) is read, dated at or after the tag request;
+            # the row is in Ready for Review except for the `main` push after the merge.
+            latest = auto_mode.latest_request(transcript_path)
+            at = auto_mode.parse_ts(latest[0].get("timestamp")) if latest is not None else None
+            return (at is not None and at >= when
+                    and _answered_task(transcript_path, latest[0], id_regex) == task_id
+                    and (tag is None or main_push or _ready_for_review(task_id)))
+
         bound = tag != "ticket" and (task_id in _named_tasks(text, id_regex) or _guides_added_since(
-            sorted(targets)[0][2], when) == {task_id})
+            sorted(targets)[0][2], when) == {task_id} or answered())
         if not bound and tag is not None:
             # R1: the loop binds only through this session's own `--start` call after the tag
             # request, and a pass record written after that call. R4: for the merge and the task
@@ -2481,7 +2561,7 @@ def admin_refusal(command, cwd, transcript_path, admin, tag=None):
                 return f"{task_id} is not {loop}"
             return (f"{task_id} is not the task of the `[admin]` request: the request does not "
                     "name it, and it is not the one task whose guide was first added after "
-                    "the request" + ("" if tag is None else ", nor " + loop))
+                    "the request" + ("" if tag is None else ", nor " + loop) + "; " + ANSWER_HINT)
         for _, branch, where in sorted(targets):
             if committed_verify_row(task_id, branch, where, hook_only=True) is not True:
                 return (f"{task_id} has no passed auto verify committed on {branch} (a hook-written "

@@ -52,13 +52,14 @@ Mode: auto
 Checks: tests `python3 -m pytest .claude/hooks/tests/test_t323_answered_question.py -q` — 50 failed, 10 passed (oracle red, 95cfadca); implementation pending
 Memory: nothing new yet (memory pass runs at close-out)
 Not done: implementation, code-review, security-review, auto verify, merge (admin: after the auto verify pass)
+Paused: auto-mode check failed — Risk High, but the trace has no `security-review` Skill call [report 009a40b61469]
 
 ## Evidence
 
 | Check | Result | Notes / output snippet |
 |-------|--------|------------------------|
-| **New test(s) cover Acceptance Criteria (file paths pasted)** | ☐ pass / ☐ fail | Locked oracle `.claude/hooks/tests/test_t323_answered_question.py` (qa-expert, written first). Red run before any implementation, 2026-11-16T04:33Z, at `1d68ba33`: `python3 -m pytest .claude/hooks/tests/test_t323_answered_question.py -q -p no:cacheprovider` → `50 failed, 10 passed in 3.47s` (AC 1-8 cases). Every failure is the binding refusal `T900 is not the task of the `[admin]` request: ...`: 17 positive cases (T322 shape, push, by-ID, each short yes, split entries, per-request path) are refused instead of allowed; 32 negative cases are refused but lack the AC 6 hint; `test_ac5_the_answered_task_still_needs_its_committed_auto_verify` is refused by the binding instead of the verify-row check. The 10 passing are guards that must stay green: octopus merge, force push, `[ticket]` x2, unreadable transcript x4, request naming the ID binds, `[ticket]` naming the ID does not. AC 9 cases added (coordinator, after Debate 2), red run 2026-11-16T04:37:40Z: same command → `53 failed, 12 passed in 4.88s`. The new failures are refused by the binding: an untagged yes under session `[admin]` and the T900 merge in `test_ac9_only_the_question_directly_before_the_latest_yes_binds` should be allowed; `test_ac9_a_yes_typed_before_the_tag_request_does_not_bind` is refused but lacks the hint. 2 new guards already pass: `[ticket]` + untagged yes stays refused, and after `[stop]` no `[admin]` path applies (the gate answers like the never-tagged control). Reviewer fills the green run here. |
-| Verification command run | ☐ pass / ☐ fail | [paste actual output] |
+| **New test(s) cover Acceptance Criteria (file paths pasted)** | ☐ pass / ☐ fail | Locked oracle `.claude/hooks/tests/test_t323_answered_question.py` (qa-expert, written first). Red run before any implementation, 2026-11-16T04:33Z, at `1d68ba33`: `python3 -m pytest .claude/hooks/tests/test_t323_answered_question.py -q -p no:cacheprovider` → `50 failed, 10 passed in 3.47s` (AC 1-8 cases). Every failure is the binding refusal `T900 is not the task of the `[admin]` request: ...`: 17 positive cases (T322 shape, push, by-ID, each short yes, split entries, per-request path) are refused instead of allowed; 32 negative cases are refused but lack the AC 6 hint; `test_ac5_the_answered_task_still_needs_its_committed_auto_verify` is refused by the binding instead of the verify-row check. The 10 passing are guards that must stay green: octopus merge, force push, `[ticket]` x2, unreadable transcript x4, request naming the ID binds, `[ticket]` naming the ID does not. AC 9 cases added (coordinator, after Debate 2), red run 2026-11-16T04:37:40Z: same command → `53 failed, 12 passed in 4.88s`. The new failures are refused by the binding: an untagged yes under session `[admin]` and the T900 merge in `test_ac9_only_the_question_directly_before_the_latest_yes_binds` should be allowed; `test_ac9_a_yes_typed_before_the_tag_request_does_not_bind` is refused but lacks the hint. 2 new guards already pass: `[ticket]` + untagged yes stays refused, and after `[stop]` no `[admin]` path applies (the gate answers like the never-tagged control). Green run (implementer, common-infrastructure, after the change, oracle unedited), 2026-11-16T04:42:06Z: same command → `65 passed in 3.16s`. Reviewer ticks after re-running. |
+| Verification command run | ☐ pass / ☐ fail | Implementer run, worktree `/home/hungnguyenhuu/workspace/pets/wt-t323`, 2026-11-16T04:42:06Z: `python3 -m pytest .claude/hooks/tests/test_t323_answered_question.py -q -p no:cacheprovider` → `65 passed in 3.16s`; `python3 -m pytest .claude/hooks/tests/test_admin_tag.py .claude/hooks/tests/test_t317_*.py -q` → `401 passed in 16.05s`. |
 | Negative cases hold | ☐ pass / ☐ fail | [paste the red run against the prior content, or the mutation diff (`git diff --stat`, non-empty) before each verdict] |
 | verify | ☐ pass / ☐ fail / ☐ N/A | [leave it: the auto verify hook writes this row, with its run record. If you ran /verify yourself, tick pass and make the whole Notes cell "/verify by the user, session <id>, commit <sha>" (the full 40-character commit). The merge gate counts no other row, even with the word "pass" in it] |
 | Review scope bounded to the change's blast radius (affected set, not whole repo) | ☐ pass / ☐ fail | [what was reviewed vs. skipped, and why] |
@@ -95,7 +96,15 @@ E   assert "[hook:pre_bash] Auto-mode gate — cannot push/merge:\n  • `[admin
 
 Transcript of that case: assistant text "Do you want me to merge `feat/t900-x` into `main`?", then human (`origin.kind: "human"`) "yes [admin]"; `feat/t900-x` commits a hook-written pass row with its run record; T900 in Ready for Review. Today the gate refuses `git merge feat/t900-x` — the user's T322 refusal, reproduced.
 
-**AFTER**: [same command, post-change] OR [verbatim excerpt of the new content]
+**AFTER**: common-infrastructure (implementer), same worktree, after the change in `.claude/hooks/pre_bash_block_unsafe_merge.py` (`_answered_task`, one `or answered()` in `bound`, the AC 6 hint):
+
+```
+$ date -u +%Y-%m-%dT%H:%M:%SZ
+2026-11-16T04:47:35Z
+$ python3 -m pytest ".claude/hooks/tests/test_t323_answered_question.py::test_sc1_the_t322_shape_binds_the_merge_under_the_admin_tag" ".claude/hooks/tests/test_t323_answered_question.py::test_sc1_the_t322_shape_binds_on_the_per_request_admin_path" -q -p no:cacheprovider --tb=line
+..                                                                       [100%]
+2 passed in 0.24s
+```
 
 **DELTA**: [one sentence — what a user can now do that they could not before]
 
