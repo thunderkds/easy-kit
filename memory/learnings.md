@@ -1663,6 +1663,10 @@ argument. The control's failure mode is a confident wrong inference, not lazines
 **How to apply:** always run the unwired arm. Without it you cannot tell a rule that works from a rule
 that was never needed — and the answer differs task to task.
 
+### 2026-11-16 — `[admin]` binds a task only by ID, new guide, or a `--start` after the tag
+**Learning**: "yes [admin]" in reply to the Supervisor's "merge T322?" did not bind T322: the request named no ID, and the auto verify pass was written before the tag, so `--start T322` refused ("already filled") and the loop binding could not hold. Also `git push origin main` under `[admin]` is blocked when local `main` carries commits other than the one merge (board commits from this or another session). Ask for `merge Txxx [admin]` up front, and start `--start` only after the tag when an `[admin]` merge is expected. Fix tracked as T323.
+**Files**: .claude/hooks/pre_bash_block_unsafe_merge.py, docs/claude-md/tracks.md
+
 ### 2026-08-24 — A doc pointer that names a check still does not get the check run
 
 T091's Staleness Guard ends with "`tests/test_provider_adapters.py` enforces this mechanically at

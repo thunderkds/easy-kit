@@ -159,6 +159,7 @@
 - [T215: Done rows are one-line; full text in docs/archive/KANBAN_DONE_DETAIL.md](decisions.md) — logs moved to docs/brainstorming, docs/prd; write new Done rows short
 
 ### Patterns & Gotchas
+- [`[admin]` binds by task ID, new guide, or `--start` after the tag](learnings.md) — T322: "yes [admin]" failed; `main` push blocked by extra board commits
 - [A text gate over shell input: allowlist plain shapes; author fuzz proves little](learnings.md) — T294/T296: 12 then 11 bypass classes; stop at documented limits
 - [Never switch the main checkout mid auto-verify run](learnings.md) — verdict write crashes; use a worktree; state file needs ID + timestamp lines
 - [Merge gate after T210/T211](learnings.md) — verify row committed on the branch; any `git <global opts> push|merge|pull|rebase` and `-c alias.` gated; open: `echo … | sh`
