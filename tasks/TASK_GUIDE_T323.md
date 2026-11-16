@@ -133,7 +133,7 @@ Risk: High. The gate decides what may reach `main`. Every doubt must fail closed
 | `.claude/hooks/lib/auto_mode.py` | only if the helper or a transcript reader lives there |
 | `docs/claude-md/tracks.md` | `### Admin tag` item 3, `### Session tags` merge-gate bullet |
 | `.claude/hooks/tests/test_t323_answered_question.py` | new, `qa-expert`, locked |
-| Pre-existing pin tests | List each test that pins the refusal text or "three ways" wording, and its handling. **Filled by the implementer:** |
+| Pre-existing pin tests | List each test that pins the refusal text or "three ways" wording, and its handling. **Filled by the implementer:** `grep -rn "not the task\|three ways" .claude/hooks/tests/ tests/` (2026-11-16, before work): `test_admin_tag.py:675` pins the substring "not the task of the `[admin]` request"; `test_admin_tag.py:960` and `test_t317_loop_binding.py:78,88,97` pin "not the task" (and `[{tag}]`). Handling: the refusal keeps its full prior text and only appends the AC 6 hint after it, so all five pins keep passing unedited. No test pins the "one of three ways" wording (only `docs/claude-md/tracks.md:918`). |
 
 ## Files Must NOT Touch
 
