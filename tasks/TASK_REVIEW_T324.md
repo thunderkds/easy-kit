@@ -42,8 +42,30 @@ Not done: merge (admin: after the auto verify pass); auto verify: not started
 > **before any implementation commit exists**; if it does not (docs, templates, skill-instruction
 > text), BEFORE is the **verbatim prior content** of what changed — a quoted excerpt, not a command.
 
-**BEFORE**: [pasted timestamped command output showing the thing absent/failing, captured before the
-first implementation commit] OR [verbatim excerpt of the prior content, for non-executable changes]
+**BEFORE**: captured by qa-expert at 2026-11-16T04:04:36Z (UTC) on commit
+`bb41db536c9279db03bb95bd6ee427a20dd7311b` (branch `fix/t324-test-run-not-work`, no implementation
+commit yet), in `/home/hungnguyenhuu/workspace/pets/wt-t324`.
+
+Phase 1 repro (`session_work.worked_on` today; a script loads `.claude/hooks/lib/session_work.py` of
+this worktree and passes the incident command, cwd = main checkout, worktree `../wt-t321`):
+
+```
+incident test run -> True
+grep of the review -> False
+```
+
+Locked oracle, red on the unchanged code:
+
+```
+$ python3 -m pytest .claude/hooks/tests/test_t324_test_run_not_work.py -q -p no:cacheprovider
+75 failed, 74 passed in 1.54s
+```
+
+Red causes: AC 1/2/4 `TypeError: worked_on() got an unexpected keyword argument 'test_runs_count'`
+(72 tests); AC 5 the incident stop is blocked (`T900: Risk High, but no decision was DEBATED with 3
+Advocates`, no test run in the trace, no `code-review`, no `security-review`, no `Memory:` line); AC 6
+the spy sees `worked_on` called with no keyword (`('worked_on', [{}])`), and the Debate window opens at
+the test run, so the `before the task's first change` hint is missing.
 
 **AFTER**: [same command, post-change] OR [verbatim excerpt of the new content]
 
