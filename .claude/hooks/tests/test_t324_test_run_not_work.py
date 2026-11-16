@@ -151,7 +151,8 @@ def test_ac3_the_default_is_true_when_passed_explicitly():
 
 def test_ac3_the_merge_gate_is_byte_identical_to_main():
     rel = ".claude/hooks/pre_bash_block_unsafe_merge.py"
-    done = subprocess.run(["git", "-C", str(REPO), "show", f"main:{rel}"], capture_output=True,
+    base = subprocess.run(["git", "-C", str(REPO), "merge-base", "HEAD", "main"], capture_output=True, text=True, timeout=30).stdout.strip() or "MISSING"  # REPOINTED (T324, user): fork point, not main tip
+    done = subprocess.run(["git", "-C", str(REPO), "show", f"{base}:{rel}"], capture_output=True,
                           timeout=30)
     assert done.returncode == 0, done.stderr  # fail closed: no `main` copy is a failure
     assert (REPO / rel).read_bytes() == done.stdout
