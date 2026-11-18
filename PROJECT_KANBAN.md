@@ -96,8 +96,6 @@
 
 
 ### In Progress
-- [ ] **T326** — `[admin]` push of `main` works on git older than 2.38 | common-infrastructure | C2 | Risk: High | P1 | Guide: `tasks/TASK_GUIDE_T326.md` | Registered and started 2026-11-18 [admin], user: "yes, register both tasks, and execute 2 of them parallel [admin]": branch `fix/t326-old-git-main-push`, worktree `../wt-t326` | Track: extended
-- [ ] **T327** — Clean up a task's resources after it is merged and Done | common-infrastructure | C2 | Risk: High | P1 | Guide: `tasks/TASK_GUIDE_T327.md` | Registered and started 2026-11-18 [admin], user: "yes, register both tasks, and execute 2 of them parallel [admin]": branch `feat/t327-cleanup-after-done`, worktree `../wt-t327` | Track: extended
 - [ ] **T324** — a test run in a task's worktree is not work on the task (Stop check false positive) | common-infrastructure | C2 | Risk: High | P1 | Guide: `tasks/TASK_GUIDE_T324.md` | Registered and started 2026-11-16 [admin], user: "yes [admin]" (log the stop-hook false positive): branch `fix/t324-test-run-not-work`, worktree `../wt-t324` | Track: extended
 - [ ] **T321** — the `[admin]`/`[ticket]` push remote is a setting (`EASY_KIT_ADMIN_REMOTE`), not the hard-coded `origin` | common-infrastructure | C2 | Risk: High | P1 | Started 2026-11-15 [admin]: branch `feat/t321-admin-remote`, worktree `../wt-t321` | Track: extended
 
@@ -113,6 +111,8 @@
 
 
 ### Ready for Review
+- [ ] **T326** — `[admin]` push of `main` works on git older than 2.38 | common-infrastructure | C2 | Risk: High | P1 | Guide: `tasks/TASK_GUIDE_T326.md` | Registered and started 2026-11-18 [admin], user: "yes, register both tasks, and execute 2 of them parallel [admin]": branch `fix/t326-old-git-main-push`, worktree `../wt-t326` | Track: extended | Stage 4 2026-11-18 [admin]: code-review 0 P0/0 P1/1 P2 fixed; security-review by hand (built-in needs `origin/HEAD`), no findings; Debate A (read-tree fallback); report `tasks/TASK_REVIEW_T326.md` `## Auto decisions` | Ready for Review 2026-11-18
+- [ ] **T327** — Clean up a task's resources after it is merged and Done | common-infrastructure | C2 | Risk: High | P1 | Guide: `tasks/TASK_GUIDE_T327.md` | Registered and started 2026-11-18 [admin], user: "yes, register both tasks, and execute 2 of them parallel [admin]": branch `feat/t327-cleanup-after-done`, worktree `../wt-t327` | Track: extended | Stage 4 2026-11-18 [admin]: code-review 0 P0/0 P1 code, 1 P3; security-review by hand, no findings; Debate B (list processes, refuse, no signal); report `tasks/TASK_REVIEW_T327.md` `## Auto decisions` | Ready for Review 2026-11-18
 
 
 
