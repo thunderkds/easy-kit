@@ -49,6 +49,7 @@ scripts/board_sync.py
 scripts/pull_moment.py
 scripts/gen_sandbox_profile.py
 scripts/lane_check.py
+scripts/cleanup_task.py
 scripts/verify_trace.py
 templates
 docs/claude-md
