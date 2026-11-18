@@ -44,6 +44,19 @@ Not done: merge (yours); <auto verify: running (T182) | auto verify: <result> | 
 
 -->
 
+## Auto decisions
+
+Mode: auto
+1. Track extended, Risk High, C2 (deletes worktrees and branches) — RULE: AGENTS.md `## Tracks` ("a change that deletes ... user data", "Risk Medium or High" → extended)
+2. Only `git worktree remove` (no `--force`) and `git branch -d` (merged only); never `git clean`, `-D` or prune — RULE: `docs/claude-md/tracks.md` `### Stops that stay` (no destructive action without the user)
+3. Leftover processes inside the worktree are listed and the cleanup refuses while any runs; no signal is sent (option B), not SIGTERM (A) or ignore (C) — DEBATED: B (Advocate 1: A, teardown is the agent's duty per agents/common-infrastructure.md; Advocate 2: B, a worktree may hold another live session; Advocate 3: B, smallest safe thing, a refusal is a clean report line). Settled by `skills/wake/SKILL.md:69` "another live session is still working there — check the worktree's latest commit time and ask before relaunching or touching it" ⚠ decided for you — please review
+4. Cleanup is a doctrine step (Supervisor runs the script after the merge), no hook auto-trigger — SAFER OPTION: guide cut list; a hook that deletes worktrees on its own is more risk than the request needs ⚠ decided for you — please review
+5. P3 left as is: unreadable `/proc` entries are counted and skipped, not refused — SAFER OPTION: refusing on every unreadable entry (other users' processes) would block every run on a shared machine ⚠ decided for you — please review
+6. Security review done by hand: the built-in `security-review` skill fails here (`git log origin/HEAD...`: this repo has no `origin` remote) — FACT: `git remote -v` "github	git@github.com:thunderkds/easy-kit.git (fetch)" ⚠ decided for you — please review
+Checks: tests `uv run --with pytest python -m pytest -q tests/test_cleanup_task.py` — 14 passed (red first: 8 failed, 5 passed; mutation `if dirty:`→`if False:` caught); full suites: no failure in a file this task touched, all failures pre-existing on `main` (see Evidence); reviews code-review — 0 P0, 0 P1 code, 1 P1 process note resolved (agents/common-infrastructure.md arrives as the agent's system prompt), 1 P3; security-review (by hand) — no findings: task ID `T\d+`, list-arg subprocess, no force flags, no signals, branch must be in `refs/heads` and an ancestor of `main`; real run: not run against the real repo on purpose (it deletes the task's worktree) — fixture repos only (auto-checked, not /verify)
+Memory: memory/learnings.md — "2026-11-18 — `[admin]` with two new guides, a repo without `origin`, and git 2.34"; memory/MEMORY.md — `[admin]` binds line extended
+Not done: merge (admin: after the auto verify pass); push of `main` (yours: the gate pushes only to `origin`, this repo's remote is `github`); auto verify: running (T182)
+
 ## Evidence
 | Check | Result | Notes / output snippet |
 |-------|--------|------------------------|
