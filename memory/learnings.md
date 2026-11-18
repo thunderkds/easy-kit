@@ -1663,6 +1663,10 @@ argument. The control's failure mode is a confident wrong inference, not lazines
 **How to apply:** always run the unwired arm. Without it you cannot tell a rule that works from a rule
 that was never needed — and the answer differs task to task.
 
+### 2026-11-18 — `[admin]` with two new guides, a repo without `origin`, and git 2.34
+**Learning**: One `[admin]` request that registers two tasks (T326, T327) binds neither: the gate's "one task whose guide was first added after the request" rule needs exactly one, and the request named no ID. Ask the user to name the IDs in the request (`do T326 and T327 [admin]`) or expect a `merge Txxx [admin]` reply per task. This repo's only remote is `github`, not `origin`: the `[admin]` push and the built-in `security-review` (it runs `git log origin/HEAD...`) both fail here; do the security review by hand and say so. git 2.34.1 has no `merge-tree --write-tree`: T326 adds the `read-tree` fallback.
+**Files**: .claude/hooks/pre_bash_block_unsafe_merge.py, docs/claude-md/tracks.md
+
 ### 2026-11-16 — `[admin]` binds a task only by ID, new guide, or a `--start` after the tag
 **Learning**: "yes [admin]" in reply to the Supervisor's "merge T322?" did not bind T322: the request named no ID, and the auto verify pass was written before the tag, so `--start T322` refused ("already filled") and the loop binding could not hold. Also `git push origin main` under `[admin]` is blocked when local `main` carries commits other than the one merge (board commits from this or another session). Fixed by T323 (merged 2026-11-16): a short yes to the Supervisor's question naming exactly one task now binds it; still ask "merge Txxx?" with one task only. The `main` push rule is unchanged: push the backlog yourself first.
 **Files**: .claude/hooks/pre_bash_block_unsafe_merge.py, docs/claude-md/tracks.md
