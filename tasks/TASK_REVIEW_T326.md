@@ -68,8 +68,18 @@ Not done: merge (yours); <auto verify: running (T182) | auto verify: <result> | 
 > **before any implementation commit exists**; if it does not (docs, templates, skill-instruction
 > text), BEFORE is the **verbatim prior content** of what changed — a quoted excerpt, not a command.
 
-**BEFORE**: [pasted timestamped command output showing the thing absent/failing, captured before the
-first implementation commit] OR [verbatim excerpt of the prior content, for non-executable changes]
+**BEFORE**: captured 2026-11-18T15:35:15Z, git 2.34.1, before any implementation commit, `uv run --with pytest python -m pytest -q .claude/hooks/tests/test_admin_tag.py` (tail):
+
+```
+2026-11-18T15:35:15Z
+git version 2.34.1
+FAILED .claude/hooks/tests/test_admin_tag.py::test_r3_n4_harmless_values_of_those_keys_stay_allowed[core.autocrlf-input]
+FAILED .claude/hooks/tests/test_admin_tag.py::test_r3_n4_harmless_values_of_those_keys_stay_allowed[user.name-T]
+FAILED .claude/hooks/tests/test_admin_tag.py::test_r3_n4_harmless_values_of_those_keys_stay_allowed[branch.main.merge-refs/heads/main]
+20 failed, 211 passed in 13.71s
+```
+
+Cause: `` `[admin]` does not allow this command: `git merge-tree --wri... `` (`git merge-tree --write-tree` needs git >= 2.38).
 
 **AFTER**: [same command, post-change] OR [verbatim excerpt of the new content]
 

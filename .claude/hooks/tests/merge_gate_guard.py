@@ -98,8 +98,12 @@ GATE_REL = ".claude/hooks/pre_bash_block_unsafe_merge.py"
 #          exactly one task, binds that task for `[admin]` (never `[ticket]`)
 #          (`tasks/TASK_GUIDE_T323.md`, AC 1-9). Supervisor sign-off under session `[admin]`,
 #          2026-11-16 (user: "[admin] let completes all tasks").
+#   T326 — `_main_push_refusal` decides the `[admin]` push of `main` on git older than 2.38 (no
+#          `merge-tree --write-tree`) as on new git, by a read-only three-way `read-tree` in a temporary
+#          index; any doubt refuses (`tasks/TASK_GUIDE_T326.md`, AC 1-5). Supervisor sign-off under
+#          session `[admin]`, 2026-11-18.
 AUTHORISED_TASKS = ("T182", "T188", "T190", "T197", "T196", "T210", "T211", "T232", "T250", "T284",
-                    "T289", "T291", "T296", "T295", "T308", "T309", "T317", "T323")
+                    "T289", "T291", "T296", "T295", "T308", "T309", "T317", "T323", "T326")
 
 
 def _git(root, *args):
