@@ -8,6 +8,8 @@
 ## Board
 
 ### Todo
+- [ ] **T324** — a test run in a task's worktree is not work on the task (Stop check false positive) | common-infrastructure | C2 | Risk: High | P1 | Guide: `tasks/TASK_GUIDE_T324.md` | Registered and started 2026-11-16 [admin], user: "yes [admin]" (log the stop-hook false positive): branch `fix/t324-test-run-not-work`, worktree `../wt-t324` | Track: extended | Back to Todo 2026-11-18 (user: "Move both to Todo"): stale In Progress — no branch and no worktree existed
+- [ ] **T321** — the `[admin]`/`[ticket]` push remote is a setting (`EASY_KIT_ADMIN_REMOTE`), not the hard-coded `origin` | common-infrastructure | C2 | Risk: High | P1 | Started 2026-11-15 [admin]: branch `feat/t321-admin-remote`, worktree `../wt-t321` | Track: extended | Back to Todo 2026-11-18 (user: "Move both to Todo"): stale In Progress — no branch and no worktree existed
 - [ ] **T325** — `[admin]` answered-question binding (T323) binds a task named in ANY one-task question, not only a merge question ("T900 passed verify. Should I wait?" + "yes" binds T900); require a merge/push verb in the same clause as the task ID | common-infrastructure | C1 | Risk: High | P2 | Depends on: T323 | Registered 2026-11-16 [admin] from the T323 code review (P2, conf 75) and security review (below the bar, 4/10)
 - [ ] **T320** — The merge gate does not block `gh pr merge` or `gh api … /merges` in any mode (not in `BLOCKED_PATTERNS`); with session-wide `[admin]`/`[ticket]` (T317) and the `autonomous` profile this runs with no prompt; add them to the gate as merges | common-infrastructure | C1 | Risk: High | P1 | Registered 2026-11-15 [admin] from the T317 code review (needs-validation lead, pre-existing)
 - [ ] **T319** — Local-mode `path_forms` turns `\` into `/` before `is_predicted`, so with a guide predicting `infra/main.tf`, a Write of `infra/evil\..\main.tf` or `infra\main.tf` is silent and creates a new literal file in a sensitive folder (on `main` today; pinned by `test_t314_backslash_key.py::test_local_predicted_guide_unchanged`); build the predicted-path match from the path as the OS sees it | common-infrastructure | C1 | Risk: High | P1 | Registered 2026-11-15 [admin] from the T314 security review (out of T314 scope: local mode)
@@ -96,8 +98,6 @@
 
 
 ### In Progress
-- [ ] **T324** — a test run in a task's worktree is not work on the task (Stop check false positive) | common-infrastructure | C2 | Risk: High | P1 | Guide: `tasks/TASK_GUIDE_T324.md` | Registered and started 2026-11-16 [admin], user: "yes [admin]" (log the stop-hook false positive): branch `fix/t324-test-run-not-work`, worktree `../wt-t324` | Track: extended
-- [ ] **T321** — the `[admin]`/`[ticket]` push remote is a setting (`EASY_KIT_ADMIN_REMOTE`), not the hard-coded `origin` | common-infrastructure | C2 | Risk: High | P1 | Started 2026-11-15 [admin]: branch `feat/t321-admin-remote`, worktree `../wt-t321` | Track: extended
 
 
 
