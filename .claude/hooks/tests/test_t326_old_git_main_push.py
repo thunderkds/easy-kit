@@ -136,3 +136,19 @@ def test_criss_cross_merge_bases_are_refused(tmp_path, monkeypatch):
     text = merge_gate._main_push_refusal(str(work), "feat/t900-x")
     bases = git(work, "merge-base", "--all", "HEAD^1", "HEAD^2").split()
     assert (len(bases) > 1) == bool(text) or len(bases) == 1
+
+
+@pytest.mark.parametrize("out, code, expected", [
+    ("git version 2.37.9\n", 0, False), ("git version 2.38.0\n", 0, True),
+    ("git version 3.0.1 (Apple Git-200)\n", 0, True), ("git version 2.34.1\n", 0, False),
+    ("garbage\n", 0, False), ("git version 2.40.0\n", 1, False)])
+def test_version_check_needs_2_38_and_refuses_doubt(out, code, expected, monkeypatch):
+    """Stage 4 P2: the version boundary is pinned; an unreadable or failed `git version` is False."""
+    done = subprocess.CompletedProcess(["git"], code, stdout=out, stderr="")
+    monkeypatch.setattr(merge_gate, "_git", lambda where, *args: done)
+    assert merge_gate._git_has_write_tree(".") is expected
+
+
+def test_version_check_none_from_git_is_false(monkeypatch):
+    monkeypatch.setattr(merge_gate, "_git", lambda where, *args: None)
+    assert merge_gate._git_has_write_tree(".") is False
