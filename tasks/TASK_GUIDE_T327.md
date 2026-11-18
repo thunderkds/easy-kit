@@ -62,7 +62,7 @@ output, or stops its test processes after Done. User: "yes, register both tasks,
 | 1 | `python3 scripts/cleanup_task.py <ID>` on a Done task whose branch is merged into local `main`: removes the task's linked worktree (and so its build/test output), deletes the branch with `git branch -d`, prints one line per action | "clean the resource ... after done" |
 | 2 | Refuses (exit non-zero, nothing removed) when the board row is not in Done, or the branch is not merged into `main` | never delete unmerged work |
 | 3 | Refuses to remove a worktree with uncommitted or untracked (non-ignored) files; never uses `--force`, `branch -D` or `git clean` | never delete uncommitted work |
-| 4 | Processes whose cwd is inside the task's worktree are sent SIGTERM (only those; own process excluded) and listed before the worktree is removed; Linux `/proc` based, other OS: lists nothing and says so | "related build for testing" (test servers, watchers) |
+| 4 | No signal is sent to any process. Every process whose symlink-resolved cwd is inside the task's worktree (the script's own process and its ancestors excluded) is printed, one line with PID and command, and while any runs the command refuses: exit non-zero, nothing removed, so the user stops them and runs again (a worktree may hold another live session, `skills/wake/SKILL.md:69`). An unreadable `/proc` entry is skipped and counted in a printed line; other OS: prints that the process check was skipped | "related build for testing" (test servers, watchers) |
 | 5 | Run from a linked worktree, or with no worktree/branch left: prints what is already clean and exits 0 (idempotent) | safe re-run |
 | 6 | Doctrine: Stage 5 in `docs/claude-md/pipeline-stages.md`, the minimal track steps and `### Admin tag` / `### Session tags` loop in `docs/claude-md/tracks.md` name the command as the step after merge; under `[admin]`/session loop the Supervisor runs it itself | "we have progress to clean" |
 | 7 | Never touches the main checkout or another task's worktree/branch | surgical |
@@ -113,7 +113,7 @@ Supervisor decision (SAFER OPTION): use only `git worktree remove <path>` (no `-
 
 - [ ] Board row names no branch → use the one worktree whose branch names the task; none or several → refuse
 - [ ] Worktree folder already deleted by hand → `git worktree prune` for that entry only? No: use `git worktree remove` semantics; report and exit 0 if git no longer lists it
-- [ ] Process that ignores SIGTERM: report it, do not SIGKILL, do not remove the worktree, exit non-zero
+- [ ] Process running in the worktree: list it, send no signal, do not remove the worktree or branch, exit non-zero
 - [ ] Task ID shape validated (`T\d+`); no shell interpolation (subprocess list args)
 - [ ] Pin-test pre-flight: the `Pre-existing pin tests` row below is filled before work starts
 - [ ] Stale references: grep for "Stage 5" step lists in README, `site/`, `docs/claude-md/`

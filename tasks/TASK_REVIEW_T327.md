@@ -47,11 +47,11 @@ Not done: merge (yours); <auto verify: running (T182) | auto verify: <result> | 
 ## Evidence
 | Check | Result | Notes / output snippet |
 |-------|--------|------------------------|
-| **New test(s) cover Acceptance Criteria (file paths pasted)** | ☑ pass | `tests/test_cleanup_task.py`: `uv run --with pytest python -m pytest -q tests/test_cleanup_task.py` -> `13 passed in 3.98s`. Covers AC1 (worktree, branch, sleep process), AC2 (not Done, unmerged), AC3 (untracked, modified), AC4 (SIGTERM, SIGTERM-ignoring process keeps worktree), AC5 (second run, linked worktree), AC7 (other worktree untouched), bad ID, no-branch-in-row, no-force source check |
+| **New test(s) cover Acceptance Criteria (file paths pasted)** | ☑ pass | `tests/test_cleanup_task.py`: `uv run --with pytest python -m pytest -q tests/test_cleanup_task.py` -> `14 passed in 2.48s`. Covers AC1 (worktree, branch), AC2 (not Done, unmerged), AC3 (untracked, modified), AC4 (a `sleep` with cwd in the worktree, also via a symlink: listed, refused, still alive, worktree and branch kept; cleanup succeeds after it ends; no signal calls in the source), AC5 (second run, linked worktree), AC7 (other worktree untouched), bad ID, no-branch-in-row, no-force/no-signal source check |
 | Verification command run | ☑ pass | `uv run --with pytest python -m pytest -q -p no:cacheprovider .claude/hooks/tests tests` -> `76 failed, 7481 passed, 24 skipped, 87 subtests passed in 412.45s`. All 76 failures are in files this task does not touch: test_admin_tag (20), test_slot2b_brace_glob (19), test_stop_attribution_t287 (25), test_admin_repo_allowlist (3), test_heredoc_quoted_marker (4), test_t317_session_tags (2), test_auto_verify_skip_pass (1), test_gate_hidden_verbs (1), tests/test_auto_verify.py (1, a timeout test; passes alone: `253 passed in 97.84s`). With my changes stashed, the same git-2.34.1 hook files fail the same way (29 failed in the six files re-run; 46 failed in slot2b/t287/t317). None names cleanup_task, tracks.md, pipeline-stages.md or MANIFEST |
 | Negative cases hold | ☑ pass | Red run first: `8 failed, 5 passed` with no script. Mutation: `sed 's/if dirty:/if False:/'` on scripts/cleanup_task.py -> `1 failed, 12 passed` (`test_refuses_dirty_worktree_and_leaves_process_alone`); restored |
 | verify | ☐ pass / ☐ fail / ☐ N/A | [the auto verify hook writes this row] |
-| Review scope bounded to the change's blast radius (affected set, not whole repo) | ☑ pass | Reviewed `scripts/cleanup_task.py`, the 4 doc/MANIFEST edits, the 47 pin-test files by grep; skipped nothing else. The script imports `auto_mode.row_branch/board_rows/names_task/read` read-only. Safety: no `--force`, no `branch -D`, no `git clean`, no SIGKILL, list-form subprocess, ID matched by `T\d+` |
+| Review scope bounded to the change's blast radius (affected set, not whole repo) | ☑ pass | Reviewed `scripts/cleanup_task.py`, the 4 doc/MANIFEST edits, the 47 pin-test files by grep; skipped nothing else. The script imports `auto_mode.row_branch/board_rows/names_task/read` read-only. Safety: no `--force`, no `branch -D`, no `git clean`, no signal sent (Supervisor change 2026-11-18), list-form subprocess, ID matched by `T\d+` |
 | Full smoke suite still green (no regression) | ☑ pass | No new failure versus baseline; see the verification row |
 | **Companion score (easy-verifier)** | ☑ N/A | Not run |
 | **UI: Visual regression (diff or verdict pasted)** | ☑ N/A | No UI |
@@ -110,7 +110,7 @@ Stage 5 step list from `docs/claude-md/pipeline-stages.md` (steps 2 to 5 verbati
 
 ```
 $ uv run --with pytest python -m pytest -q tests/test_cleanup_task.py
-13 passed in 3.98s
+14 passed in 2.48s
 ```
 
 Stage 5 item 5 of `docs/claude-md/pipeline-stages.md` now continues: "**Clean up after the merge (T327).** When the task is in Done and its branch is merged into `main`, run `python3 scripts/cleanup_task.py <ID>` from the main checkout. ..." `docs/claude-md/tracks.md` names it after minimal step 7, in `### Admin tag` and in `### Session tags` step 4.

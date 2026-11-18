@@ -90,7 +90,7 @@ Stage 4 skills. In auto mode, the Debate's read-only `Explore` Advocates are one
 6. **Record.** Append the Decision record to `tasks/MINIMAL_LOG.md`, newest first, with every field of the template: the `## <ID> — <title> · <track>` heading, `Asked:`, `Decisions:`, `Checked:`, `Files:`, `Not done:`. If the file does not exist, create it from `templates/MINIMAL_LOG_template.md`. The same block is the Supervisor's final chat message.
 7. **Board.** Add one board row under Ready for Review in `PROJECT_KANBAN.md`, marked `| Track: minimal | Record: tasks/MINIMAL_LOG.md` at its end. Commit on the task branch without asking: the commit is part of this step.
 
-After the user merges the task and the row is in Done, run `python3 scripts/cleanup_task.py <ID>` from the main checkout. It removes the task's worktree and its merged branch, and refuses unmerged or uncommitted work (T327).
+After the user merges the task and the row is in Done, run `python3 scripts/cleanup_task.py <ID>` from the main checkout. It removes the task's worktree and its merged branch, and refuses unmerged or uncommitted work or a process still running in the worktree (T327).
 
 **The only stop.** When the request itself is unclear (it has more than one reasonable reading), ask one
 clear question and stop. Asking is cheaper than undoing a wrong guess. In auto mode, a Debate settles it
@@ -627,8 +627,9 @@ hook left `Paused: done not moved`, it skips `ship` and says why. A missing `Dep
 `TODO: confirm with operator` in the plan (`ship`'s own rule): that is not a stop.
 
 **Clean up (T327).** After the merge, when the task is in Done, the Supervisor runs
-`python3 scripts/cleanup_task.py <ID>` itself, from the main checkout: no question to you. It stops the
-processes inside the task's worktree (SIGTERM only), removes the worktree and deletes the merged branch.
+`python3 scripts/cleanup_task.py <ID>` itself, from the main checkout: no question to you. It lists the
+processes inside the task's worktree, signals none, removes the worktree and deletes the merged branch.
+While a process runs there it refuses and removes nothing: the Supervisor reports it for you to stop.
 It refuses unmerged or dirty work and then removes nothing; the Supervisor reports the refusal and goes on.
 When the hook left `Paused: done not moved`, the row is not in Done and the command refuses: that is expected.
 

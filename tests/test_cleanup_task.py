@@ -5,7 +5,6 @@ Every test builds a temp fixture repo (main checkout + linked worktree + fake bo
 repo is never touched.
 """
 import os
-import signal
 import subprocess
 import sys
 import time
@@ -65,20 +64,50 @@ def branches(main):
     return git(main, "branch", "--list", BRANCH).strip()
 
 
-def test_done_merged_clean_removes_worktree_branch_and_stops_process(repo):
+def test_done_merged_clean_removes_worktree_and_branch(repo):
+    main, wt = repo
+    merge(main)
+    out = run(main)
+    assert out.returncode == 0, out.stdout + out.stderr
+    assert not wt.exists() and not branches(main)
+    assert "removed worktree" in out.stdout and "deleted branch" in out.stdout
+
+
+def test_running_process_refuses_lists_it_and_is_left_alone(repo):
     main, wt = repo
     merge(main)
     proc = subprocess.Popen(["sleep", "60"], cwd=str(wt))
     try:
         out = run(main)
-        assert out.returncode == 0, out.stdout + out.stderr
+        assert out.returncode != 0
+        assert str(proc.pid) in out.stdout and "sleep 60" in out.stdout
+        assert proc.poll() is None  # no signal sent
+        assert wt.exists() and branches(main)
+        proc.terminate()
+        proc.wait(timeout=5)
+        again = run(main)
+        assert again.returncode == 0, again.stdout + again.stderr
         assert not wt.exists() and not branches(main)
-        assert proc.wait(timeout=5) == -signal.SIGTERM
-        assert str(proc.pid) in out.stdout
-        assert len([l for l in out.stdout.splitlines() if l.strip()]) >= 3
     finally:
         if proc.poll() is None:
             proc.kill()
+            proc.wait()
+
+
+def test_process_in_a_subdirectory_via_symlink_is_found(repo, tmp_path):
+    main, wt = repo
+    merge(main)
+    (wt / "build").mkdir(exist_ok=True)
+    link = tmp_path / "link"
+    link.symlink_to(wt / "build")
+    proc = subprocess.Popen(["sleep", "60"], cwd=str(link))
+    try:
+        out = run(main)
+        assert out.returncode != 0 and str(proc.pid) in out.stdout
+        assert wt.exists()
+    finally:
+        proc.kill()
+        proc.wait()
 
 
 def test_main_checkout_and_other_worktree_untouched(repo, tmp_path):
@@ -108,18 +137,13 @@ def test_refuses_when_branch_unmerged(repo):
     assert wt.exists() and branches(main)
 
 
-def test_refuses_dirty_worktree_and_leaves_process_alone(repo):
+def test_refuses_dirty_worktree(repo):
     main, wt = repo
     merge(main)
     (wt / "untracked.txt").write_text("u")
-    proc = subprocess.Popen(["sleep", "60"], cwd=str(wt))
-    try:
-        out = run(main)
-        assert out.returncode != 0
-        assert wt.exists() and branches(main) and proc.poll() is None
-    finally:
-        proc.kill()
-        proc.wait()
+    out = run(main)
+    assert out.returncode != 0
+    assert wt.exists() and branches(main)
 
 
 def test_refuses_modified_tracked_file(repo):
@@ -128,24 +152,6 @@ def test_refuses_modified_tracked_file(repo):
     (wt / "b.txt").write_text("changed\n")
     assert run(main).returncode != 0
     assert wt.exists()
-
-
-def test_process_ignoring_sigterm_blocks_removal(repo):
-    main, wt = repo
-    merge(main)
-    proc = subprocess.Popen(
-        [sys.executable, "-c",
-         "import signal,time;signal.signal(signal.SIGTERM,signal.SIG_IGN);print('r',flush=True);"
-         "time.sleep(60)"], cwd=str(wt), stdout=subprocess.PIPE, text=True)
-    proc.stdout.readline()
-    try:
-        out = run(main)
-        assert out.returncode != 0
-        assert wt.exists() and branches(main) and proc.poll() is None
-        assert str(proc.pid) in out.stdout + out.stderr
-    finally:
-        proc.kill()
-        proc.wait()
 
 
 def test_second_run_is_idempotent(repo):
@@ -191,5 +197,5 @@ def test_task_with_nothing_left_is_already_clean(repo):
 
 def test_never_uses_force_flags():
     src = open(SCRIPT).read()
-    for bad in ("--force", "branch\", \"-D", "SIGKILL", "\"clean\""):
+    for bad in ("--force", "branch\", \"-D", "SIGKILL", "SIGTERM", "os.kill", "\"clean\""):
         assert bad not in src
