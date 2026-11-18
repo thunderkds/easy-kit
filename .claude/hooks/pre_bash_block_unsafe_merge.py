@@ -39,6 +39,7 @@ import shlex
 import stat
 import subprocess
 import sys
+import tempfile
 import time
 from datetime import datetime, timezone
 
@@ -2190,6 +2191,47 @@ def _rev(where, ref):
     return sha if SHA_PATTERN.match(sha) else None
 
 
+def _git_has_write_tree(where):
+    """T326: True only when `git version` is 2.38 or newer (`git merge-tree --write-tree`). An
+    unreadable version is False: the read-only fallback then decides, and it refuses on any doubt."""
+    done = _git(where, "version")
+    found = re.match(r"git version (\d+)\.(\d+)", done.stdout) if done is not None \
+        and done.returncode == 0 else None
+    return bool(found) and (int(found.group(1)), int(found.group(2))) >= (2, 38)
+
+
+GIT_LOCATION_ENV = ("GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_OBJECT_DIRECTORY",
+                    "GIT_ALTERNATE_OBJECT_DIRECTORIES", "GIT_COMMON_DIR", "GIT_NAMESPACE")
+
+
+def _old_git_merge_tree(where, remote, tip):
+    """T326: the tree of the clean three-way merge of `remote` and `tip` on git without
+    `merge-tree --write-tree`, or "" on any doubt. It leaves the repo's index, working tree and refs
+    alone: `read-tree -i -m --aggressive <base> <remote> <tip>` into a temporary index file, then
+    `write-tree` there (which, like `merge-tree --write-tree`, only adds tree objects to the object store). It runs
+    no merge driver or textconv, and it resolves only whole-file cases: a file changed on both
+    sides is an unmerged entry, so `write-tree` fails and the push is refused. Needs exactly one merge
+    base. The temporary directory is always removed."""
+    bases = _git(where, "merge-base", "--all", remote, tip)
+    base = bases.stdout.split() if bases is not None and bases.returncode == 0 else []
+    if len(base) != 1 or not SHA_PATTERN.match(base[0]):
+        return ""
+    try:
+        with tempfile.TemporaryDirectory() as tmp:
+            env = {k: v for k, v in os.environ.items() if k not in GIT_LOCATION_ENV}
+            env["GIT_INDEX_FILE"] = os.path.join(tmp, "index")
+            for args in (("read-tree", "-i", "-m", "--aggressive", base[0], remote, tip),
+                         ("write-tree",)):
+                done = subprocess.run(["git", "-C", where, *args], capture_output=True, text=True,
+                                      timeout=GIT_WORKTREE_TIMEOUT_S, env=env)
+                if done.returncode != 0:
+                    return ""
+            tree = done.stdout.strip()
+    except Exception:
+        return ""
+    return tree if SHA_PATTERN.match(tree) else ""
+
+
 def _main_push_refusal(where, merged):
     """P0 (rounds 1-2): why `main` may not be pushed after the merge of branch `merged`, or None.
     Allowed: `main` is the branch tip and contains the remote's real `main` (a fast-forward), or
@@ -2220,12 +2262,19 @@ def _main_push_refusal(where, merged):
     if parents is None or parents.returncode != 0 or parents.stdout.split()[1:] != [remote, tip]:
         return (f"`main` carries commits besides the merge of {merged}: it is not one merge commit "
                 "of the remote's `main` and the branch tip")
-    expected = _git(where, "merge-tree", "--write-tree", remote, tip)
-    tree = expected.stdout.split()[0] if expected is not None and expected.returncode == 0 \
-        and expected.stdout.split() else ""
-    if not SHA_PATTERN.match(tree):
-        return ("`git merge-tree --write-tree` failed or found a conflict: push a merge that "
-                "resolves a conflict yourself")
+    if _git_has_write_tree(where):
+        expected = _git(where, "merge-tree", "--write-tree", remote, tip)
+        tree = expected.stdout.split()[0] if expected is not None and expected.returncode == 0 \
+            and expected.stdout.split() else ""
+        if not SHA_PATTERN.match(tree):
+            return ("`git merge-tree --write-tree` failed or found a conflict: push a merge that "
+                    "resolves a conflict yourself")
+    else:
+        tree = _old_git_merge_tree(where, remote, tip)
+        if not SHA_PATTERN.match(tree):
+            return ("the clean merge of the remote's `main` and the branch tip could not be computed "
+                    "(git older than 2.38: one merge base, and no file changed on both sides): push a "
+                    "merge that resolves a conflict yourself")
     if _rev(where, f"{main_sha}^{{tree}}") != tree:
         return f"the merge commit on `main` changes files the merge of {merged} does not"
     return None

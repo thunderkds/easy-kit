@@ -687,7 +687,9 @@ command, from this session's transcript. It allows a `git merge` or `git push` o
    remote's real `main` with `git ls-remote origin refs/heads/main` (never the local `origin/main` ref)
    and allows only two shapes: `main` is the branch tip and contains the remote's `main` (a
    fast-forward), or `main` is one merge commit whose parents are the remote's `main` and the branch tip
-   and whose tree equals `git merge-tree --write-tree` of those two. If `ls-remote` fails, times out or
+   and whose tree equals `git merge-tree --write-tree` of those two. On git older than 2.38 the gate computes
+   that tree with a read-only three-way `read-tree` in a temporary index; known limit: it needs one merge base
+   and no file changed on both sides, else the push is blocked. If `ls-remote` fails, times out or
    returns nothing, or `merge-tree` fails or finds a conflict, the push is blocked: a merge that resolves
    a conflict is yours to push. A force push (`-f`, `--force`, `--force-with-lease`, `+<branch>`), a push
    of any other ref, another remote, `--no-verify`, `--all`, `--tags`, a `git pull` and an octopus merge
