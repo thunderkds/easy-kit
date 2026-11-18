@@ -2206,8 +2206,9 @@ GIT_LOCATION_ENV = ("GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_OBJECT_DI
 
 def _old_git_merge_tree(where, remote, tip):
     """T326: the tree of the clean three-way merge of `remote` and `tip` on git without
-    `merge-tree --write-tree`, or "" on any doubt. Read-only for the repo: `read-tree -i -m
-    --aggressive <base> <remote> <tip>` into a temporary index file, then `write-tree` there. It runs
+    `merge-tree --write-tree`, or "" on any doubt. It leaves the repo's index, working tree and refs
+    alone: `read-tree -i -m --aggressive <base> <remote> <tip>` into a temporary index file, then
+    `write-tree` there (which, like `merge-tree --write-tree`, only adds tree objects to the object store). It runs
     no merge driver or textconv, and it resolves only whole-file cases: a file changed on both
     sides is an unmerged entry, so `write-tree` fails and the push is refused. Needs exactly one merge
     base. The temporary directory is always removed."""

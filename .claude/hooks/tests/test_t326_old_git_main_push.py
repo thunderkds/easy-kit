@@ -152,3 +152,13 @@ def test_version_check_needs_2_38_and_refuses_doubt(out, code, expected, monkeyp
 def test_version_check_none_from_git_is_false(monkeypatch):
     monkeypatch.setattr(merge_gate, "_git", lambda where, *args: None)
     assert merge_gate._git_has_write_tree(".") is False
+
+
+def test_identical_change_on_both_sides_is_allowed(mode, tmp_path):
+    """Debate (Advocate 1): the same edit on both sides is a clean merge on either git."""
+    work = build(tmp_path)
+    write(work / "b.txt", "b2\n")
+    git(work, "commit", "-q", "-am", "main makes the same edit")
+    git(work, "push", "-q", "origin", "main")
+    git(work, "merge", "-q", "--no-ff", "-m", "T900 merge", "feat/t900-x")
+    assert merge_gate._main_push_refusal(str(work), "feat/t900-x") is None
