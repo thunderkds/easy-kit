@@ -44,6 +44,19 @@ Not done: merge (yours); <auto verify: running (T182) | auto verify: <result> | 
 
 -->
 
+## Auto decisions
+
+Mode: auto
+1. Track extended, Risk High, C2 (merge gate change) — RULE: `docs/claude-md/tracks.md` `### Debate size by Risk` and AGENTS.md `## Tracks` ("Risk Medium or High" → extended)
+2. Supervisor sign-off: `T326` added to `AUTHORISED_TASKS` for the old-git main-push rule only — RULE: `.claude/hooks/tests/merge_gate_guard.py` "Adding a task is the record" (Supervisor sign-off under `[admin]`)
+3. On git < 2.38, compute the clean-merge tree with `read-tree -i -m --aggressive` + `write-tree` in a temp index (option A), not "refuse with an upgrade message" (B) or "require git 2.38 at install" (C) — DEBATED: A (Advocate 1: A, no false accept found, B/C leave 2.34 users without the gate; Advocate 2: B or narrowed A, write-tree adds objects, env scrub partial; Advocate 3: B, smallest safe thing, A refuses often on shared files). Decided A by the requirement: `tasks/TASK_GUIDE_T326.md` Restated intent "the `[admin]` push of `main` ... is decided exactly as on new git" — B and C do not meet it; every Advocate found A fail-closed (refuses only, never a false accept). ⚠ decided for you — please review
+4. Debate findings taken: docstring no longer says "read-only" (write-tree adds tree objects, as merge-tree --write-tree does); test for an identical change on both sides added — SAFER OPTION: test-only and comment-only changes ⚠ decided for you — please review
+5. Stage 4 P2 fixed: `_git_has_write_tree` version boundary pinned by tests (2.37/2.38/3.x/unreadable/failed) — SAFER OPTION: test-only ⚠ decided for you — please review
+6. Security review done by hand: the built-in `security-review` skill fails here (`git log origin/HEAD...`: this repo has no `origin` remote) — FACT: `git remote -v` "github	git@github.com:thunderkds/easy-kit.git (fetch)" ⚠ decided for you — please review
+Checks: tests `uv run --with pytest python -m pytest -q .claude/hooks/tests/test_t326_old_git_main_push.py .claude/hooks/tests/test_admin_tag.py .claude/hooks/tests/test_merge_gate_guard.py .claude/hooks/tests/test_stop_auto_mode_check.py tests/test_auto_mode.py` — 482 passed (BEFORE: test_admin_tag.py 20 failed); full suites: 49 failures, the same 49 fail on `main` (test_stop_attribution_t287, test_slot2b_brace_glob, test_heredoc_quoted_marker, test_gate_hidden_verbs); reviews code-review — 0 P0, 0 P1, 1 P2 (fixed); security-review (by hand) — no findings: fallback runs only merge-base/read-tree/write-tree into a temp index, `_admin_repo_refusal` (config allowlist, hooks, merge/filter/diff attributes) runs first, a trivial merge cannot add content from neither side; real run: on git 2.34.1 `_main_push_refusal` returns None for a clean merge and refuses an extra change (auto-checked, not /verify)
+Memory: memory/learnings.md — "2026-11-18 — `[admin]` with two new guides, a repo without `origin`, and git 2.34"; memory/MEMORY.md — `[admin]` binds line extended
+Not done: merge (admin: after the auto verify pass); push of `main` (yours: the gate pushes only to `origin`, this repo's remote is `github`); auto verify: running (T182)
+
 ## Evidence
 
 | Check | Result | Notes / output snippet |
@@ -52,12 +65,12 @@ Not done: merge (yours); <auto verify: running (T182) | auto verify: <result> | 
 | Verification command run | ☑ pass | `pytest -q test_admin_tag.py test_t326_old_git_main_push.py test_merge_gate_guard.py` -> 267 passed (BEFORE: 20 failed in test_admin_tag.py). Full suites `.claude/hooks/tests tests`: 7504 passed, 50 failed: 49 pre-existing (test_stop_attribution_t287, test_slot2b_brace_glob, test_heredoc_quoted_marker, test_gate_hidden_verbs: identical 49 failed on a detached `main` worktree) + 1 flake (test_auto_verify_skip_pass tracks.md param, 222 passed alone) | [paste actual output] |
 | Negative cases hold | ☑ pass | red run before the change: forced-old tests ERROR/FAIL (`_git_has_write_tree` absent); test_admin_tag.py 20 failed | [paste the red run against the prior content, or the mutation diff (`git diff --stat`, non-empty) before each verdict] |
 | verify | ☐ pass / ☐ fail / ☐ N/A | [leave it: the auto verify hook writes this row, with its run record. If you ran /verify yourself, tick pass and make the whole Notes cell "/verify by the user, session <id>, commit <sha>" (the full 40-character commit). The merge gate counts no other row, even with the word "pass" in it] |
-| Review scope bounded to the change's blast radius (affected set, not whole repo) | ☐ pass / ☐ fail | [what was reviewed vs. skipped, and why] |
+| Review scope bounded to the change's blast radius (affected set, not whole repo) | ☑ pass | `pre_bash_block_unsafe_merge.py` `_main_push_refusal` + new helpers, its callers (`admin_refusal`), the new and pinned tests, the tracks.md line; rest of the gate not re-reviewed (unchanged) |
 | Full smoke suite still green (no regression) | ☑ pass | no new failure vs `main`; see Verification row | |
-| **Companion score (easy-verifier)** | ☐ pass / ☐ fail / ☐ N/A | [`overall` and `change_risk` as the tool returned them, the scope, the ref, and the absolute path of the verifier report after a literal `report:` label — e.g. "overall 86 (>= 80), change_risk pass, scope changes, ref `main...HEAD`, report: `/home/me/.easy-verifier-reports/kit/score_changes_20261028T0530Z.html`". The gate reads the path that follows `report:` and nothing else, so with no label, or a path that is absent, the row is unscored — write ☑ N/A instead. ☑ N/A with a reason when neither companion tool was run: the merge gate blocks on ☑ fail only, never on an absent or N/A row] |
-| **UI: Visual regression (diff or verdict pasted)** | ☐ pass / ☐ fail / ☐ N/A | [screenshot path or LLM verdict — required for UI tasks, Hard-Stop Gate 6] |
-| **UI: Design-system compliance (tokens/colors/typography verified)** | ☐ pass / ☐ fail / ☐ N/A | [method used + output] |
-| **UI: Responsiveness at target viewports** | ☐ pass / ☐ fail / ☐ N/A | [viewports tested, any overflow findings] |
+| **Companion score (easy-verifier)** | ☑ N/A | Not run: easy-verifier not installed in this session |
+| **UI: Visual regression (diff or verdict pasted)** | ☑ N/A | No UI |
+| **UI: Design-system compliance (tokens/colors/typography verified)** | ☑ N/A | No UI |
+| **UI: Responsiveness at target viewports** | ☑ N/A | No UI |
 
 ---
 
