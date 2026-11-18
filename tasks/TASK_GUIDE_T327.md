@@ -128,7 +128,7 @@ Supervisor decision (SAFER OPTION): use only `git worktree remove <path>` (no `-
 | `tests/test_cleanup_task.py` | new |
 | `docs/claude-md/pipeline-stages.md` | Stage 5 step after merge |
 | `docs/claude-md/tracks.md` | minimal steps, `### Admin tag`, `### Session tags` loop step 4 |
-| Pre-existing pin tests | tests pinning tracks.md / pipeline-stages.md text or size, `test_agent_guide_dedup.py`, `test_vital_slice.py`, memory budget tests — agent fills before work |
+| Pre-existing pin tests | Checked before editing (grep of `pipeline-stages.md`, `tracks.md`, `MANIFEST` in `tests/` and `.claude/hooks/tests/`: 47 files): `tests/test_tracks.py`, `test_stage_names.py`, `test_claude_md_slim.py`, `test_t307_admin_end_to_end.py`, `test_t306_admin_retry_blocked.py`, `test_auto_verify.py`, `test_plugin_names.py` (scripts vs MANIFEST), `test_memory_slice.py`, `.claude/hooks/tests/test_agent_guide_dedup.py`, `test_memory_channel_and_budget.py`. All of them passed in the full run after the edit |
 
 ## Files Must NOT Touch
 

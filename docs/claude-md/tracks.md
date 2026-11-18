@@ -90,6 +90,8 @@ Stage 4 skills. In auto mode, the Debate's read-only `Explore` Advocates are one
 6. **Record.** Append the Decision record to `tasks/MINIMAL_LOG.md`, newest first, with every field of the template: the `## <ID> — <title> · <track>` heading, `Asked:`, `Decisions:`, `Checked:`, `Files:`, `Not done:`. If the file does not exist, create it from `templates/MINIMAL_LOG_template.md`. The same block is the Supervisor's final chat message.
 7. **Board.** Add one board row under Ready for Review in `PROJECT_KANBAN.md`, marked `| Track: minimal | Record: tasks/MINIMAL_LOG.md` at its end. Commit on the task branch without asking: the commit is part of this step.
 
+After the user merges the task and the row is in Done, run `python3 scripts/cleanup_task.py <ID>` from the main checkout. It removes the task's worktree and its merged branch, and refuses unmerged or uncommitted work (T327).
+
 **The only stop.** When the request itself is unclear (it has more than one reasonable reading), ask one
 clear question and stop. Asking is cheaper than undoing a wrong guess. In auto mode, a Debate settles it
 instead (`## Auto mode`). A question about a fact in the code is not a stop: read the code and go on.
@@ -624,6 +626,12 @@ writes its plan, as a plan only. It never runs a deploy command, and never tags 
 hook left `Paused: done not moved`, it skips `ship` and says why. A missing `Deployment target` gives
 `TODO: confirm with operator` in the plan (`ship`'s own rule): that is not a stop.
 
+**Clean up (T327).** After the merge, when the task is in Done, the Supervisor runs
+`python3 scripts/cleanup_task.py <ID>` itself, from the main checkout: no question to you. It stops the
+processes inside the task's worktree (SIGTERM only), removes the worktree and deletes the merged branch.
+It refuses unmerged or dirty work and then removes nothing; the Supervisor reports the refusal and goes on.
+When the hook left `Paused: done not moved`, the row is not in Done and the command refuses: that is expected.
+
 **Merge and push.** The Supervisor may merge the task branch and push it, after the auto verify run
 passed. The merge gate, `.claude/hooks/pre_bash_block_unsafe_merge.py`, reads the tag at the time of the
 command, from this session's transcript. It allows a `git merge` or `git push` only when all of these hold:
@@ -912,6 +920,8 @@ for example `Session tag: [admin] — type [stop] to end it.`
 4. After a pass: with `[ticket]`, push the task branch to `origin` (`git push origin <task branch>`).
    With `[admin]`, merge the task branch into `main` and push `main`, as `### Admin tag` says. After
    `blocked` or `fail`, push and merge nothing.
+   After the merge, with the task in Done, run `python3 scripts/cleanup_task.py <ID>` from the main
+   checkout (T327). With `[ticket]` nothing is merged by the loop, so nothing is cleaned.
 5. Write the ticket's own final report. Then go back to step 1.
 
 The session ends when no ticket is ready. The loop pauses only for `### Stops that stay`. Each pause

@@ -45,9 +45,20 @@ Not done: merge (yours); <auto verify: running (T182) | auto verify: <result> | 
 -->
 
 ## Evidence
-
 | Check | Result | Notes / output snippet |
 |-------|--------|------------------------|
+| **New test(s) cover Acceptance Criteria (file paths pasted)** | ☑ pass | `tests/test_cleanup_task.py`: `uv run --with pytest python -m pytest -q tests/test_cleanup_task.py` -> `13 passed in 3.98s`. Covers AC1 (worktree, branch, sleep process), AC2 (not Done, unmerged), AC3 (untracked, modified), AC4 (SIGTERM, SIGTERM-ignoring process keeps worktree), AC5 (second run, linked worktree), AC7 (other worktree untouched), bad ID, no-branch-in-row, no-force source check |
+| Verification command run | ☑ pass | `uv run --with pytest python -m pytest -q -p no:cacheprovider .claude/hooks/tests tests` -> `76 failed, 7481 passed, 24 skipped, 87 subtests passed in 412.45s`. All 76 failures are in files this task does not touch: test_admin_tag (20), test_slot2b_brace_glob (19), test_stop_attribution_t287 (25), test_admin_repo_allowlist (3), test_heredoc_quoted_marker (4), test_t317_session_tags (2), test_auto_verify_skip_pass (1), test_gate_hidden_verbs (1), tests/test_auto_verify.py (1, a timeout test; passes alone: `253 passed in 97.84s`). With my changes stashed, the same git-2.34.1 hook files fail the same way (29 failed in the six files re-run; 46 failed in slot2b/t287/t317). None names cleanup_task, tracks.md, pipeline-stages.md or MANIFEST |
+| Negative cases hold | ☑ pass | Red run first: `8 failed, 5 passed` with no script. Mutation: `sed 's/if dirty:/if False:/'` on scripts/cleanup_task.py -> `1 failed, 12 passed` (`test_refuses_dirty_worktree_and_leaves_process_alone`); restored |
+| verify | ☐ pass / ☐ fail / ☐ N/A | [the auto verify hook writes this row] |
+| Review scope bounded to the change's blast radius (affected set, not whole repo) | ☑ pass | Reviewed `scripts/cleanup_task.py`, the 4 doc/MANIFEST edits, the 47 pin-test files by grep; skipped nothing else. The script imports `auto_mode.row_branch/board_rows/names_task/read` read-only. Safety: no `--force`, no `branch -D`, no `git clean`, no SIGKILL, list-form subprocess, ID matched by `T\d+` |
+| Full smoke suite still green (no regression) | ☑ pass | No new failure versus baseline; see the verification row |
+| **Companion score (easy-verifier)** | ☑ N/A | Not run |
+| **UI: Visual regression (diff or verdict pasted)** | ☑ N/A | No UI |
+| **UI: Design-system compliance (tokens/colors/typography verified)** | ☑ N/A | No UI |
+| **UI: Responsiveness at target viewports** | ☑ N/A | No UI |
+
+-------|--------|------------------------|
 | **New test(s) cover Acceptance Criteria (file paths pasted)** | ☐ pass / ☐ fail | [test file path(s) — required before Done] |
 | Verification command run | ☐ pass / ☐ fail | [paste actual output] |
 | Negative cases hold | ☐ pass / ☐ fail | [paste the red run against the prior content, or the mutation diff (`git diff --stat`, non-empty) before each verdict] |
@@ -68,12 +79,42 @@ Not done: merge (yours); <auto verify: running (T182) | auto verify: <result> | 
 > **before any implementation commit exists**; if it does not (docs, templates, skill-instruction
 > text), BEFORE is the **verbatim prior content** of what changed — a quoted excerpt, not a command.
 
-**BEFORE**: [pasted timestamped command output showing the thing absent/failing, captured before the
-first implementation commit] OR [verbatim excerpt of the prior content, for non-executable changes]
+**BEFORE**: captured 2026-11-18T15:34:27Z, before any implementation commit (HEAD e30e165):
 
-**AFTER**: [same command, post-change] OR [verbatim excerpt of the new content]
+```
+$ python3 scripts/cleanup_task.py T327
+python3: can't open file '/home/thunderkds/workspace/pets/hungnguyen111/wt-t327/scripts/cleanup_task.py': [Errno 2] No such file or directory
+exit=2
+```
 
-**DELTA**: [one sentence — what a user can now do that they could not before]
+Stage 5 step list from `docs/claude-md/pipeline-stages.md` (steps 2 to 5 verbatim, step 5 ends the list; no cleanup step):
 
-**WITNESS**: [who ran it and when — derived from `memory/event-trace/Txxx.jsonl`, never the
-implementing agent alone]
+```
+2. **Confirm smoke tests pass** (coordinate with QA-Automation-Agent).
+
+3. Update `PROJECT_SPEC.md` Memory/Insights section with key learnings.
+
+4. **Memory update** (diff-driven pass — run before `ship`):
+   - `git diff HEAD~1 --name-only` — identify files changed in this merge
+   - If `agents/tech-lead.md` and `docs/architecture/README.md` both exist (tech-lead pack, `packs/tech-lead/PACK.md`), match this list against the map's watched paths: on a match, spawn `tech-lead` in refresh mode for the matched documents only; no match (or no watched-paths column), nothing.
+   - Grep `memory/decisions.md`, `memory/glossary.md`, `memory/learnings.md` for references to those files
+   - Update matched entries in place (fix stale facts, expand with new context)
+   - Append any new decisions or learnings from this session to the appropriate cold file
+   - Summarize new/changed entries as one-liners in `memory/MEMORY.md` (keep hot tier ≤50,000 characters)
+   - **Self-review reminder** (a reminder only: you never start the loop): run `python3 skills/self-review/scripts/self_review.py pre`. It calls no model. Its one write marks register rows `fixed` once their fix task has merged, so commit `memory/self-review/register.md` with this pass if it changed. If it prints `"status": "ready"` with at least 3 `files`, tell the user in one line that N merged review files wait and that `/self-review` mines them. Never run `/self-review` or its miner yourself. Any other status, or an error: say nothing. In auto mode, put the line under `Not done:`.
+
+5. Merge the worktree and close the task on PROJECT_KANBAN.md. In auto mode with `[auto]` the merge is never automatic: it waits for the user. With `[admin]` the Supervisor merges and pushes the task branch, then pushes `main`, only after the auto verify pass (`docs/claude-md/tracks.md` `### Admin tag`). After an auto verify pass, the hook moves the row to Done (`docs/claude-md/tracks.md` `### Auto close-out`), and the Supervisor ran item 4 before it stopped (the report's `Memory:` line).
+```
+
+**AFTER**: tests drive the script on temp fixture repos (the real repo was not touched):
+
+```
+$ uv run --with pytest python -m pytest -q tests/test_cleanup_task.py
+13 passed in 3.98s
+```
+
+Stage 5 item 5 of `docs/claude-md/pipeline-stages.md` now continues: "**Clean up after the merge (T327).** When the task is in Done and its branch is merged into `main`, run `python3 scripts/cleanup_task.py <ID>` from the main checkout. ..." `docs/claude-md/tracks.md` names it after minimal step 7, in `### Admin tag` and in `### Session tags` step 4.
+
+**DELTA**: after a merge the Supervisor can remove the task's worktree, merged branch and leftover test processes with one command that refuses unmerged or dirty work.
+
+**WITNESS**: pytest runs by common-infrastructure agent, 2026-11-18, task trace `memory/event-trace/T327.jsonl`.
