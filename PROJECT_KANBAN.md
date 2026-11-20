@@ -99,7 +99,6 @@
 
 
 ### In Progress
-- [ ] **T342** — a glob inside a quoted span is not a path (sensitive-path hook false positive) | common-infrastructure | C2 | Risk: High | P1 | Guide: `tasks/TASK_GUIDE_T342.md` | Registered and started 2026-11-20 [admin], user: "yes, start [admin]" (admin mode = full rights; sensitive-path false positive on `sed 's/ - .*//'`): branch `fix/t342-quoted-glob-not-a-path`, worktree `../wt-t342` | Track: extended
 - [ ] **T341** — Extended track: the Supervisor writes the code, a fresh reviewer spawn is required at merge | common-infrastructure | C3 | Risk: High | P1 | Guide: `tasks/TASK_GUIDE_T341.md` | Registered and started 2026-11-20 [admin] (lean-kit Part 2 step 1, option B): branch `feat/t341-reviewer-gate`, worktree `../wt-t341` | Track: extended
 
 
@@ -114,6 +113,7 @@
 
 
 ### Ready for Review
+- [ ] **T342** — a glob inside a quoted span is not a path (sensitive-path hook false positive) | common-infrastructure | C2 | Risk: High | P1 | Guide: `tasks/TASK_GUIDE_T342.md` | Registered and started 2026-11-20 [admin], user: "yes, start [admin]" (admin mode = full rights; sensitive-path false positive on `sed 's/ - .*//'`): branch `fix/t342-quoted-glob-not-a-path`, worktree `../wt-t342` | Track: extended | Stage 4 2026-11-20 [admin]: code-review 0 P0/1 P1 fixed (escaped quote, 78b76f2)/0 P2/1 P3; security-review by hand (built-in needs `origin/HEAD`), no open findings; Debate A (allowlist, default expand); report `tasks/TASK_REVIEW_T342.md` `## Auto decisions` | Ready for Review 2026-11-20
 - [ ] **T326** — `[admin]` push of `main` works on git older than 2.38 | common-infrastructure | C2 | Risk: High | P1 | Guide: `tasks/TASK_GUIDE_T326.md` | Registered and started 2026-11-18 [admin], user: "yes, register both tasks, and execute 2 of them parallel [admin]": branch `fix/t326-old-git-main-push`, worktree `../wt-t326` | Track: extended | Stage 4 2026-11-18 [admin]: code-review 0 P0/0 P1/1 P2 fixed; security-review by hand (built-in needs `origin/HEAD`), no findings; Debate A (read-tree fallback); report `tasks/TASK_REVIEW_T326.md` `## Auto decisions` | Ready for Review 2026-11-18
 - [ ] **T327** — Clean up a task's resources after it is merged and Done | common-infrastructure | C2 | Risk: High | P1 | Guide: `tasks/TASK_GUIDE_T327.md` | Registered and started 2026-11-18 [admin], user: "yes, register both tasks, and execute 2 of them parallel [admin]": branch `feat/t327-cleanup-after-done`, worktree `../wt-t327` | Track: extended | Stage 4 2026-11-18 [admin]: code-review 0 P0/0 P1 code, 1 P3; security-review by hand, no findings; Debate B (list processes, refuse, no signal); report `tasks/TASK_REVIEW_T327.md` `## Auto decisions` | Ready for Review 2026-11-18
 - [ ] **T340** — Remove kit files nothing uses (lean-kit Part 1: two scripts, two spikes) | common-infrastructure | C1 | Risk: Low | P1 | Started 2026-11-20 [admin]: branch `chore/t340-remove-unused-files`, worktree `../wt-t340` | Track: minimal | Record: tasks/MINIMAL_LOG.md
