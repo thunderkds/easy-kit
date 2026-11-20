@@ -102,8 +102,14 @@ GATE_REL = ".claude/hooks/pre_bash_block_unsafe_merge.py"
 #          `merge-tree --write-tree`) as on new git, by a read-only three-way `read-tree` in a temporary
 #          index; any doubt refuses (`tasks/TASK_GUIDE_T326.md`, AC 1-5). Supervisor sign-off under
 #          session `[admin]`, 2026-11-18.
+#   T341 — the merge (and the narrowed push) of an extended-track task branch is refused until a
+#          hook-written trace record proves a fresh `Reviewer: <ID>` spawn ran on the code being
+#          merged (`trace_shows_review`: exact description, fixed prompt prefix, `Commit:` an ancestor
+#          of the tip with only review, board, log or memory files after it, chain hash and anchor
+#          intact); checked per merged target, no date cutoff (`tasks/TASK_GUIDE_T341.md`, AC 4-6, 9;
+#          DDR-0011). Supervisor sign-off under session `[admin]`, 2026-11-20.
 AUTHORISED_TASKS = ("T182", "T188", "T190", "T197", "T196", "T210", "T211", "T232", "T250", "T284",
-                    "T289", "T291", "T296", "T295", "T308", "T309", "T317", "T323", "T326")
+                    "T289", "T291", "T296", "T295", "T308", "T309", "T317", "T323", "T326", "T341")
 
 
 def _git(root, *args):

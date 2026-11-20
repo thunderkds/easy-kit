@@ -226,6 +226,7 @@ def test_a_code_file_renamed_into_memory_after_the_reviewed_commit_is_refused(ga
     fx = gate(kanban(done=(TID,)))
     reviewed = fx.extended()
     fx.review(reviewed)
+    os.makedirs(os.path.join(fx.wt, "memory"))
     git(fx.wt, "mv", "app.py", "memory/app.md")
     git(fx.wt, "commit", "-qm", f"{TID}: move")
     assert_review_block(merge(fx))
@@ -487,3 +488,11 @@ def test_trace_shows_review_is_false_on_a_git_error(gate):
     fx.review()
     assert merge_gate.trace_shows_review(TID, fx.tip(), fx.main)
     assert not merge_gate.trace_shows_review(TID, fx.tip(), os.path.join(fx.main, "missing"))
+
+
+def test_a_merge_whose_branch_cannot_be_resolved_is_refused(gate):
+    fx = gate(kanban(done=(TID,)))
+    fx.extended()
+    fx.review()
+    text = reason(MERGE + " --no-ff " + BRANCH + "; echo done", fx.main)
+    assert text is not None and "cannot tell which branch this merge brings in" in text, text
