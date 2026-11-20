@@ -20,11 +20,10 @@ Mode: auto
 5. Implementer: a `common-infrastructure` sub-agent, not the Supervisor — RULE: `AGENTS.md:171` "The Supervisor must never write implementation code directly." (Gate 1 stays in force until this task merges).
 6. Merge-gate sign-off: T341 added to `AUTHORISED_TASKS` by the Supervisor under session `[admin]` — RULE: `.claude/hooks/tests/merge_gate_guard.py:22` "**Adding a task is the record.**" (precedent T323, T326).
 7. Supervisor-written fixture repair (`d06a85d8`, `d425b47e`: test helpers, pins, AGENTS.md wording) reverted; a `common-infrastructure` sub-agent redoes it — DEBATED: B (Advocate 1: A, keep both, record the breach of main's Gate 1 plainly, the required `Reviewer: T341` covers them; Advocate 2: B, revert both and have a `common-infrastructure` sub-agent redo them, because main's Gate 1 holds until the merge; Advocate 3: A, keep both, smallest change, the reviewer covers the tip) — settled by RULE: `AGENTS.md:171` on `main` "The Supervisor must never write implementation code directly." and `AGENTS.md:168` "not skippable by any rationale"; matches decision 5.
-Checks: <filled at Stage 4>
-Memory: <filled after merge>
-Not done: merge (admin: after the auto verify pass); auto verify: running (T182)
-Paused: auto-mode check failed — no `Memory:` line in the report — run the memory pass before you stop and record it there (each entry written, or `Memory: nothing new`); extended track, but the trace has no `code-review` Skill call (Stage 4 runs in auto mode); Risk High, but the trace has no `security-review` Skill call [report 89365fbeca2a]
-
+Checks: full suite at `00b66ad` fails exactly the 54 `main` baseline tests (`comm -3` empty; 54 failed, 7572 passed); Verification Command 178 passed — auto-checked, not /verify. Stage 4 reviewer spawn, code-review and security-review NOT run (paused below).
+Memory: nothing new (no merge; the async-spawn finding goes to memory when the question below is decided)
+Not done: Stage 4 reviewer spawn, code-review, security-review, auto verify, merge (admin: after the auto verify pass)
+Paused: unsure — every `Agent()` spawn in this harness is recorded `spawn.status: async_launched` (all 7 spawns of 2026-11-20 in `memory/event-trace/T341.jsonl` / `_untagged.jsonl`; the Agent tool has no foreground option), but `trace_shows_review` counts only `completed` or no status, so after merge every extended-track merge would be refused; options: A accept an `async_launched` reviewer record (proves a spawn on that commit, not that it finished) / B add a completion record written at the reviewer's end (SubagentStop hook) and count only that / C keep the gate as is and run the reviewer from a CLI session that records `completed`
 
 ## Evidence
 
@@ -95,3 +94,23 @@ the unchanged gate allows every one of these merges.
 
 **WITNESS**: [who ran it and when — derived from `memory/event-trace/Txxx.jsonl`, never the
 implementing agent alone]
+
+## Stage 4 code-review (Supervisor, inline, 2026-11-20, range `main...a7e7512f`)
+
+Not the independent `Reviewer: T341` spawn: that spawn waits on the Paused question. Lane: `C3, 27 files, 1409 lines, FITS`; 16 files unpredicted by the guide's Files table (the fixture and pin files). Startup reads of the implementer (`5f54ee3`, `00b66ad`): all four Permanent-Rule reads reported — pass. Entry point `trace_shows_review`: found.
+
+| Sev | File | Line | Finding | Conf | Action |
+|-----|------|------|---------|------|--------|
+| P1 | `.claude/hooks/pre_bash_block_unsafe_merge.py` | `_spawn_finished` | Every `Agent()` spawn in this harness is recorded `spawn.status: async_launched` (7 of 7 on 2026-11-20); the gate counts only `completed` or no status, so after merge no extended-track merge can pass. `test_a_background_spawn_that_only_launched_is_refused` pins it; the remedy text and `pipeline-stages.md` Stage 4 ask for a foreground spawn the Agent tool cannot make. | 100 | User decision (Paused: unsure, options A/B/C) |
+| P2 | `tasks/TASK_GUIDE_T341.md` | Files to Change | 16 changed files not predicted (fixture helpers, older gate tests, pins, `CLAUDE_LEGACY.md`). | 75 | Add them to the Files table at the next guide touch |
+| P3 | `.claude/hooks/pre_bash_block_unsafe_merge.py` | `main` board read | No `PROJECT_KANBAN.md` exits before `review_blockers` runs, so a project with no board gets no reviewer check (the existing exit, unchanged). | 75 | Note only |
+| P3 | `.claude/hooks/pre_bash_block_unsafe_merge.py` | `review_blockers` | A bare `git merge` (upstream) resolves no task target and is not checked. | 75 | Note only |
+
+P0: none. Probed: `git merge --abort/--continue/--quit` pass through; `git merge -m x <task branch>` is refused with the remedy. Safe fixes applied: none (the P1 needs the user's choice).
+
+## Stage 4 security-review (Supervisor, by hand, 2026-11-20)
+
+The built-in `security-review` skill could not run: it reads `origin/HEAD`, and this repo's only remote is `github` (`fatal: ambiguous argument 'origin/HEAD...'`). Reviewed by hand instead, scope `pre_bash_block_unsafe_merge.py` T341 block. Findings: none.
+- Git calls take argument lists, no shell; the reviewed commit comes only from `Commit: ([0-9a-f]{40})`; the tip is checked against `SHA_PATTERN`; `glob.escape` on `TRACE_DIR`.
+- Probed: `git merge --no-ff -- --output=/tmp/x-t341` → no target, no git call with that argument; `git merge feat/t341-x^{commit}` → refused fail-closed; a summary whose prompt carries a quoted `"description": "Reviewer: T341"` while the real description differs → not a reviewer record.
+- Known limit (documented in `docs/claude-md/tracks.md` `### Known limits`): an agent's own Python can write a chained, anchored record; the anchor raises the bar and is not a proof.
