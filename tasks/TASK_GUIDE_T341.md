@@ -64,6 +64,10 @@ User, 2026-11-20, on the lean-kit proposal (`docs/brainstorming/BRAINSTORMING_LO
 | 7 | `.claude/hooks/tests/merge_gate_guard.py` `AUTHORISED_TASKS` gains `T341` with a comment naming the rule (Supervisor sign-off under session `[admin]`, 2026-11-20); the gate commit subject names T341. | gate sign-off rule |
 | 8 | `docs/claude-md/tracks.md` names the new merge-gate condition, and its `### Known limits` adds: the trace and anchor raise the bar and are not a proof (an agent's own Python can write a matching record, as for T148/T182). | honest limits |
 | 9 | Negative: a merge is refused for each of — no reviewer record; description `Reviewer: T999` for task T998; prompt without the prefix; a commit not in the tip's history; a code file changed after the reviewed commit; a record whose hash does not match its anchor. Allowed for — the reviewed commit equals the tip; only a board, review-file or memory commit after it; a minimal-track branch with no guide; a merge of task A's branch while task B (already merged, no reviewer record) still sits in Ready for Review. Refused also for — a guide committed with a backdated `GIT_COMMITTER_DATE` (no date is trusted). | negative / boundary |
+| 11 | Option B (user, 2026-11-20: "so B"): a new `SubagentStop` hook `.claude/hooks/subagent_stop_reviewer_done.py`, registered in `.claude/settings.json`, writes one record to the trace when a sub-agent ends whose spawn prompt (first line of its own transcript, read the way `.claude/hooks/lib/task_context.py` `_spawn_prompt` reads it) starts with `REVIEWER_PROMPT_PREFIX`, then `Task ID: <ID>`, then `Commit: <40-hex>`. The record: `tool_name` `"ReviewerDone"`, the task ID, the commit, the agent ID, filed in `memory/event-trace/<ID>.jsonl`, hash-chained and anchored the way `post_tool_trace.py` appends (`trace_chain`). Spike first: capture one real `SubagentStop` event (its field names) before writing the hook; do not guess. Never raises; exits 0; writes nothing for any other sub-agent. | the reviewer finished, not only started |
+| 12 | `trace_shows_review` counts only a hook-written `ReviewerDone` record for the task and the commit (chain hash, link, anchor intact; commit an ancestor of the tip; only review-free files after it). An `Agent` spawn record alone, `async_launched` or `completed`, no longer counts. The block line's remedy names the spawn shape and says the record is written when the reviewer ends; it no longer asks for a foreground spawn. | finished review proven |
+| 13 | Negative: refused for — a spawn record with no `ReviewerDone`; a `ReviewerDone` for another task or another commit; one with a bad hash or no anchor; one typed into the trace by hand (`echo >>`); a sub-agent that ends with a non-reviewer prompt writes nothing. Allowed for — a `ReviewerDone` on the tip, or on a commit followed only by review-free files. | negative / boundary |
+| 14 | `docs/claude-md/pipeline-stages.md` Stage 4 step 0, `docs/claude-md/tracks.md` and DDR-0011 say: the spawn may run in the background; the merge gate counts the record the `SubagentStop` hook writes when the reviewer ends. `.claude/settings.json` gains only the `SubagentStop` entry (no other key changes). | doctrine matches the gate |
 | 10 | Stale references: every live doc that says the Supervisor never writes implementation code on the extended track is updated (`AGENTS.md`, `docs/claude-md/pipeline-stages.md`, `docs/claude-md/tracks.md`, `agents/*.md`, `templates/`, `skills/*/SKILL.md`, `site/`), or listed in the review with the reason it stays (dated records under `tasks/`, `memory/`, `docs/ddr/`, `docs/archive/`, `docs/brainstorming/`, `experiments/` stay). | one rule, one wording |
 
 ---
@@ -133,6 +137,10 @@ Decisions (`tasks/TASK_REVIEW_T341.md` `## Auto decisions`): the proof is a trac
 |------|--------|
 | `.claude/hooks/pre_bash_block_unsafe_merge.py` | `REVIEWER_PROMPT_PREFIX`, `is_reviewer_call`, `trace_shows_review`, wired per merged/pushed target (ordinary and `[admin]` paths), not into the board-wide loop |
 | `.claude/hooks/tests/merge_gate_guard.py` | `AUTHORISED_TASKS` += `T341` |
+| `.claude/hooks/subagent_stop_reviewer_done.py` | new (AC 11): the `ReviewerDone` record writer |
+| `.claude/hooks/tests/test_t341_reviewer_done.py` | new: AC 11, 13 (hook side) |
+| `.claude/settings.json` | the `SubagentStop` entry only (AC 11, 14) |
+| `.claude/hooks/tests/hook_verify_row.py` and the older gate tests | their reviewer fixture becomes a `ReviewerDone` record (AC 12) |
 | `.claude/hooks/tests/test_t341_reviewer_gate.py` | new: AC 4-6, 9 |
 | `tests/test_t341_gate1_doctrine.py` | new: AC 1-3, 7, 8, 10 |
 | `AGENTS.md` | Gate 1 last sentence; Stage 3/4 lines |
@@ -151,7 +159,7 @@ Decisions (`tasks/TASK_REVIEW_T341.md` `## Auto decisions`): the proof is a trac
 | `.claude/hooks/stop_auto_verify.py` | the independent verify run stays as is |
 | `.claude/hooks/stop_auto_mode_check.py` | Advocate counts are rollout step 2 |
 | `.claude/skills`, `.claude/agents` symlinks | load-bearing |
-| `.claude/settings.json` | no permission change in this task |
+| `.claude/settings.json` | only the one `SubagentStop` hook entry of AC 11 (user's choice of option B, 2026-11-20); no permission or other change |
 
 ---
 
@@ -176,4 +184,5 @@ TDD per AC: write `.claude/hooks/tests/test_t341_reviewer_gate.py` first (temp g
 
 ## Questions Log
 
+- 2026-11-20 USER After Stage 4 found that every `Agent()` spawn here is recorded `async_launched` (so the gate could never pass), options A (accept a started record) / B (a `SubagentStop` record when the reviewer ends) / C (keep it, run reviewers from a CLI). Supervisor recommended B (a reviewer that dies mid-run, as the fixture sub-agent did on a rate limit today, must not count). User: "so B". → AC 11-14.
 - 2026-11-20 DEBATE Which tasks does the reviewer check cover? → (C) no cutoff, no exemption list; check per merged/pushed target (Advocate 1: C, the date helper trusts backdated `%ct` and T309/Readiness rollouts grandfathered nothing; Advocate 2: C, `_guides_added_since` turns absent-means-block into absent-means-skip; Advocate 3: C, plus wire per target, not in the board-wide loop at L2873) — all three agree.
