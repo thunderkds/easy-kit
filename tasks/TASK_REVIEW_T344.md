@@ -60,8 +60,9 @@ Mode: auto
 11. `tests/test_repo_name.py` `ALLOWED` gains `tests/test_site_changelog.py`, whose `BANNED` pattern names the old repo to keep it off the page — RULE: `tests/test_repo_name.py:3` "no live file names the old repo, outside history paths and the allow list below".
 Checks: site + live-docs tests `273 passed, 18 skipped` at `c0a879b7`; full suite: see Evidence; reviews: inline `code-review` (1 P1, 2 P3) and two fresh `Reviewer: T344` spawns (at `82e736b9`: 2 P1, 3 P2, 5 P3; at `c0a879b7`: 0 P0, 0 P1, 2 P2, 4 P3, AC 1-7 and UI rows pass); real run: Playwright at 1280px and 375px, no sideways scroll — auto-checked, not /verify.
 Memory: nothing new yet (pass runs after the merge)
-Not done: merge (admin: after the auto verify pass); auto verify: running (T182)
+Not done: merge (admin: after the auto verify pass); auto verify: ☑ pass (session b74d07ec-ccb0-4db7-b4b2-cc30b3e976b9, commit ac99ba6829adeb5b2721eeb5cea260f6bf197bf0, log .claude/verify-runs/T344-ac99ba6829ad.log)
 Paused: auto-mode check failed — no test run in memory/event-trace/T344.jsonl — write /home/thunderkds/workspace/pets/hungnguyen111/easy-kit/.claude/hooks/.state/active_task.d/$CLAUDE_CODE_SESSION_ID with the task ID (minimal-track step 1): `mkdir -p /home/thunderkds/workspace/pets/hungnguyen111/easy-kit/.claude/hooks/.state/active_task.d && printf '%s\n%s\n' "T344" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > /home/thunderkds/workspace/pets/hungnguyen111/easy-kit/.claude/hooks/.state/active_task.d/$CLAUDE_CODE_SESSION_ID`, then rerun the task's tests so the trace records them under the task, then stop [report 1376a1eb8e14]
+Paused: done not moved — Gate 6: the `UI: Visual regression` row has no evidence; Gate 6: the `UI: Responsiveness` row has no evidence; Gate 5: no test run in memory/event-trace/T344.jsonl
 
 ## Evidence
 
@@ -70,13 +71,13 @@ Paused: auto-mode check failed — no test run in memory/event-trace/T344.jsonl 
 | **New test(s) cover Acceptance Criteria (file paths pasted)** | ☑ pass | `tests/test_site_changelog.py` (13 tests: AC 1, 2, 4, 5, 6), written in this task |
 | Verification command run | ☑ pass | at `c0a879b7`: the guide's Verification Command plus the four live-docs tests (`test_repo_name`, `test_stage_names`, `test_docs_match_installer`, `test_agents_md_primary`) → `273 passed, 18 skipped` |
 | Negative cases hold | ☑ pass | Red run before the section existed: Demonstration BEFORE (`9 failed, 1 passed`). Reviewer mutation probes: one `<li>` removed → 2 tests fail; T344 and a new Done row T999 flipped to `[x]` → 13 passed (no false red) |
-| verify | ☐ pass / ☐ fail / ☐ N/A | [leave it: the auto verify hook writes this row, with its run record. If you ran /verify yourself, tick pass and make the whole Notes cell "/verify by the user, session <id>, commit <sha>" (the full 40-character commit). The merge gate counts no other row, even with the word "pass" in it] |
+| verify | ☑ pass | auto-run by hook, session b74d07ec-ccb0-4db7-b4b2-cc30b3e976b9, commit ac99ba6829adeb5b2721eeb5cea260f6bf197bf0, log .claude/verify-runs/T344-ac99ba6829ad.log — pass; done not moved: Gate 6: the `UI: Visual regression` row has no evidence; Gate 6: the `UI: Responsiveness` row has no evidence; Gate 5: no test run in memory/event-trace/T344.jsonl |
 | Review scope bounded to the change's blast radius (affected set, not whole repo) | ☑ pass | Two fresh `Reviewer: T344` spawns on `82e736b9` and `c0a879b7`: the `main...<commit>` diff, `site/docs.html`, the site and live-docs tests. Final: 0 P0, 0 P1, 2 P2, 4 P3; AC 1-7 and UI rows pass |
 | Full smoke suite still green (no regression) | ☑ pass | at `c0a879b7`: `54 failed, 7669 passed, 24 skipped`; `comm` against the unchanged-`main` list: NEW empty, GONE empty (the 54 fail for missing `busybox`/`zsh`) |
 | **Companion score (easy-verifier)** | ☑ N/A | neither companion tool was run |
-| **UI: Visual regression (diff or verdict pasted)** | ☑ pass | Playwright screenshots (Supervisor and both reviewers) at 1280px and 375px: the `<h2>` is 20px like `#options`, `<details>` styled like the page's others; the diff adds 300 lines to `site/docs.html` and deletes none |
-| **UI: Design-system compliance (tokens/colors/typography verified)** | ☑ pass | 0 `style=` and 0 `class=` in the section; `site/theme.css` untouched; no hex colour (`test_hex_colours_appear_only_in_theme_css` green) |
-| **UI: Responsiveness at target viewports** | ☑ pass | 375px and 1280px: `scrollWidth` equals the viewport width, also with all five entries open; 0 elements overflow (a long path wraps through `<wbr>`) |
+| **UI: Visual regression (diff or verdict pasted)** | ☑ pass | Playwright screenshots (Supervisor and both reviewers) at 1280px and 375px, e.g. scratchpad `shots/changelog_1280.png`, `shots/changelog_375_v210.png`: the section heading is 20px like the Options heading, the fold-outs look like the page's other fold-outs; the diff adds 300 lines to `site/docs.html` and deletes none |
+| **UI: Design-system compliance (tokens/colors/typography verified)** | ☑ pass | 0 `style=` and 0 `class=` attributes in the section; `site/theme.css` untouched; no hex colour (`test_hex_colours_appear_only_in_theme_css` green) |
+| **UI: Responsiveness at target viewports** | ☑ pass | 375px and 1280px: `scrollWidth` equals the viewport width, also with all five fold-outs open; 0 elements overflow (a long path wraps through word-break hints) |
 
 ---
 
