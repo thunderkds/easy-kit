@@ -575,14 +575,20 @@ CHANGED_BY_T303 = {
 }
 
 
+# T341 (DDR-0011): on the extended track the Supervisor writes the code; one fresh reviewer sub-agent per task.
+CHANGED_BY_T341 = {
+    "59626c61cba65820": "the lead's Pipeline item: code in isolated worktrees, one fresh reviewer sub-agent (T341)",
+}
+
+
 def test_every_paragraph_item_cell_and_definition_of_the_old_page_is_on_docs():
     now = set(sentence_hashes(docs_html()))
-    missing = [(h, t) for h, t in _baseline()["sentences"] if h not in now and h not in CHANGED_BY_T239 and h not in CHANGED_BY_T240 and h not in CHANGED_BY_T245 and h not in CHANGED_BY_T251 and h not in CHANGED_BY_T256 and h not in CHANGED_BY_T261 and h not in CHANGED_BY_T284 and h not in CHANGED_BY_T290 and h not in CHANGED_BY_T303]
+    missing = [(h, t) for h, t in _baseline()["sentences"] if h not in now and h not in CHANGED_BY_T239 and h not in CHANGED_BY_T240 and h not in CHANGED_BY_T245 and h not in CHANGED_BY_T251 and h not in CHANGED_BY_T256 and h not in CHANGED_BY_T261 and h not in CHANGED_BY_T284 and h not in CHANGED_BY_T290 and h not in CHANGED_BY_T303 and h not in CHANGED_BY_T341]
     assert not missing, f"{len(missing)} text(s) lost from docs.html: {missing[:5]}"
 
 
 def test_every_listed_change_is_a_real_baseline_text():
-    assert set(CHANGED_BY_T239) | set(CHANGED_BY_T240) | set(CHANGED_BY_T245) | set(CHANGED_BY_T251) | set(CHANGED_BY_T256) | set(CHANGED_BY_T261) | set(CHANGED_BY_T284) | set(CHANGED_BY_T290) <= {h for h, _ in _baseline()["sentences"]}
+    assert set(CHANGED_BY_T239) | set(CHANGED_BY_T240) | set(CHANGED_BY_T245) | set(CHANGED_BY_T251) | set(CHANGED_BY_T256) | set(CHANGED_BY_T261) | set(CHANGED_BY_T284) | set(CHANGED_BY_T290) | set(CHANGED_BY_T341) <= {h for h, _ in _baseline()["sentences"]}
 
 
 def test_the_baseline_is_not_empty():

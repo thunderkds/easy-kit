@@ -202,7 +202,7 @@ Run these **one by one**. After each session, summarize findings, ask for user c
 
 > These gates exist because pipeline bypasses happen when tasks *feel* small. Perceived smallness is **never** a valid reason to skip any gate below.
 
-1. **No TASK_GUIDE = no work.** If the user requests any implementation and no `tasks/TASK_GUIDE_Txxx.md` exists for it, the Supervisor must create one through Stage 2 before any code is written — by the Supervisor *or* any agent. The Supervisor must never write implementation code directly.
+1. **No TASK_GUIDE = no work.** If the user requests any implementation and no `tasks/TASK_GUIDE_Txxx.md` exists for it, the Supervisor must create one through Stage 2 before any code is written — by the Supervisor *or* any agent. The Supervisor writes the code itself, in the task's worktree, test first; it spawns an implementer only for 2+ independent tasks at once, or for a C3 task too big for one context. Each task gets one fresh-context reviewer spawn (`Reviewer: <ID>`), and the merge gate refuses the merge until its trace record shows that reviewer ran on the code being merged (DDR-0011).
 
 2. **Complexity floor for structural work.** Any task containing the words *refactor*, *restructure*, *migrate to pattern*, *clean architecture*, *QA suite*, or *test coverage* starts at **C2 / Medium Risk** minimum. Do not reduce below this floor without explicit user instruction.
 

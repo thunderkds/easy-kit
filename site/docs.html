@@ -264,7 +264,7 @@
     deterministic hooks, not just prompted convention. Install it into any git repo with one command.
   </p>
   <ul class="lead">
-    <li><strong>Pipeline</strong> — plan → spawn isolated sub-agents → review → integrate → ship.</li>
+    <li><strong>Pipeline</strong> — plan → code in isolated worktrees → one fresh reviewer sub-agent → integrate → ship.</li>
     <li><strong>Claude Code</strong> — the Supervisor session and its hooks enforce every stage.</li>
     <li><strong>Other providers</strong> (Codex, Cursor) — Codex reads the full doctrine in <code>AGENTS.md</code>. Cursor gets a thin adapter. See
       Providers below for what carries over and what doesn't.</li>
@@ -288,7 +288,7 @@
   <dd><ul class="strip">
     <li><a href="#agent-roles"><span class="num">4</span><span class="label">spawnable roles</span></a></li>
     <li><a href="#skills"><span class="num">37</span><span class="label">skills</span></a></li>
-    <li><a href="#hooks"><span class="num">6</span><span class="label">blocking hooks (of 14)</span></a></li>
+    <li><a href="#hooks"><span class="num">6</span><span class="label">blocking hooks (of 15)</span></a></li>
     <li><a href="#packs"><span class="num">6</span><span class="label">optional domain packs</span></a></li>
   </ul></dd>
 </dl>
@@ -3702,6 +3702,7 @@ curl -fsSL https://raw.githubusercontent.com/$GITHUB_USERNAME/easy-kit/main/setu
 <tr><td data-label="Event">Stop</td><td data-label="Matcher">—</td><td data-label="Script"><code>stop_<wbr>auto_<wbr>mode_<wbr>check.py</code></td><td data-label="Behavior"><span class="tag tag-block">blocks</span> the end of an <code>[auto]</code> run until its final report checks out — once; the second try stops <details><summary>What it checks</summary><ul><li>The report is in its file, marked <code>Mode: auto</code></li><li>Each Medium/High-risk choice was argued by 2 or 3 Advocates</li><li>Stage 4 review ran</li></ul></details></td></tr>
 <tr><td data-label="Event">Stop</td><td data-label="Matcher">—</td><td data-label="Script"><code>stop_<wbr>auto_<wbr>verify.py</code></td><td data-label="Behavior"><span class="tag tag-advise">advises</span> — starts one headless <code>/verify</code> run per commit for an <code>[auto]</code> task that waits for review <details><summary>What the run does</summary><ul><li>It writes the <code>verify</code> row and a run record</li><li>The merge gate accepts that row only with the record</li><li>The merge stays yours</li><li>With <code>[admin]</code>, the Supervisor may merge and push the task branch after a pass</li></ul></details></td></tr>
 <tr><td data-label="Event">SessionStart</td><td data-label="Matcher"><code>resume</code></td><td data-label="Script"><code>session_<wbr>start_<wbr>resume_<wbr>mark.py</code></td><td data-label="Behavior"><span class="tag tag-inert">inert</span> — records the resume time so a session tag typed before it ends</td></tr>
+<tr><td data-label="Event">SubagentStop</td><td data-label="Matcher">—</td><td data-label="Script"><code>subagent_<wbr>stop_<wbr>reviewer_<wbr>done.py</code></td><td data-label="Behavior"><span class="tag tag-inert">inert</span> — when a reviewer sub-agent ends, writes its <code>ReviewerDone</code> record; the merge gate counts only that record</td></tr>
 </tbody>
 </table>
 </div>

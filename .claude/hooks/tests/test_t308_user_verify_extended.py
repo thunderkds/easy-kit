@@ -32,6 +32,7 @@ HOOKS = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(HOOKS / "lib"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+import hook_verify_row  # noqa: E402  (T341)
 import verify_record  # noqa: E402
 from test_t250_session_ownership import (  # noqa: E402
     OTHER_SID, SID, _git, commit_at, gate_env, gate_project, human, min_project, run_gate,
@@ -78,6 +79,9 @@ def ext_project(tmp_path, cells_for=lambda sha: f"☑ pass | {user_notes(sha)}",
     on branch `fix/t900-x`, checked out in `../wt-t900`. Returns (project, checkout, sha)."""
     project = gate_project(tmp_path, in_progress=(), ready=(RFR_EXT_ROW,),
                            files={"src/app.py": "print('v1')\n", GUIDE_REL: POINTER_GUIDE})
+    # T341: `MERGE_OTHER` merges another task's branch, so it exists (T901, no guide: minimal
+    # track, cut before T900's work). A merge the gate cannot resolve is refused since T341.
+    _git(project, "branch", "fix/t901-x")
     trace = project / "memory" / "event-trace"
     trace.mkdir(parents=True)
     (trace / "T900.jsonl").write_text(json.dumps({"tool_name": "Bash", "is_error": False,
@@ -98,6 +102,10 @@ def ext_project(tmp_path, cells_for=lambda sha: f"☑ pass | {user_notes(sha)}",
         commit_at(checkout, ROW_AT, "T900: more code")
     if not worktree:
         _git(project, "branch", "fix/t900-x")
+    # T341: a fresh reviewer ran on the tip of T900's branch. These tests are about verify rows;
+    # the reviewer check is `test_t341_reviewer_gate.py`'s.
+    hook_verify_row.prove_review(trace, project, TASK, _git(project, "rev-parse", "fix/t900-x"),
+                                 anchor_dir=tmp_path / "anchors")
     return project, checkout, sha
 
 

@@ -184,6 +184,13 @@ def test_sc5_supervisor_settings_have_no_permissions_or_sandbox():
                     '"matcher": "resume"',
                     '"command": "python3 \\"$CLAUDE_PROJECT_DIR\\"/.claude/hooks/'
                     'session_start_resume_mark.py"'}
+        # T341 (option B, user "so B"): one SubagentStop hook entry (the reviewer record), likewise.
+        allowed |= {'"SubagentStop": [',
+                    '"description": "Reviewer record (T341): when a sub-agent spawned with the '
+                    'reviewer prompt ends, write its ReviewerDone record to the trace; the merge gate '
+                    'counts only that record"',
+                    '"command": "python3 \\"$CLAUDE_PROJECT_DIR\\"/.claude/hooks/'
+                    'subagent_stop_reviewer_done.py"'}
         assert set(changed) <= allowed, set(changed) - allowed
 
 

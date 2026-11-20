@@ -260,14 +260,16 @@ def _git(cwd, *args):
     return done.stdout.strip()
 
 
-def gate_project(tmp_path, in_progress=(IN_PROGRESS_ROW,), ready=(), files=None):
-    """A temp kit project: the hooks, a board, and one commit."""
+def gate_project(tmp_path, in_progress=(IN_PROGRESS_ROW,), ready=(), files=None, guide=True):
+    """A temp kit project: the hooks, a board, and one commit. `guide=False` (T341): no
+    `tasks/TASK_GUIDE_T900.md`, so T900 is a minimal-track task (the reviewer check skips it)."""
     project = tmp_path / "repo"
     (project / ".claude").mkdir(parents=True)
     shutil.copytree(HOOKS, project / ".claude" / "hooks",
                     ignore=shutil.ignore_patterns("tests", "__pycache__", ".state"))
     (project / "tasks").mkdir()
-    (project / "tasks" / "TASK_GUIDE_T900.md").write_text("# T900\n", encoding="utf-8")
+    if guide:
+        (project / "tasks" / "TASK_GUIDE_T900.md").write_text("# T900\n", encoding="utf-8")
     for rel, text in (files or {}).items():
         (project / rel).parent.mkdir(parents=True, exist_ok=True)
         (project / rel).write_text(text, encoding="utf-8")
@@ -510,8 +512,12 @@ def commit_at(project, when, message):
 def min_project(tmp_path, line_for=lambda sha: [user_line(sha)], code_change_after=False):
     """T900 at Ready for Review on the minimal track: code committed at 06:00, the Decision record
     with its `verify:` line(s) committed at 06:10. Returns (project, code sha)."""
+    # T341: a minimal-track task has no guide (TASK_GUIDE_T341 AC 6), and `MERGE_OTHER` merges
+    # another task's branch, so that branch exists (T901, no guide). A merge the gate cannot
+    # resolve is refused since T341 (AC 5: any doubt is false).
     project = gate_project(tmp_path, in_progress=(), ready=(RFR_MIN_ROW,),
-                           files={"src/app.py": "print('v1')\n"})
+                           files={"src/app.py": "print('v1')\n"}, guide=False)
+    _git(project, "branch", "fix/t901-x")
     trace = project / "memory" / "event-trace"
     trace.mkdir(parents=True)
     (trace / "T900.jsonl").write_text(json.dumps({"tool_name": "Bash", "is_error": False,

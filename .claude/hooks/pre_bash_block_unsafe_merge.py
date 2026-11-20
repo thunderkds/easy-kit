@@ -81,6 +81,7 @@ try:
     from auto_mode import record_block  # noqa: E402
     import session_work  # noqa: E402
     from task_context import join_line_continuations  # noqa: E402
+    from trace_chain import GENESIS, anchor_path, chain_hash, safe_name  # noqa: E402
 except Exception as exc:  # pragma: no cover - exercised via subprocess test
     print(json.dumps({
         "decision": "block",
@@ -90,8 +91,8 @@ except Exception as exc:  # pragma: no cover - exercised via subprocess test
             "evidence for any task, so this push/merge is blocked. Restore "
             ".claude/hooks/lib/project_root.py, .claude/hooks/lib/guide_sections.py, "
             ".claude/hooks/lib/shell_data.py, .claude/hooks/lib/board/config.py, "
-            ".claude/hooks/lib/board/moments.py, .claude/hooks/lib/verify_record.py and "
-            ".claude/hooks/lib/session_work.py."
+            ".claude/hooks/lib/board/moments.py, .claude/hooks/lib/verify_record.py, "
+            ".claude/hooks/lib/session_work.py and .claude/hooks/lib/trace_chain.py."
         ),
     }))
     sys.exit(0)
@@ -2653,6 +2654,226 @@ def auto_mode_blocker(command, cwd, transcript_path):
     return f"`[admin]` does not allow this command: {why}" if why else None
 
 
+# --- A fresh reviewer ran on the exact code being merged (T341) -----------------------------
+#
+# On the extended track the Supervisor writes the code itself; independence comes from one
+# fresh-context reviewer spawn per task (`docs/claude-md/pipeline-stages.md`, Stage 4). This gate,
+# not prose, holds that: a merge of an extended-track task branch (and the narrowed push of one)
+# is refused until a hook-written trace record proves the reviewer ran on the code being merged.
+#
+#   * The record (option B, AC 12): a `ReviewerDone` record for the task, which the `SubagentStop`
+#     hook `subagent_stop_reviewer_done.py` writes when a sub-agent ends whose spawn prompt's first
+#     three lines are `REVIEWER_PROMPT_PREFIX`, `Task ID: <ID>` and `Commit: <40-hex>` (the hook
+#     reads them from the sub-agent's own transcript). The `Agent` spawn record alone does not
+#     count, whatever its `spawn.status`: every spawn here is recorded `async_launched`, at launch,
+#     before the review ran. A sub-agent that ends on an API error fires `StopFailure`, not
+#     `SubagentStop`, so it leaves no record (T341 spike, Claude Code 2.1.329).
+#   * Hook-written: the line's chain hash, its link to the chained line before it and its anchor
+#     line check out, as `scripts/verify_trace.py` reads them (T148). An `echo >>` has no anchor.
+#   * Any trace file: the record is the task's by its `task_id`, not by its file.
+#   * Fresh: the named commit is an ancestor of the tip, and between the two only the review
+#     file, the board, `tasks/MINIMAL_LOG.md` and `memory/*.md` (not `memory/MEMORY.md`) changed.
+#
+# Scope (AC 6): a task is extended track when its guide is at the tip, in the main checkout, or
+# in a commit of `main..tip`; no guide anywhere (the minimal track) is never checked. No date is
+# trusted, so there is no cutoff. The check runs per merged or pushed branch, never in the
+# board-wide Ready-for-Review loop: a Ready-for-Review row of an already merged task blocks
+# nothing new. Any doubt (git error, unreadable trace, bad hash, missing anchor, unknown commit)
+# is a refusal. Known limit: the anchor raises the bar and is not a proof (T148).
+REVIEWER_PROMPT_PREFIX = "Review alone, from the repo only:"
+REVIEWER_DONE = "ReviewerDone"
+REVIEWED_COMMIT = re.compile(r"[0-9a-f]{40}")
+REVIEW_FREE_MEMORY = re.compile(r"memory/[^/]+\.md")
+REVIEW_FREE_FILES = ("PROJECT_KANBAN.md", MINIMAL_LOG_REL)
+REVIEW_BASE_REF = "refs/heads/main"
+UNRESOLVED_MERGE = re.compile(GIT_VERB_PREFIX + r"merge(?=\s|$)")
+REVIEW_REMEDY = (
+    "{tid} (extended track) has no fresh reviewer record for {branch} at {tip}: spawn "
+    "`Agent({{ subagent_type: \"qa-expert\", description: \"Reviewer: {tid}\", prompt: "
+    "\"{prefix}\\nTask ID: {tid}\\nCommit: {tip}\\n…\" }})` on that commit (it may run in the "
+    "background), with this session's active-task state set to {tid}; the `SubagentStop` hook "
+    "writes the `ReviewerDone` record when the reviewer ends (docs/claude-md/pipeline-stages.md, "
+    "Stage 4)")
+
+
+def reviewer_commit(record, task_id):
+    """The commit a `ReviewerDone` record for `task_id` names, or None when the record is not one
+    (tool name, exact task ID, a full lower-case commit hash)."""
+    if not isinstance(record, dict) or record.get("tool_name") != REVIEWER_DONE:
+        return None
+    commit = record.get("commit")
+    if record.get("task_id") != task_id or not isinstance(commit, str):
+        return None
+    return commit if REVIEWED_COMMIT.fullmatch(commit) else None
+
+
+def _read_anchors(path, name):
+    """`{line_no: {hash, ...}}`, as `scripts/verify_trace.py` `read_anchors` reads them."""
+    anchors = {}
+    try:
+        with open(path, encoding="utf-8", errors="replace") as f:
+            for raw in f:
+                parts = raw.split()
+                if len(parts) == 3 and parts[0] == name and parts[1].isdigit():
+                    anchors.setdefault(int(parts[1]), set()).add(parts[2])
+    except (FileNotFoundError, NotADirectoryError):
+        pass
+    return anchors
+
+
+def _reviewed_commits(path, task_id):
+    """The commits named by the hook-written `ReviewerDone` records for `task_id` in one trace file:
+    each line's hash matches its content, its `prev` is the chained line before it (genesis for the
+    first), and its anchor line holds that hash. Raises on an unreadable file or anchor."""
+    with open(path, "rb") as f:
+        data = f.read()
+    if REVIEWER_DONE.encode() not in data:
+        return []
+    stem = os.path.basename(path)[:-len(".jsonl")]
+    anchors = _read_anchors(anchor_path(ROOT, stem), safe_name(stem, "_untagged"))
+    commits, prev = [], GENESIS
+    for number, raw in enumerate(data.split(b"\n"), 1):
+        try:
+            record = json.loads(raw)
+        except Exception:
+            continue
+        if not isinstance(record, dict) or not isinstance(record.get("hash"), str):
+            continue
+        linked = record.get("prev") == prev
+        prev = record["hash"]
+        commit = reviewer_commit(record, task_id)
+        if (commit and linked and "anchor" not in record
+                and chain_hash(record) == record["hash"] and record["hash"] in anchors.get(number, ())):
+            commits.append(commit)
+    return commits
+
+
+def _review_free(path, task_id):
+    return (path in REVIEW_FREE_FILES or path == f"tasks/TASK_REVIEW_{task_id}.md"
+            or (REVIEW_FREE_MEMORY.fullmatch(path) is not None and path != "memory/MEMORY.md"))
+
+
+def _reviewed_code_is_tip(task_id, commit, tip, directory):
+    """True when `commit` is an ancestor of `tip` and only review-free files differ between them."""
+    held = _git(directory, "--no-replace-objects", "merge-base", "--is-ancestor", commit, tip)
+    if held is None or held.returncode != 0:
+        return False
+    diff = _git(directory, "--no-replace-objects", "diff", "--name-only", "--no-renames",
+                "--no-ext-diff", "--no-textconv", "-z", commit, tip)
+    if diff is None or diff.returncode != 0:
+        return False
+    return all(_review_free(path, task_id) for path in diff.stdout.split("\0") if path)
+
+
+def trace_shows_review(task_id, tip, directory):
+    """AC 5, AC 12: True only when some `ReviewerDone` record in `TRACE_DIR/*.jsonl` (the task's own
+    file first) proves a reviewer of `task_id` ended on a commit whose code is `tip`'s. Any doubt is
+    False."""
+    try:
+        own = os.path.join(TRACE_DIR, f"{task_id}.jsonl")
+        paths = sorted(glob.glob(os.path.join(glob.escape(TRACE_DIR), "*.jsonl")))
+        for path in sorted(paths, key=lambda p: p != own):
+            for commit in _reviewed_commits(path, task_id):
+                if _reviewed_code_is_tip(task_id, commit, tip, directory):
+                    return True
+    except Exception:
+        return False
+    return False
+
+
+def review_in_scope(task_id, tip, directory):
+    """AC 6: True when the task is extended track — its guide is at `tip`, in the main checkout,
+    or in a commit of `main..tip` — and on any doubt."""
+    rel = f"tasks/TASK_GUIDE_{task_id}.md"
+    if os.path.isfile(os.path.join(TASKS_DIR, f"TASK_GUIDE_{task_id}.md")):
+        return True
+    at_tip = _git(directory, "--no-replace-objects", "cat-file", "-e", f"{tip}:{rel}")
+    if at_tip is None or at_tip.returncode == 0:
+        return True
+    base = _git(directory, "rev-parse", "--verify", "--quiet", REVIEW_BASE_REF + "^{commit}")
+    span = (f"{base.stdout.strip()}..{tip}" if base is not None and base.returncode == 0
+            else tip)
+    history = _git(directory, "--no-replace-objects", "log", "--format=%H", span, "--", rel)
+    if history is None or history.returncode != 0:
+        return True
+    return bool(history.stdout.strip())
+
+
+MERGE_CONTROL_FLAGS = frozenset({"--abort", "--continue", "--quit"})
+UNREAD_MERGE_REASON = ("cannot tell which branch this merge brings in, so its reviewer record "
+                       "cannot be checked (T341) — run `git merge <branch>` on its own")
+
+
+def _per_action_review_targets(actions):
+    """Stage 4 P1: `(targets, doubts)` for a command `branch_targets` does not resolve: two or more
+    git actions, or one merge action whose directory is unknown. Each `git merge` action's sources, and each `git push`
+    action's task-branch refspecs, are read on their own, so `git checkout main && git merge <b>`
+    and `git merge <b> && git push` are checked like `git merge <b>`. A merge that names no source
+    (other than `--abort`, `--continue`, `--quit`) or whose directory is unknown is a doubt (AC 5).
+    A source that names no task is not a task branch and is not checked."""
+    id_regex = re.compile(task_id_pattern(ROOT, bounded=True), re.IGNORECASE)
+    sources, doubts = [], []
+    for args, where in actions:
+        if args[0] == "merge":
+            merged = _merge_sources(args[1:], where)
+            if (not merged and not MERGE_CONTROL_FLAGS.intersection(args[1:])) or (
+                    merged and where is None):
+                doubts.append(UNREAD_MERGE_REASON)
+                continue
+            sources.extend(merged)
+        elif args[0] == "push":
+            pushed = []
+            _push_task_id(args[1:], where, id_regex, pushed)  # collects each task-named refspec
+            sources.extend(pushed)
+    targets = []
+    for directory, branch in sources:
+        task_id = _ref_task_id(branch, id_regex)
+        if task_id and (task_id, branch, directory) not in targets:
+            targets.append((task_id, branch, directory))
+    return targets, doubts
+
+
+def review_blockers(command, cwd, scannable, narrowed_push):
+    """The block lines for each extended-track task branch `command` merges, or pushes when the
+    push is narrowed to that task (T197) or chained with another git action (Stage 4 P1), with no
+    fresh reviewer record. Never raises."""
+    try:
+        actions = _git_actions(command, cwd)
+        if actions is None:
+            # The harness always sends an absolute `cwd`; then a merge the resolver cannot read is
+            # a doubt. An event with no `cwd` (a hand-built test event) leaves nothing to resolve.
+            if (isinstance(cwd, str) and os.path.isabs(cwd)
+                    and UNRESOLVED_MERGE.search(scannable)):
+                return ["cannot tell which branch this merge brings in, so its reviewer record "
+                        "cannot be checked (T341) — run `git merge <branch>` on its own"]
+            return []
+        chained = len(actions) > 1 and any(args[0] in ("merge", "push") for args, _ in actions)
+        if not any(args[0] == "merge" for args, _ in actions) and not narrowed_push and not chained:
+            return []
+        targets, _ = branch_targets(command, cwd)
+        found = []
+        # Second Stage 4 P1: one merge action (or a narrowed push) that `branch_targets` leaves
+        # unresolved, e.g. after `cd <dir> ;` or `cd <dir> ||` (directory unknown), is read the same
+        # way, so its unknown directory is a doubt, not a pass.
+        single = len(actions) == 1 and (actions[0][0][0] == "merge" or narrowed_push)
+        if not targets and (chained or single):
+            targets, found = _per_action_review_targets(actions)
+            found = list(dict.fromkeys(found))
+        for task_id, branch, where in targets:
+            tid = task_id.upper()
+            done = _git(where, "rev-parse", "--verify", "--quiet", f"{branch}^{{commit}}")
+            tip = done.stdout.strip() if done is not None and done.returncode == 0 else ""
+            if not SHA_PATTERN.match(tip):
+                found.append(f"{tid}: cannot resolve {branch} to a commit, so its reviewer "
+                             "record cannot be checked (T341)")
+            elif review_in_scope(tid, tip, where) and not trace_shows_review(tid, tip, where):
+                found.append(REVIEW_REMEDY.format(tid=tid, branch=branch, tip=tip,
+                                                  prefix=REVIEWER_PROMPT_PREFIX))
+        return found
+    except Exception as exc:
+        return [f"the reviewer check failed ({type(exc).__name__}) (T341)"]
+
+
 # --- What to actually do about an unattributed Bash call (T095 defect B) ----
 #
 # This gate used to end its block with "a Bash command is attributed to a task
@@ -2845,7 +3066,9 @@ def main():
     # would meet no check at all (Stage 4 finding 4; D3 as revised). An unresolved
     # push, and every such task, keep the whole board (D2).
     scoped = pushed_task_ids(command, event.get("cwd"))
-    if scoped is not None and scoped in {tid.upper() for tid in [*in_progress, *ready_review]}:
+    narrowed_push = (scoped is not None
+                     and scoped in {tid.upper() for tid in [*in_progress, *ready_review]})
+    if narrowed_push:
         in_progress = [tid for tid in in_progress if tid.upper() == scoped]
         ready_review = [tid for tid in ready_review if tid.upper() == scoped]
 
@@ -2914,6 +3137,9 @@ def main():
                 f"Tasks in Ready for Review with an Evidence row marked fail: "
                 f"{', '.join(failed_rows)}"
             )
+
+    # T341: per merged (or narrowed pushed) branch, never in the board-wide loop above.
+    blockers.extend(review_blockers(command, event.get("cwd"), scannable, narrowed_push))
 
     if blockers:
         result = {
