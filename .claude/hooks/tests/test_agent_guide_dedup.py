@@ -149,7 +149,8 @@ T069_BASELINE_REF = "8d6d56b"
 # REPOINTED AGAIN by T289 (`c566b2b6` -> `83ac3e7a`, T289's edit commit; the Tracks sentence's "on `skip`, `blocked` or `fail` merges nothing" becomes "on `blocked` or `fail` merges nothing", because a docs-only SKIP is now a pass: TASK_GUIDE_T289 AC 7, user request of 2026-11-08). Eight bytes shorter; nothing collapsed. Repointed, NOT deleted.
 # REPOINTED AGAIN by T307 (`83ac3e7a` -> `3212718d`, T307's second AGENTS.md commit; the `[admin]` sentence's "`ship` stays the user's" becomes "`ship` runs (plan only)", the same 26 bytes, so the 21724-byte cap holds: TASK_GUIDE_T307 AC 3, user request of 2026-11-11). Same line, still 196 lines; nothing collapsed. Repointed, NOT deleted.
 # REPOINTED AGAIN by T317 (`3212718d` -> `7ed30604`, T317's main commit; the `## Tracks` paragraph gains one sentence pointing to `### Session tags`: "`[ticket]` and `[admin]` hold for the whole session until `[stop]` or another tag: the Supervisor then works the board one ticket at a time": TASK_GUIDE_T317 AC 4, user request of 2026-11-15). Same line, still 196 lines; nothing collapsed. Repointed, NOT deleted.
-T070_BASELINE_REF = "7ed30604"  # T317 (was 3212718d)
+# REPOINTED AGAIN by T341 (`7ed30604` -> `5f54ee3c`, T341's last AGENTS.md commit; Hard-Stop Gate 1's last sentence and the Stage 3/4 lines say the Supervisor writes the code on the extended track and one fresh reviewer spawn is required by the merge gate: TASK_GUIDE_T341 AC 1, DDR-0011, user request of 2026-11-20). Same lines, still 196 lines; nothing collapsed. Repointed, NOT deleted.
+T070_BASELINE_REF = "5f54ee3c"  # T341 (was 7ed30604)
 
 # T082's own edit commit (same commit as the repoint above). T082 adds a mandatory Base Rule bullet
 # to `general-agent-template.md` too (the same untrusted-content pointer) — a legitimate, required
