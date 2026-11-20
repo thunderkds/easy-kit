@@ -99,6 +99,7 @@
 
 
 ### In Progress
+- [ ] **T344** — `site/docs.html` gets a Change log section listing every release | frontend-developer | C2 | Risk: Low | P2 | Started 2026-11-20 (user: page "docs.html", scope "Every release"): branch `feat/t344-changelog`, worktree `../wt-t344` | Track: extended
 
 
 
