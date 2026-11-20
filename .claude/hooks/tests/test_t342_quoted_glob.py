@@ -106,6 +106,9 @@ class QuotedGlobTest(base.SensitivePathHookTest):
             ('cd d; grep "$(ls .c*)" f', ".claude"),         # command substitution runs
             ("cd d; sudo sed 's/ .c* //' f", ".claude"),      # wrapper before the command word
             ("cd d; find . -name '.c*' -delete", ".claude"),  # find is not on the list
+            # Stage 4 P1: `\"` is a literal quote in the shell, so the glob after it is unquoted.
+            (r'cd d; sed \" .c* \" f', ".claude"),
+            (r'cd d; sed -i -e "s/a/b/" \" .cl* \"', ".claude"),
         ]
         for command, needle in cases:
             with self.subTest(command=command):

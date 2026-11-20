@@ -308,8 +308,8 @@ def unexpanded_globs(text):
     A span counts only when its segment command matches `NO_GLOB_COMMAND_PATTERN`, the span
     has no executor and, behind `sed`, no `e` command. The scan mirrors shell_data's
     `strip_quoted_spans`: quotes pair with the next same quote, a segment boundary outside a
-    span starts a new segment, and an unterminated quote ends the scan, so the tail keeps its
-    globs. Quote characters are token separators, so no token mixes a span with outside text.
+    span starts a new segment, and an unterminated quote or a backslash-escaped opening quote
+    ends the scan, so the tail keeps its globs (`\\\\"` over-asks: the safe side). Quote characters are token separators, so no token mixes a span with outside text.
     """
     out = list(text)
     segment_start = 0
@@ -317,6 +317,8 @@ def unexpanded_globs(text):
     while i < len(text):
         char = text[i]
         if char in "\"'":
+            if i and text[i - 1] == "\\":
+                break  # `\"` is a literal quote: what follows is unquoted (Stage 4 P1)
             close = text.find(char, i + 1)
             if close == -1:
                 break
