@@ -598,3 +598,58 @@ def test_merge_abort_continue_and_quit_still_pass(gate, command):
     fx = gate(kanban(done=(TID,)))
     fx.extended()  # extended track, no reviewer record: nothing is merged, so nothing is checked
     assert reason(command, fx.main) is None
+
+
+# ---------------------------------------------------------------------------
+# Second Stage 4 P1: one merge action whose directory is unknown (`cd <dir> ;`, `cd <dir> ||`)
+# ---------------------------------------------------------------------------
+#
+# After `cd <dir> ;` or `cd <dir> ||` the resolver cannot be sure where the merge runs, so the
+# action's directory is unknown and `branch_targets` gives no target. The merge is refused as a
+# doubt (AC 5), with or without a reviewer record: the gate cannot tell which checkout it merges in.
+
+@pytest.mark.parametrize("sep", [" ; ", " || "], ids=["semicolon", "or"])
+def test_a_merge_after_an_uncertain_cd_is_refused_as_a_doubt(gate, sep):
+    fx = gate(kanban(done=(TID,)))
+    fx.extended()
+    command = "cd " + fx.main + sep + MERGE + " --no-ff " + BRANCH
+    text = reason(command, fx.main)
+    assert text is not None and "cannot tell which branch this merge brings in" in text, text
+    fx.review()
+    text = reason(command, fx.main)  # a record does not settle where the merge runs
+    assert text is not None and "cannot tell which branch this merge brings in" in text, text
+
+
+def test_a_merge_after_a_certain_cd_is_judged_as_before(gate):
+    fx = gate(kanban(done=(TID,)))
+    fx.extended()
+    command = "cd " + fx.main + " && " + MERGE + " --no-ff " + BRANCH
+    assert_review_block(reason(command, fx.main))
+    fx.review()
+    assert reason(command, fx.main) is None
+
+
+def test_a_lone_merge_and_merge_abort_behave_as_before(gate):
+    fx = gate(kanban(done=(TID,)))
+    fx.extended()
+    assert_review_block(merge(fx))
+    assert reason(MERGE + " --abort", fx.main) is None
+    fx.review()
+    assert merge(fx) is None
+
+
+# ---------------------------------------------------------------------------
+# Second Stage 4 P3: the ancestor check on its own
+# ---------------------------------------------------------------------------
+
+def test_a_reviewed_commit_with_the_tips_tree_that_is_not_its_ancestor_is_refused(gate):
+    """A rebase or cherry-pick of the same code: the tree diff to the tip is empty (review-free),
+    but the named commit is not in the tip's history, so it is not the code being merged."""
+    fx = gate(kanban(done=(TID,)))
+    fx.extended()
+    tip = fx.tip()
+    base = git(fx.main, "rev-parse", "main")
+    twin = git(fx.main, "commit-tree", tip + "^{tree}", "-p", base, "-m", "same tree, other history")
+    assert git(fx.main, "diff", "--name-only", twin, tip) == ""  # review-free: nothing differs
+    fx.review(twin)
+    assert_review_block(merge(fx))

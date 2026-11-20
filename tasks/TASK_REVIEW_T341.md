@@ -144,6 +144,36 @@ FAILED .claude/hooks/tests/test_t341_reviewer_gate.py::test_a_chained_merge_that
 9 failed, 19 passed, 268 deselected in 1.32s
 ```
 
+**BEFORE (second Stage 4 P1 fix, merge after an uncertain `cd`)**: captured by the common-infrastructure
+sub-agent at `f3096282f860cc52747b44a8e7d176ca41fc1236`, after the red tests were written and before any
+fix commit (the gate's `git diff --stat` is empty). `cd <main> ; git merge --no-ff <b>` and
+`cd <main> || git merge --no-ff <b>` are allowed with no reviewer record; the `&&` shape, a lone merge,
+`git merge --abort` and the new ancestor-only case already behave as wanted:
+
+```
+$ date -u +%Y-%m-%dT%H:%M:%SZ; git rev-parse HEAD; git diff --stat HEAD -- .claude/hooks/pre_bash_block_unsafe_merge.py; python3 -m pytest .claude/hooks/tests/test_t341_reviewer_gate.py -q -p no:cacheprovider --tb=no -rf -k "uncertain_cd or certain_cd or lone_merge_and or not_its_ancestor"
+2026-11-20T14:29:43Z
+f3096282f860cc52747b44a8e7d176ca41fc1236
+FAILED .claude/hooks/tests/test_t341_reviewer_gate.py::test_a_merge_after_an_uncertain_cd_is_refused_as_a_doubt[semicolon]
+FAILED .claude/hooks/tests/test_t341_reviewer_gate.py::test_a_merge_after_an_uncertain_cd_is_refused_as_a_doubt[or]
+2 failed, 3 passed, 64 deselected in 0.35s
+```
+
+The ancestor-only test kills the reviewer's mutation: with `merge-base --is-ancestor`'s result ignored
+(a temporary in-place edit, reverted with `git checkout --` before any commit), only it fails beyond the
+two P1 reds:
+
+```
+mutation (is-ancestor result ignored):
+ .claude/hooks/pre_bash_block_unsafe_merge.py   |  2 -
+ .claude/hooks/tests/test_t341_reviewer_gate.py | 55 ++++++++++++++++++++++++++
+ 2 files changed, 55 insertions(+), 2 deletions(-)
+FAILED .claude/hooks/tests/test_t341_reviewer_gate.py::test_a_merge_after_an_uncertain_cd_is_refused_as_a_doubt[semicolon]
+FAILED .claude/hooks/tests/test_t341_reviewer_gate.py::test_a_merge_after_an_uncertain_cd_is_refused_as_a_doubt[or]
+FAILED .claude/hooks/tests/test_t341_reviewer_gate.py::test_a_reviewed_commit_with_the_tips_tree_that_is_not_its_ancestor_is_refused
+3 failed, 66 passed in 2.85s
+```
+
 **AFTER**: [same command, post-change] OR [verbatim excerpt of the new content]
 
 **DELTA**: [one sentence — what a user can now do that they could not before]
