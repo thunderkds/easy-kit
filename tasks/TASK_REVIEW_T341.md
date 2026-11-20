@@ -122,6 +122,28 @@ The doctrine text of AC 14 as it is now, `docs/claude-md/pipeline-stages.md` Sta
 
 > The exact shape, in the foreground (not `run_in_background`), with this session's active-task state set to `<ID>`:
 
+**BEFORE (Stage 4 P1 fix, chained merge)**: captured by the common-infrastructure sub-agent at
+`9024d6ed8065d3af75c492cb91c2ffcb08d73e2b`, after the red tests were written and before any fix
+commit (the gate unchanged: `git diff --stat HEAD -- .claude/hooks/pre_bash_block_unsafe_merge.py`
+is empty). Every chained shape is allowed with no reviewer record; `git merge --abort/--continue/--quit`
+and the `[admin]` case already pass:
+
+```
+$ date -u +%Y-%m-%dT%H:%M:%SZ; git rev-parse HEAD; git diff --stat HEAD -- .claude/hooks/pre_bash_block_unsafe_merge.py; python3 -m pytest .claude/hooks/tests/test_t341_reviewer_gate.py .claude/hooks/tests/test_admin_tag.py -q -p no:cacheprovider --tb=no -rf -k "chained or abort_continue or t341_admin"
+2026-11-20T11:37:15Z
+9024d6ed8065d3af75c492cb91c2ffcb08d73e2b
+FAILED .claude/hooks/tests/test_t341_reviewer_gate.py::test_a_chained_merge_or_task_branch_push_with_no_reviewer_record_is_refused[checkout-merge]
+FAILED .claude/hooks/tests/test_t341_reviewer_gate.py::test_a_chained_merge_or_task_branch_push_with_no_reviewer_record_is_refused[pull-merge]
+FAILED .claude/hooks/tests/test_t341_reviewer_gate.py::test_a_chained_merge_or_task_branch_push_with_no_reviewer_record_is_refused[merge-push-main]
+FAILED .claude/hooks/tests/test_t341_reviewer_gate.py::test_a_chained_merge_or_task_branch_push_with_no_reviewer_record_is_refused[merge-push]
+FAILED .claude/hooks/tests/test_t341_reviewer_gate.py::test_a_chained_merge_or_task_branch_push_with_no_reviewer_record_is_refused[merge-branch-d]
+FAILED .claude/hooks/tests/test_t341_reviewer_gate.py::test_a_chained_merge_or_task_branch_push_with_no_reviewer_record_is_refused[merge-or-push]
+FAILED .claude/hooks/tests/test_t341_reviewer_gate.py::test_a_chained_merge_or_task_branch_push_with_no_reviewer_record_is_refused[push-branch-push-main]
+FAILED .claude/hooks/tests/test_t341_reviewer_gate.py::test_a_chained_merge_of_a_code_change_after_the_reviewed_commit_is_refused
+FAILED .claude/hooks/tests/test_t341_reviewer_gate.py::test_a_chained_merge_that_names_no_branch_is_refused
+9 failed, 19 passed, 268 deselected in 1.32s
+```
+
 **AFTER**: [same command, post-change] OR [verbatim excerpt of the new content]
 
 **DELTA**: [one sentence — what a user can now do that they could not before]

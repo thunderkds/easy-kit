@@ -187,13 +187,14 @@ def reason(command, cwd, transcript_path):
     return json.loads(out)["reason"] if out.strip() else None
 
 
-def auto_verified(fx):
+def auto_verified(fx, reviewed=True):
     """T900 at Ready for Review with a hook-written pass row and its run record, committed, and
-    (T341) a fresh reviewer record for the verified commit."""
+    (T341) a fresh reviewer record for the verified commit (unless `reviewed` is False)."""
     fx.task_file("TASK_GUIDE_T900.md", GUIDE_VACATED.format(tid="T900"), commit=True)
     verified = git(fx.wt, "rev-parse", "HEAD")
     verify_record.write_record(merge_gate.ROOT, "T900", verified, "pass", "s-1", "log.txt")
-    fx.reviewed(verified)  # T341: a fresh reviewer ran on the verified commit
+    if reviewed:
+        fx.reviewed(verified)  # T341: a fresh reviewer ran on the verified commit
     cells = verify_record.row_cells(verified, "pass", "s-1", "log.txt")
     fx.task_file("TASK_REVIEW_T900.md", REVIEW.format(tid="T900", result=cells[0],
                                                       notes=cells[1]), commit=True)
@@ -229,6 +230,19 @@ def test_sc2_admin_with_a_passed_auto_verify_may_merge_its_branch(gate, tmp_path
     fx = gate(kanban(ready=("T900",)))
     auto_verified(fx)
     assert reason(command, fx.main, session(tmp_path, fx, "do T-thing [admin]")) is None
+
+
+def test_t341_admin_merge_is_refused_without_a_reviewer_record(gate, tmp_path):
+    """T341 Stage 4 P2: `[admin]` lets the merge past the auto-mode check; the reviewer check
+    still runs after it. No `ReviewerDone` for the tip: refused; with one: allowed (sc2 above)."""
+    fx = gate(kanban(ready=("T900",)))
+    auto_verified(fx, reviewed=False)
+    path = session(tmp_path, fx, "do T-thing [admin]")
+    text = reason(MERGE + " feat/t900-x", fx.main, path)
+    assert text is not None and "T900 (extended track) has no fresh reviewer record" in text, text
+    assert "does not allow this command" not in text, text  # not the admin check: the review one
+    fx.reviewed(git(fx.main, "rev-parse", "feat/t900-x"))
+    assert reason(MERGE + " feat/t900-x", fx.main, path) is None
 
 
 def test_sc2_admin_merge_with_global_options_is_gated_the_same(gate, tmp_path):

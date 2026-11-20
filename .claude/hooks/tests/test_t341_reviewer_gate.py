@@ -523,3 +523,78 @@ def test_a_merge_whose_branch_cannot_be_resolved_is_refused(gate):
     fx.review()
     text = reason(MERGE + " --no-ff " + BRANCH + "; echo done", fx.main)
     assert text is not None and "cannot tell which branch this merge brings in" in text, text
+
+
+# ---------------------------------------------------------------------------
+# Stage 4 P1: a merge or task-branch push chained with another git command is checked too
+# ---------------------------------------------------------------------------
+#
+# `branch_targets` resolves only a command with one git action, so before the fix every chained
+# shape below was allowed with no reviewer record. Each merge action's sources (and each push
+# action's task-branch refspecs) are now resolved per action; a merge whose source cannot be read
+# is refused (AC 5: any doubt is false).
+
+CHAINED = [
+    G + "checkout main && " + MERGE + " --no-ff " + BRANCH,
+    G + "pull github main && " + MERGE + " --no-ff " + BRANCH,
+    MERGE + " --no-ff " + BRANCH + " && " + PUSH + " github main",
+    MERGE + " " + BRANCH + " && " + PUSH,
+    MERGE + " " + BRANCH + " && " + G + "branch -d " + BRANCH,
+    MERGE + " " + BRANCH + " || " + PUSH + " github main",
+    PUSH + " github " + BRANCH + " && " + PUSH + " github main",
+]
+CHAINED_IDS = ["checkout-merge", "pull-merge", "merge-push-main", "merge-push", "merge-branch-d",
+               "merge-or-push", "push-branch-push-main"]
+
+
+@pytest.mark.parametrize("command", CHAINED, ids=CHAINED_IDS)
+def test_a_chained_merge_or_task_branch_push_with_no_reviewer_record_is_refused(gate, command):
+    fx = gate(kanban(ready=(TID,)))
+    fx.extended()
+    fx.verified()
+    assert_review_block(reason(command, fx.main))
+
+
+@pytest.mark.parametrize("command", CHAINED, ids=CHAINED_IDS)
+def test_a_chained_merge_or_task_branch_push_with_a_record_on_the_tip_is_allowed(gate, command):
+    fx = gate(kanban(ready=(TID,)))
+    fx.extended()
+    fx.verified()
+    fx.review()
+    assert reason(command, fx.main) is None
+
+
+def test_a_chained_merge_of_a_code_change_after_the_reviewed_commit_is_refused(gate):
+    fx = gate(kanban(done=(TID,)))
+    reviewed = fx.extended()
+    fx.review(reviewed)
+    fx.commit({"app.py": "x = 2\n"})
+    assert_review_block(reason(G + "checkout main && " + MERGE + " --no-ff " + BRANCH, fx.main))
+
+
+def test_a_chained_merge_that_names_no_branch_is_refused(gate):
+    """`git checkout main && git merge` merges the upstream: which task it brings in is a doubt."""
+    fx = gate(kanban(done=(TID,)))
+    fx.extended()
+    fx.review()
+    text = reason(G + "checkout main && " + MERGE, fx.main)
+    assert text is not None and "cannot tell which branch" in text and "(T341)" in text, text
+
+
+def test_a_chained_merge_of_a_branch_that_names_no_task_is_not_checked(gate):
+    """Bringing `main` into the task branch is not a merge of a task branch."""
+    fx = gate(kanban(done=(TID,)))
+    fx.extended()
+    assert reason("cd " + fx.wt + " && " + MERGE + " main && " + G + "branch -d feat/none",
+                  fx.main) is None
+
+
+@pytest.mark.parametrize("command", [
+    MERGE + " --abort", MERGE + " --continue", MERGE + " --quit",
+    MERGE + " --abort && " + G + "checkout main",
+    G + "checkout main && " + MERGE + " --abort",
+])
+def test_merge_abort_continue_and_quit_still_pass(gate, command):
+    fx = gate(kanban(done=(TID,)))
+    fx.extended()  # extended track, no reviewer record: nothing is merged, so nothing is checked
+    assert reason(command, fx.main) is None
