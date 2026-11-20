@@ -20,9 +20,11 @@ Mode: auto
 - Suite: `python -m pytest .claude/hooks/tests tests -q -p no:cacheprovider` — `53 failed, 7522 passed, 24 skipped` with f7 still in; the extra failure was `tests/test_repo_layout_t215.py::test_moved_files_left_the_root_and_kept_their_bytes` (decision 5), now `7 passed`. The other 52 fail the same way on unchanged `main` (`52 failed, 141 passed` on those files): shells this machine lacks (`busybox`, `zsh` variants) and environment-bound timestamp tests. Python here has no pytest; runs used a scratch venv with pytest 9.2.0.
 - Real run: `sh scripts/validate.sh` — `validate.sh: PASS` on the branch and on `main`.
 - Simplify: skipped: the change outside tests and docs is deletions only.
+- verify: ☑ pass — auto-run by hook, session a3398d99-fb6c-4002-9013-ebed10686317, commit 84049bb73b0251a876ce44a3caa2cb6bd68e248e, log .claude/verify-runs/T340-84049bb73b02.log
 **Files:** `scripts/measure_agent_guide_tokens.py` (deleted), `scripts/test-claude-md-refs.sh` (deleted), `experiments/plugin-spike/` (deleted), `tests/test_plugin_spike.py` (deleted), `experiments/self-review-spike/` (deleted, `RESULTS.md` moved), `docs/experiments/self-review-spike-RESULTS.md`, `docs/prd/PRD_self-review.md`, `tests/test_t340_remove_unused_files.py`, `tasks/MINIMAL_LOG.md`, `PROJECT_KANBAN.md`
 **Memory:** nothing new
-**Not done:** merge (admin: after the auto verify pass); push: this repo has no `origin` remote (remote is `github`), and the `[admin]` gate pushes to `origin` only — T321 covers that; f5 after machine 2's T328 merges; follow-up: T326 and T327 still sit in Ready for Review although merged on 2026-11-18.
+**Not done:** merge (admin: after the auto verify pass); auto verify: ☑ pass (session a3398d99-fb6c-4002-9013-ebed10686317, commit 84049bb73b02, log .claude/verify-runs/T340-84049bb73b02.log); push: this repo has no `origin` remote (remote is `github`), and the `[admin]` gate pushes to `origin` only — T321 covers that; f5 after machine 2's T328 merges; follow-up: T326 and T327 still sit in Ready for Review although merged on 2026-11-18; `docs/brainstorming/BRAINSTORMING_LOG_self-review.md:3` still names the old spike path `experiments/self-review-spike/RESULTS.md` (a dated record, left as written; found by the verify run).
+Paused: done not moved — report incomplete: auto verify slot
 
 ## T303 — The docs page says what T285, T288, T295 and T297–T299 changed · minimal
 Mode: auto
