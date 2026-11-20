@@ -121,8 +121,10 @@ def _shown():
 
 
 def render_title(title):
-    """The board title as the section shows it: escaped, then backtick spans as `<code>`."""
-    return re.sub(r"`([^`]+)`", r"<code>\1</code>", html.escape(title, quote=False))
+    """The board title as the section shows it: escaped, then backtick spans as `<code>`, with a `<wbr>`
+    break hint after each `/` and `_` so a long path wraps at 375px (T199 precedent; no new CSS)."""
+    return re.sub(r"`([^`]+)`", lambda m: "<code>" + re.sub(r"([/_])", r"\1<wbr>", m.group(1)) + "</code>",
+                  html.escape(title, quote=False))
 
 
 # ---- AC 1 ------------------------------------------------------------------------------------
@@ -203,6 +205,7 @@ def test_ac4_the_page_shows_no_task_id_and_no_board_word():
 
 def test_ac4_render_title_escapes_and_keeps_code_spans():
     assert render_title("a < b & `x<y>` c") == "a &lt; b &amp; <code>x&lt;y&gt;</code> c"
+    assert render_title("`docs/a_b.md`") == "<code>docs/<wbr>a_<wbr>b.md</code>"
 
 
 # ---- AC 3 ------------------------------------------------------------------------------------
