@@ -100,6 +100,9 @@ class QuotedGlobTest(base.SensitivePathHookTest):
             ("cd d; sed 's/x/ls .cl* /e' f", ".claude"),     # sed `s///e` flag
             ("cd d; sed '1e rm .c*' f", ".claude"),           # sed `e` command after an address
             ("cd d; sed 's/x/rm .c* /ge' f", ".claude"),      # sed `s///e` flag after `g`
+            ("cd d; sed 's/x/rm .c* /eg' f", ".claude"),      # sed `s///e` flag before `g`
+            ("cd d; sed 's/x/rm .c* /3ew o' f", ".claude"),   # sed `s///e` flag inside `3ew`
+            ("cd d; sed 'x;$e rm .c*' f", ".claude"),         # sed `e` command after `$`
             ('cd d; grep "$(ls .c*)" f', ".claude"),         # command substitution runs
             ("cd d; sudo sed 's/ .c* //' f", ".claude"),      # wrapper before the command word
             ("cd d; find . -name '.c*' -delete", ".claude"),  # find is not on the list
