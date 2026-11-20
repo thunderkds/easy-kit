@@ -2805,8 +2805,8 @@ UNREAD_MERGE_REASON = ("cannot tell which branch this merge brings in, so its re
 
 
 def _per_action_review_targets(actions):
-    """Stage 4 P1: `(targets, doubts)` for a command of two or more git actions, which
-    `branch_targets` does not resolve. Each `git merge` action's sources, and each `git push`
+    """Stage 4 P1: `(targets, doubts)` for a command `branch_targets` does not resolve: two or more
+    git actions, or one merge action whose directory is unknown. Each `git merge` action's sources, and each `git push`
     action's task-branch refspecs, are read on their own, so `git checkout main && git merge <b>`
     and `git merge <b> && git push` are checked like `git merge <b>`. A merge that names no source
     (other than `--abort`, `--continue`, `--quit`) or whose directory is unknown is a doubt (AC 5).
@@ -2852,7 +2852,11 @@ def review_blockers(command, cwd, scannable, narrowed_push):
             return []
         targets, _ = branch_targets(command, cwd)
         found = []
-        if not targets and chained:
+        # Second Stage 4 P1: one merge action (or a narrowed push) that `branch_targets` leaves
+        # unresolved, e.g. after `cd <dir> ;` or `cd <dir> ||` (directory unknown), is read the same
+        # way, so its unknown directory is a doubt, not a pass.
+        single = len(actions) == 1 and (actions[0][0][0] == "merge" or narrowed_push)
+        if not targets and (chained or single):
             targets, found = _per_action_review_targets(actions)
             found = list(dict.fromkeys(found))
         for task_id, branch, where in targets:
