@@ -1948,7 +1948,8 @@ SIDEBAR_GROUPS = [
     ("// overview", ["Quick reference", "What you get", "Minimal and extended tracks"]),
     ("// getting started", ["Install", "Update flow", "Settings tool", "Install variants"]),
     ("// the team", ["Agent roles", "Skills", "Explorer", "Hooks", "Agent focus"]),  # T312 added Explorer after Skills
-    ("// reference", ["Packs", "Providers", "Repository layout", "Memory system", "MCPs", "Options"]),
+    ("// reference", ["Packs", "Providers", "Repository layout", "Memory system", "MCPs", "Options",
+                      "Change log"]),  # T344 added Change log after Options
 ]
 
 

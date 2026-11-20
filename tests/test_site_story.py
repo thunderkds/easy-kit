@@ -483,8 +483,8 @@ def test_each_stage_marks_exactly_one_key_skill_with_a_shape_and_a_text_cue():
 def test_docs_holds_all_17_section_ids_in_the_old_order():
     base = _baseline()
     assert len(base["sections"]) == 17
-    # T312 added #explorer after #skills; the 17 old sections keep their order
-    assert [sid for sid, _ in top_level_sections(docs_html()) if sid != "explorer"] == base["sections"]
+    # T312 added #explorer after #skills, T344 added #changelog last; the 17 old sections keep their order
+    assert [sid for sid, _ in top_level_sections(docs_html()) if sid not in ("explorer", "changelog")] == base["sections"]
 
 
 # T251: the Legacy preset in the settings catalog carries the kit's 4 deny rules (2 for the trace anchors,
@@ -611,7 +611,9 @@ def _redirect_ids():
 
 
 def test_redirect_id_list_equals_the_link_target_ids_of_docs():
-    assert sorted(_redirect_ids()) == sorted(_doc_ids(docs_html()))
+    # T344: #changelog is new on docs.html; no old link on the story page ever targeted it, so the
+    # redirect list does not need it (and site/index.html stays out of T344's scope).
+    assert sorted(_redirect_ids()) == sorted(i for i in _doc_ids(docs_html()) if i != "changelog")
 
 
 def _run_redirect(hash_value):

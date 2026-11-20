@@ -250,6 +250,7 @@
       <li><a href="#memory-system">Memory system</a></li>
       <li><a href="#mcps">MCPs</a></li>
       <li><a href="#options">Options</a></li>
+      <li><a href="#changelog">Change log</a></li>
     </ul>
   </nav>
 </aside>
@@ -3960,6 +3961,305 @@ curl -fsSL https://raw.githubusercontent.com/$GITHUB_USERNAME/easy-kit/main/setu
 </tbody>
 </table>
 </div>
+</section>
+
+<section id="changelog">
+<h2>Change log</h2>
+<p>Every release, newest first. Each entry gives a short summary, then every change it shipped, one line each, in the order the work was planned. A change sits in the release whose tag first contains the commit that marked it done; the release log in <code>RUNBOOK.md</code> decides for the changes it names.</p>
+<details open>
+<summary>Unreleased · 106 tasks</summary>
+<p>Merged after v2.2.0 and not yet tagged. The largest changes: the <code>[admin]</code>, <code>[ticket]</code> and <code>[stop]</code> session tags; the merge gate that counts only hook-written verify rows; and the Supervisor now writes extended-track code itself while the merge gate requires a finished fresh reviewer (<code>Reviewer: &lt;ID&gt;</code>, DDR-0011).</p>
+<ul>
+<li>An aborted install says what it actually did, not "nothing was replaced"</li>
+<li>Reinstall's closing summary under-reported which CLIs the run touched: it listed the picked CLIs, not the ones actually refreshed</li>
+<li>CI re-runs the Verification Command of every task a PR moves to Done</li>
+<li>Kit-arms experiment part 2: run 36 cells under the $60 cap, report against the frozen rule</li>
+<li>Kit-arms round 2: a scripted user answers at each stop, so the full kit is judged on its own design</li>
+<li>Auto-mode check follow-up: a paused task stops re-blocking every later stop, new pause reasons are written, and <code>tracks.md</code> documents the auto-mode limits</li>
+<li>Auto verify fires for every <code>[auto]</code> task, minimal track included, and writes its result into the report's auto verify slot</li>
+<li>Auto close-out: after an auto verify pass the hook moves the row to Done (Gates 5 and 6 still hold); the auto run does its own memory pass</li>
+<li>The merge gate blocks a push when a Companion score or UI design row reads <code>fail</code>, and stays silent when there is none</li>
+<li><code>score</code> skill: one easy-verifier session at <code>changes</code> scope writes the Companion score row</li>
+<li>Sub-agents can use easy-memory, and read less of <code>memory/<wbr>MEMORY.md</code></li>
+<li>The event-trace attribution channel was one file per checkout, so two live sessions mis-attributed each other's <code>Bash</code> calls</li>
+<li>The push gate checks only the task being pushed (resolved from its branch), not every task on the board</li>
+<li><code>wake</code> reads two sections of <code>memory/<wbr>MEMORY.md</code>, not the whole file</li>
+<li>The site's MCPs section lists easy-memory-mcp as a third optional companion, with honest claims</li>
+<li><code>settings-setup</code> skill — the Supervisor offers settings profiles at Stage 1 and writes High security by default, add-only</li>
+<li>Settings tool profiles — High security and Legacy on the Build tab, each with a "for whom" line, held equal to <code>profiles.json</code></li>
+<li><code>main</code> is green again: 15 failing tests fixed by shrinking what grew, never by raising a budget</li>
+<li>Auto verify for every task: the Supervisor starts the headless <code>/<wbr>verify</code> (<code>stop_<wbr>auto_<wbr>verify.py --start &lt;ID&gt;</code>) when a task is ready for review; a Stop hook is the backstop</li>
+<li>Restyle the landing page to the Graphite Mint theme (shared <code>theme.css</code>, self-hosted IBM Plex, family header)</li>
+<li>Visual-first landing page — diagrams lead each heavy section, long prose folds into Details</li>
+<li>Auto verify reads a PASS written in bold (<code>Verdict: PASS …</code>): a real pass is no longer recorded as blocked</li>
+<li>Auto verify refuses a verdict line that lists choices, and the doctrine names every accepted shape</li>
+<li>Merge gate closes four gaps — <code>git pull</code> gated, <code>timeout</code>-wrapped test runs count, <code>git merge-base</code> read-only, verify row committed on the branch</li>
+<li>Merge gate: <code>git -C &lt;dir&gt;</code> / <code>git -c k=v</code> forms and merges with options outside <code>MERGE_<wbr>FLAGS</code> are now gated and resolved</li>
+<li>Landing page takes the neon Graphite Mint accent with glow, per the updated design canvas</li>
+<li>Sidebar scroll-spy highlights the item above the clicked one</li>
+<li>Remove the old background-spawn markers (<code>.claude/<wbr>markers/<wbr></code>, 88 files) from git and ignore the folder</li>
+<li>Tidy the repo root (logs into <code>docs/<wbr></code>) and shorten Done/Closed board rows to one line, full text in <code>docs/<wbr>archive/<wbr></code></li>
+<li>Plugin spike: one skill, one agent, one blocking hook as a Claude Code plugin; same folder tried in Codex</li>
+<li><code>packs/<wbr>tech-lead</code>: a <code>tech-lead</code> agent + <code>architecture-docs</code> skill that writes a user-approved document map, then C4/overview, sequence + journey per core feature, ER, risk register, roadmap in <code>docs/<wbr>architecture/<wbr></code> (Markdown + Mermaid); PACK.md user guide, README + site <code>#packs</code> row</li>
+<li>Pipeline pointers for the tech-lead pack: Stage 2 spawns <code>tech-lead</code> for the document map, Stage 5 item 4 refreshes documents whose watched paths the merge touched — both only when <code>agents/<wbr>tech-lead.md</code> exists</li>
+<li>Drop the stale <code>setup.sh --pack</code> install lines: packs are activated by the approved <code>select-packs</code> copy; list <code>tech-lead</code> in folder-structure</li>
+<li>Debate Advocates frame the problem (WHAT / WHY / HOW) and each proposes its own option</li>
+<li>The auto-mode Stop hook counts an <code>Agent</code> call as an Advocate only when its description matches <code>Advocate &lt;n&gt;:</code> AND its prompt starts with <code>Using the repo, answer alone:</code></li>
+<li>Project readiness: <code>PROJECT_<wbr>SPEC.md</code> <code>## Readiness</code> section; spawn hook warns <code>⚠ HIGH RISK</code> while incomplete (never blocks); stage-done defined by it; auto mode never skips Stage 0 or Stage 1</li>
+<li>Stage 1 offers the optional companion MCP servers</li>
+<li><code>dotfiles</code> skill keeps agent config in one source (<code>plan</code>/<code>apply</code>/<code>status</code>, add-only)</li>
+<li>Auto-mode check false positive: any task touched after an <code>[auto]</code> request in the same session counted as an auto task; a hand-added board row also duplicated the registered one</li>
+<li><code>dotfiles</code> follow-up: refuse a target inside the source, refuse skill folder names with unprintable text, report a wrong source shape</li>
+<li>Story landing page — one visual flow on index.html, reference moves to docs.html</li>
+<li>Hooks find the real project when they run from a plugin</li>
+<li>Plugin package and MIT LICENSE at the repo root</li>
+<li>Skills and agents work under the easy-kit prefix</li>
+<li>/easy-kit:init sets up a project, and plugin hooks stand down beside in-repo hooks</li>
+<li>Real plugin install proven, then published on the README and site</li>
+<li>Rename a kit-arms report so no tracked names clash on Windows or macOS (plugin upload refused them)</li>
+<li>Pipeline becomes Stage 0–5 with no half numbers</li>
+<li>Rename the repo to easy-kit</li>
+<li>RUNBOOK post-deploy check also installs the plugin from GitHub (two commands in a fresh folder); today it tests <code>setup.sh</code> only</li>
+<li>Smaller plugin source: a git install copied ~28 MB while the plugin runs from ~2–2.5 MB</li>
+<li>Prepare the Anthropic plugin directory submission: fix <code>claude plugin validate . --strict</code> warnings (marketplace <code>description</code>, root <code>CLAUDE.md</code>, 512–2048 px PNG icon); the user submits at claude.ai/directory/manage</li>
+<li>Auto close-out wrote <code>Closed:</code> inside the review file's HTML comment, hidden when rendered; it now anchors on the first uncommented <code>## Auto decisions</code> block</li>
+<li><code>ux-evaluate</code> skill — the frontend agent checks its UI against the requirement's UX criteria; guide template gains UX criteria; code-review calls the same skill on UI diffs</li>
+<li>RUNBOOK names the <code>plugin/<wbr></code> file copies (<code>plugin.json</code>, <code>hooks/<wbr>hooks.json</code>, <code>icon.png</code>) and the <code>cp</code> commands to refresh them after a root edit</li>
+<li><code>ux-evaluate</code> follow-up: tap targets measured by <code>skills/<wbr>ux-evaluate/<wbr>scripts/<wbr>tap_<wbr>probe.py</code>; the scratch dir must be an absolute <code>mktemp -d</code> path</li>
+<li>Minimal-track deadlock after a blocked auto verify: the user's own <code>/<wbr>verify</code> now satisfies the merge gate, another session's open task no longer blocks every merge, and the stop check attributes tasks by session, not file time</li>
+<li><code>.claude/<wbr>settings.json</code> denies agent writes to session transcripts, so the user's <code>/<wbr>verify</code> proof gets the harness-anchors trust level; a custom <code>CLAUDE_<wbr>CONFIG_<wbr>DIR</code> is not covered</li>
+<li>Stop check: a parallel session's task already marked <code>Mode: auto</code> no longer blocks this session's stop</li>
+<li><code>self_<wbr>review.py</code> — watermark gate, citation check and proposal register for self-review</li>
+<li><code>self-review</code> skill — run the miner between <code>pre</code> and <code>post</code>, approvals become tasks</li>
+<li><code>tdd</code> + review template: prove each new test or mutation control can go red</li>
+<li>TASK_GUIDE template: list the pre-existing pin tests a task will hit, at Stage 2</li>
+<li><code>code-review</code>: stale-reference sweep for every fact the diff changes</li>
+<li><code>self_<wbr>review.py</code> keeps dropped and over-cap patterns for the next run (two-key in-run dedupe, <code>waiting</code> register state), unique report names, SKILL Step 6 says the report is local (<code>reports/<wbr>*</code> gitignored)</li>
+<li>Minimal track runs <code>/<wbr>simplify</code> after the change (step 4: skip under 20 code lines, keep no-behavior-change edits only, out-of-diff findings to <code>Not done:</code>)</li>
+<li>The docs page shows the self-review loop as a flow diagram (steps, your approval, and what it never does), not prose</li>
+<li>The Home and Docs links in the top nav are 44px wide on phones</li>
+<li>The home page journey flow gets a sixth step, "Improve it" (self-review)</li>
+<li>Stage 5 tells the Supervisor to remind the user about <code>/<wbr>self-review</code> after the memory pass: run <code>self_<wbr>review.py pre</code>; with <code>ready</code> and at least 3 files, one line to the user; never start the loop (Option C of <code>docs/<wbr>brainstorming/<wbr>BRAINSTORMING_<wbr>LOG_<wbr>self-review-trigger.md</code>)</li>
+<li>The home journey's sixth node says "Easy Kit · It proposes fixes" instead of "Your step · You improve it": the kit proposes, the user only starts and approves</li>
+<li>Karpathy autoresearch loop — seven spikes with evidence, then a decision</li>
+<li><code>[admin]</code> tag — auto mode plus merge and push after a passed verify</li>
+<li>Step limit counts per sub-agent run (<code>agent_<wbr>id</code>), not per session and task</li>
+<li><code>AGENTS.md</code> byte-size ratchet (the line cap tripped 0 times in 18 growing commits) and a cut-candidate list for the user to pick</li>
+<li>Auto-mode Stop check files a task's test, review and Advocate calls under the task they serve (6 of 10 avoidable stops)</li>
+<li><code>tasks/<wbr>attempts.tsv</code>: blocked and stopped runs derived from the event trace, full status line kept, append-only, no new hook</li>
+<li>Docs-only and tests-only tasks get a real pass verdict from the auto verify run (so <code>[admin]</code> needs no typed <code>/<wbr>verify</code>)</li>
+<li>Locked oracle: a task guide can lock its oracle test while the task runs</li>
+<li>Merge gate counts a test run with interpreter flags (<code>python3 -B -m pytest</code>)</li>
+<li>One <code>parse_<wbr>ts</code> for the hooks</li>
+<li>A Debate counts for its task only inside that task's work window</li>
+<li>A quoted heredoc marker no longer hides later lines from the merge gate (the heredoc scanner is now an allowlist: a body is stripped only for a plain header and one anchored commit form)</li>
+<li><code>[admin]</code> merge and push refuse repo config and hooks that can run code (allowlist)</li>
+<li>Merge gate: hidden git verbs, <code>merge --message</code>, and slot 2b brace and glob escapes</li>
+<li>A <code>## CLI Effort Table</code> beside the CLI Model Table</li>
+<li><code>craft-spawn-prompt</code> passes the effort from the table at spawn</li>
+<li>A task that moves up or fails <code>verify</code> gets one more effort step first</li>
+<li>Security-reviewer rules from the Cloudflare security-audit skill</li>
+<li>The docs page says how Stage 4 treats a security finding (a fold-out on <code>site/<wbr>docs.html</code>)</li>
+<li>The docs page describes the effort fold-out, the step-limit row, the <code>[admin]</code> config refusal and <code>tasks/<wbr>attempts.tsv</code></li>
+<li>Plugin hooks do nothing when <code>setup.sh</code> already wired the same hook</li>
+<li><code>[admin]</code> retries a blocked auto verify run once, then asks the user</li>
+<li><code>[admin]</code> runs a task from start to end; it asks only at project start, and stops only for high-impact events</li>
+<li>the merge gate accepts the user's own <code>/<wbr>verify &lt;ID&gt;</code> for an extended-track task</li>
+<li>the ordinary merge gate stops accepting a hand-typed <code>☑ pass</code> verify row with no proof (<code>verify_<wbr>row_<wbr>passes</code> counts any non-hook row with "pass" in Notes; <code>### Known limits</code> says it does not); repoint the two pins</li>
+<li><code>[admin]</code> stops when a Debate does not settle a choice</li>
+<li>a generator writes the kit's agent and skill data into <code>site/<wbr>docs.html</code>, and a test fails when it goes stale</li>
+<li>an "Explorer" section on <code>site/<wbr>docs.html</code> shows each agent's and skill's steps in order</li>
+<li>in board mode <code>online</code>, the sensitive-path hook asks once per path per task, not once per call</li>
+<li>session-wide <code>[admin]</code> and <code>[ticket]</code> tags run the board on their own; an "Autonomous" setup profile turns on auto mode</li>
+<li><code>site/<wbr>docs.html</code> explains the session tags <code>[ticket]</code>, <code>[admin]</code> and <code>[stop]</code></li>
+<li><code>[admin]</code> given as a reply to the Supervisor's own "merge Txxx?" question ("yes [admin]") does not bind Txxx: the merge gate needs the task ID in the request text, a guide added after it, or a loop task whose <code>--start</code> ran after the tag (impossible when the pass predates the tag: <code>--start</code> refuses "already filled"); bind the task the Supervisor's immediately preceding question named</li>
+<li>Extended track: the Supervisor writes the code, a fresh reviewer spawn is required at merge</li>
+<li>a glob inside a quoted span is not a path (sensitive-path hook false positive)</li>
+<li><code>site/<wbr>docs.html</code> gets a Change log section listing every release</li>
+</ul>
+</details>
+<details>
+<summary>v2.2.0 · 2026-10-28 · 17 tasks</summary>
+<p>Two tracks: on the minimal track the Supervisor writes the code and ends with a Decision record; the extended track keeps the full pipeline. <code>[auto]</code> runs with a Debate for open choices, a final report and a Stop-hook check, and a Stop hook runs <code>/verify</code> with a protected run record. The site gained the Settings tool and the MCPs section.</p>
+<ul>
+<li>The landing page reads as a scan-first reference, and links the Easy Verifier site</li>
+<li>The Skills section shows a stage flow with skill chips</li>
+<li>Site tables never scroll sideways — fit on desktop, stacked cards on phones</li>
+<li>An "MCPs" section lists the companion MCP servers: easy-verifier-mcp and easy-ui-mcp</li>
+<li>Writing Principles (ASD-STE100) become a named rule set next to Karpathy, for text a human reads only</li>
+<li><code>resolve-question</code> skill: a fact question is answered from quoted <code>file:line</code> evidence or by 2 read-only scanners, else escalated to the human</li>
+<li>AGENTS.md is the primary doctrine file; CLAUDE.md is only <code>@AGENTS.md</code></li>
+<li>Update can overwrite or keep all edited files in one choice on the plan screen, and logs every decision to <code>.claude/<wbr>update-log.md</code></li>
+<li>Kit-arms experiment part 1: fixture app, 6 graded tasks, runner, pre-registered keep/cut rule (no paid runs)</li>
+<li>Two tracks: small tasks run on the minimal track (Decision record in <code>tasks/<wbr>MINIMAL_<wbr>LOG.md</code>); big/risky tasks on the extended track</li>
+<li>Debate: in auto mode 2–3 read-only Advocates argue a question's options; the Supervisor decides and flags it for review; max 3 per task</li>
+<li>Auto mode: with <code>[auto]</code> either track runs to review without stopping and ends with a final report of every decision</li>
+<li>README and site describe the two tracks, the Debate step and <code>[auto]</code></li>
+<li>Auto verify: for an <code>[auto]</code> task a <code>Stop</code> hook runs the real <code>/<wbr>verify</code> headless and writes the <code>verify</code> row; the gate trusts it only with a run record</li>
+<li>Subagent definitions follow the Claude Academy "Creating a subagent" lesson — <code>color</code>, trigger-style descriptions, base template out of <code>agents/<wbr></code>, frontmatter test</li>
+<li>Site Settings tool, part 1 — Build mode: pick settings from a catalog, choose the target file, generate and copy <code>settings.json</code></li>
+<li>Site Settings tool, part 2 — Check mode: paste a <code>settings.json</code>, format it, validate it against the catalog and target file, visualize it, load it into Build</li>
+</ul>
+</details>
+<details>
+<summary>v2.1.0 · 2026-10-19 · 45 tasks</summary>
+<p>Online board mode (experimental, opt-in at setup, Linear first): the kit keeps its task board in an online tracker through <code>board_sync.py</code>, with an outbox for writes made offline, pull moments, and merge-gate filters for your own tasks.</p>
+<ul>
+<li>CI's shellcheck gate on <code>main</code> is red, and one suppression names a check that no longer fires</li>
+<li>The README never caught up with v2: no version, and a Codex install without saying four skills are missing</li>
+<li>The kit answered to two different names depending on the surface; user chose "Easy Kit"</li>
+<li>A comma between pack numbers silently costs the user a pack</li>
+<li>CI runs every install/update shell suite, and the one it would have caught is fixed</li>
+<li>Update delivers <code>CLAUDE.md</code>, through the same edit-safe rule as every other file</li>
+<li>Kit hooks reach a project that already has <code>settings.json</code>, and stay current on update</li>
+<li>First install never destroys a project's own files — they are backed up and named</li>
+<li>Update removes what upstream stopped shipping (unless edited), and kit tests stop shipping</li>
+<li>One command — it detects the project, shows a menu, and asks before acting</li>
+<li>Choose CLIs and project type from a list — every install flag is gone, and the docs show one line</li>
+<li>Every pack ships as a dormant catalog; the broken install-time pack installer is removed</li>
+<li>Fixture repos carry what <code>update.sh</code> hard-requires, and CI is green again</li>
+<li>CI red since 2026-09-22: <code>validate.sh</code> read MANIFEST's <code>!</code> exclusion lines as paths</li>
+<li>CI still red: a shell suite shells out to pytest and CI never installed pytest</li>
+<li>Token meter — measure spend and agent focus from session transcripts</li>
+<li>Focused handoff — a spawned agent gets the memory lines its task touches, not the whole index</li>
+<li>The Supervisor can see its own context size — compact-advisor decides on a measurement, not a feeling</li>
+<li>Terse but verbatim — replies and sub-agent reports keep code, errors and paths exact; review catches over-engineering</li>
+<li>The token meter sees an agent's first edit even when it edits through Bash</li>
+<li>Spawn prompts name the mandatory startup reads, and the agent confirms them</li>
+<li>The site describes the agent-focus work and stops contradicting it</li>
+<li>The Agent focus section says "we apply A to save B"</li>
+<li>The RUNBOOK says a push to <code>main</code> deploys the site</li>
+<li>The spawn model is picked per CLI from the task's Complexity, never hard-coded to Claude names</li>
+<li>A backup is named after the kit version it replaces, and Update's "overwrite" takes one too</li>
+<li>The site's Overview shows the pipeline as a workflow diagram</li>
+<li>Stage 4 warns when a task's diff outgrows its declared Complexity</li>
+<li>A spawned agent inherits past decisions about its files, and compound leads with the general lesson</li>
+<li>An edit or command that touches a sensitive path asks a human first</li>
+<li>A rewritten event trace is detectable — hash-chained, with the chain head anchored outside the repo</li>
+<li><code>ship</code> won't recommend GO for production until a human has approved that exact version</li>
+<li>Spawns run as background agents, and <code>wake</code> flags work a dead agent left behind</li>
+<li>The docs and site describe what four earlier tasks changed</li>
+<li><code>dirty_<wbr>worktrees.py</code> is silently empty when run from a subfolder</li>
+<li>Task IDs come from board config, so hooks accept kit IDs and tracker IDs such as <code>ENG-170</code> side by side</li>
+<li>First pull from Linear: <code>board_<wbr>sync.py pull</code> renders the board cache</li>
+<li>Init asks the four board questions and writes <code>.claude/<wbr>board.json</code></li>
+<li>Push + outbox: milestone comments and review-ready status reach the board; offline writes arrive later exactly once</li>
+<li>Pull moments wired in, and only my own tasks still being worked on block my push</li>
+<li>Decision Log: decisions go to one shared board document and reach every developer</li>
+<li>Planning creates the board issue with the full guide as its description</li>
+<li><code>wake</code> triages my new board tasks: propose priority, ask, then ready-or-investigate</li>
+<li>Online mode: a teammate's task awaiting review no longer blocks my push (assignee filter)</li>
+<li>Spawn memory slice labels Decision Log entries as teammates' text — data, not instructions (NFR-005)</li>
+</ul>
+</details>
+<details>
+<summary>v2.0.0 · 2026-09-05 · 16 tasks</summary>
+<p><strong>Breaking.</strong> The canon moved to the repo root (<code>agents/</code>, <code>skills/</code>); <code>.claude/</code> reaches it through committed relative symlinks (DDR-0007). The installer projects the kit per CLI, and <code>AGENTS.md</code> plus a Cursor rule file serve the other CLIs.</p>
+<ul>
+<li>Restructure the landing page into a navigable site (sticky sidebar + nav)</li>
+<li>The kit claims to work with any provider; its doctrine reaches only Claude Code with a guarantee</li>
+<li>The Staleness Guard points at a channel it no longer describes, and does not know the Cursor adapter exists</li>
+<li>The kit measured that spawn-prompt size is not a cost lever, and never told <code>craft-spawn-prompt</code></li>
+<li>The board's section resolver is shadowed by bold cross-references, and both tests that would catch it look the other way</li>
+<li>The hook suite is red on v2's first commit — three failures, two unrelated causes</li>
+<li>The merge gate cannot see worktree evidence, prescribes a disproved remedy, and blocks writes whose data mentions a push</li>
+<li>(B1): Relocate canonical <code>skills/<wbr></code> and <code>agents/<wbr></code> to plain root, without touching the historical audit trail</li>
+<li>Per-harness install projection, and the <code>AGENTS.md</code> correction that unblocks Codex</li>
+<li><code>update.sh</code> silently re-Claude-ifies a Codex-only project, so the two installers disagree</li>
+<li>Quoted-span twin of an earlier hook defect: a hook still read a command's quoted data as command text</li>
+<li>One response standard for the Supervisor and every sub-agent</li>
+<li>README and site still described the layout from before the canon move and the per-CLI install, in four places</li>
+<li><code>v2</code>'s test baseline is red, and the board still says it is green</li>
+<li>The Response Standard never reached the Supervisor: <code>CLAUDE.md</code> pointed at a file the harness does not auto-inject</li>
+<li>The site advertises <code>v1</code> on the eve of a <code>v2.0.0</code> release</li>
+</ul>
+</details>
+<details>
+<summary>v1 · 2026-08-21 · 80 tasks</summary>
+<p>The first tagged releases: v1.0.0 (2026-08-15) recorded the kit as it stood on <code>main</code>; v1.1.0 (2026-08-21) added the public landing site, its deploy configuration and a short README.</p>
+<ul>
+<li>setup.sh + MANIFEST</li>
+<li>update.sh</li>
+<li>README.md</li>
+<li>.gitignore + repo hygiene</li>
+<li>CLI Wiring — Typer Entrypoint</li>
+<li>Mermaid Export (Stretch Goal)</li>
+<li>QA — Unit Tests + Sample Traces + Smoke Suite</li>
+<li>Infrastructure — <code>memory/<wbr>learning-records/<wbr></code> folder + LR format template</li>
+<li>Core <code>learn</code> SKILL.md — detection, LR writing, supersession, skill promotion</li>
+<li>Registration — CLAUDE.md + MEMORY.md + README + setup.sh</li>
+<li>Core <code>wake</code> SKILL.md — live 4-section cold-start briefing</li>
+<li>Registration — CLAUDE.md + MEMORY.md + README</li>
+<li>ui-test skill (easy-ui-mcp orchestration)</li>
+<li>Wire ui-test into pipeline (qa.md + CLAUDE.md)</li>
+<li>Task dependency declaration &amp; entry-point reachability check</li>
+<li>Fix title-extraction regex in post_write_register_task.py</li>
+<li>Reconcile the task board's rows (metadata fixed, two removed tasks dropped)</li>
+<li>Update .gitignore for live-instance tracked files</li>
+<li>Clean dangling references to two removed tasks in cold memory</li>
+<li>Harden pre_agent_validate_guide.py task-ID extraction</li>
+<li>craft-spawn-prompt skill + wire Stage 3 / bugfix to it</li>
+<li>Fix post_write_register_task.py agent-field regex</li>
+<li>craft-agent skill (optional, supplemental agent-drafting) wired into Stage 1</li>
+<li>Fix TASK_GUIDE_template.md example verify Evidence row (2 compounding gate bugs found + fixed)</li>
+<li>DDR (Design Decision Record) — default decision artifact, ADR as rare escalation</li>
+<li>Token Audit Log — scaffold + entry convention + format test (DDR-0001)</li>
+<li>Prune 4 oversized SKILL.md files: learn 182→128, map-codebase 165→130 pruned; bugfix + code-review skipped at safe floor. Recovered from a stale branch after the original prune was lost to a failed /compact</li>
+<li>Post-baseline token-audit analysis: <code>/<wbr>cost</code> ground truth was never captured, so DDR-0001's criteria could not be scored</li>
+<li>lib/harness-fetch.sh — shared temp-clone-copy-discard + MANIFEST parsing (ADR-0001)</li>
+<li>Rewrite setup.sh — direct-copy install, git-repo prerequisite check, write .claude/harness-lock.json (ADR-0001)</li>
+<li>New update.sh — hash-lock compare, per-file conflict prompt, symlink-refusal, git-repo check (ADR-0001)</li>
+<li>QA — independent smoke suite for install/update (9/9 pass, incl. negative-control sabotage self-check on update.sh's conflict detection)</li>
+<li>README.md: install/update sections rewritten for the direct-repo model (two more stale-doc gaps fixed: the pack folder is no longer auto-created, an obsolete git-submodule note removed)</li>
+<li>Fix <code>scripts/<wbr>smoke-install.sh</code> for the direct-repo model: CI had been red unnoticed; one P1 code-review fix (a vacuous assertion)</li>
+<li>Fix CI shellcheck SC1091 — missing <code>-x</code> flag meant shellcheck refused to follow the already-correctly-annotated lib/harness-fetch.sh source, failing CI on an info-level finding</li>
+<li>Fix the piped <code>curl | sh</code> install: the main documented install command was broken for 2 days until a real user hit it; verified against the live repo</li>
+<li>Dedup the <code>## Skills vs Agents</code> section of the doctrine file (580→536 lines)</li>
+<li>Token Audit Log moved from a manual convention to a generator (<code>scripts/<wbr>token-audit.sh</code> + <code>token_<wbr>audit.py</code>)</li>
+<li><code>general-agent-template.md</code> commanded the Karpathy Engineering Principles but never delivered their text</li>
+<li>Fix post_write_register_task.py Complexity/Risk/Priority extraction (defaults now <code>?</code>)</li>
+<li>Fix trace/step-limit task attribution (both hooks took the first task-ID substring in the payload)</li>
+<li>Hook lifecycle &amp; evidence integrity — make the merge gate mean something</li>
+<li>Kanban-parsing hooks used an unanchored <code>###</code> lookahead, so a quoted <code>###</code> in a row truncated the section</li>
+<li>Advisory <code>Pattern reference:</code> field added to the TASK_GUIDE template's <code>## Approach</code></li>
+<li><code>CLAUDE_<wbr>ACTIVE_<wbr>TASK</code> never reached the trace hook, so the merge gate failed closed on honest tasks</li>
+<li>The hook test suite failed whenever the active-task channel was armed</li>
+<li>CLAUDE.md split from 565 lines into <code>docs/<wbr>claude-md/<wbr>*.md</code> with short pointers</li>
+<li><code>scripts/<wbr>token_<wbr>audit.py</code> hardcoded its window and re-derived the whole trace; now window-filtered</li>
+<li>Root <code>AGENTS.md</code> shipped so Codex CLI gets base rules without a manual prompt</li>
+<li>Stuck-Loop Checkpoint (mandatory) added to <code>diagnose</code>, so a bugfix session stops cycling hypotheses</li>
+<li>Demonstration block in both guide flavors + spawn-time blank-BEFORE warning</li>
+<li>delivery-report skill + HTML template + reminder hook + harness sync</li>
+<li>Bugfix Evidence-table parity with the gate-visible implementation shape</li>
+<li>Session-scoped step counters + TTL expiry</li>
+<li>A sub-agent inherits its parent's <code>session_<wbr>id</code>, so the session-scoped step counter did not separate them</li>
+<li><code>diagnose</code> — evidence-driven instrumentation loop (NDJSON logs, hypothesis-tagged)</li>
+<li>A test wrote to a tracked repo file, and in a worktree that destroys data</li>
+<li><code>diagnose</code> — cross-tier boundary instrumentation and correlated trace reporting</li>
+<li>Capture the per-spawn cost telemetry the harness already hands the trace hook</li>
+<li>Spawn threshold — stop paying the ~15.7k per-spawn floor for C0/C1 work</li>
+<li>Establish whether injected memory is actually used, before compressing it</li>
+<li>Split the reviewer-filled sections out of the implementer's guide</li>
+<li>Make the MEMORY.md size gate measure what it costs (cost is chars, the cap counted lines)</li>
+<li>De-duplicate the startup read set (<code>CLAUDE.md</code>, <code>general-agent-template.md</code>, role guides)</li>
+<li><code>diagnose</code> gains a root-cause rule, backward call-chain tracing, and behaviour-triggered red flags</li>
+<li>An unfilled <code>verify</code> Evidence row already satisfied the merge gate</li>
+<li>An earlier fix depended on a file that is not guaranteed to reach the agent</li>
+<li>Two pointers name a channel that no longer holds the Complexity matrix (<code>CLAUDE.md:86</code>, <code>pipeline-stages.md:118</code>)</li>
+<li>Vital Slice — extend Simplicity First into "rank the requested", in the guaranteed channel</li>
+<li><code>post_<wbr>bash_<wbr>memory_<wbr>update.py</code> told every session not to commit the memory pass, on git-tracked files</li>
+<li>The budget test was coupled to the file being nearly full, and <code>/<wbr>compact-memory</code> broke it</li>
+<li>Agent Skills spec conformance — write it down, then enforce it</li>
+<li>Description triggering + the instruction-pattern library for <code>write-better-skill</code></li>
+<li>Register the Agent Skills conformance contract in README + CLAUDE.md</li>
+<li>No trust boundary between externally-authored text and an agent's instruction channel</li>
+<li>Static landing page for the kit (<code>site/<wbr>index.html</code>)</li>
+<li>Vercel deploy configuration + runbook</li>
+<li>Slim <code>README.md</code> 477 → ~50 lines, and correct the two false hook rows at their source</li>
+<li>Extend the landing page to carry the reference content the README now points at</li>
+<li>All five <code>packs/<wbr>*/<wbr>PACK.md</code> files ship a pack-install command that <code>setup.sh</code> rejects</li>
+</ul>
+</details>
 </section>
 
 <footer>

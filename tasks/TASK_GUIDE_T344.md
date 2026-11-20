@@ -56,11 +56,11 @@ User, 2026-11-20: "create a section that about the change logs in the index docs
 |---|----------------------|-----------------------|
 | 1 | `site/docs.html` has `<section id="changelog">` with `<h2>Change log</h2>`, placed after `<section id="options">` and before `<footer>`; the sidebar's `// reference` group ends with `<li><a href="#changelog">Change log</a></li>`. | a section, linked |
 | 2 | Inside it, one `<details>` per release, newest first: `Unreleased`, `v2.2.0`, `v2.1.0`, `v2.0.0`, `v1`. Each `<summary>` names the release, its date (the tag's commit date; none for Unreleased) and its task count. Only `Unreleased` is `open`. | every release, newest first |
-| 3 | Each released entry starts with one sentence summarising it, written from `RUNBOOK.md` `## Release Log` (`v1` covers that log's `v1.0.0` and `v1.1.0` rows). The Deployer and Approved columns are not copied (the Deployer cell is an email address). | release summaries |
-| 4 | Each entry lists its tasks in ID order as `<li><code>Txxx</code> — <title></li>`, the title being the task's current `PROJECT_KANBAN.md` title, HTML-escaped, with Markdown backtick spans turned into `<code>`. | tasks named with titles |
-| 5 | Placement rule: every `- [x]` task on `PROJECT_KANBAN.md` appears exactly once across the section. A task named in a `RUNBOOK.md` Release Log scope goes to that release; any other task goes to the earliest release tag whose history contains the commit where its board row first became `- [x]` (merge diffs included); a task no tag contains is `Unreleased`. | every task, once |
-| 6 | `tests/test_site_changelog.py` (new) pins AC 1, 2, 5 (count and once-only against the live board's Done rows at test time, with the T344 Done set as the floor), the escaping of AC 4, and that the section holds no `@` character. | testable |
-| 7 | The existing site tests pass: `tests/test_site_content.py`, `tests/test_site_story.py`, `tests/test_site_visual_first.py`, `tests/test_site_explorer.py`; any baseline they pin is repointed with a `CHANGED_BY_T344` record, not deleted. | no regression |
+| 3 | Each released entry starts with a short summary (one paragraph) written from `RUNBOOK.md` `## Release Log` (`v1` covers that log's `v1.0.0` and `v1.1.0` rows). The Deployer and Approved columns are not copied (the Deployer cell is an email address). | release summaries |
+| 4 | Each entry lists its tasks in task-ID order as `<li><title></li>`, with no task ID on the page (the T083 rule, `tests/test_site_content.py:224`, kept by the user: "No IDs at all"). The title is the task's current board title (or its guide title, AC 5), HTML-escaped, Markdown backtick spans turned into `<code>` with `<wbr>` after `/` and `_`. A title that carries a task ID, a board word, a hex colour, `**`, or a name the live-docs tests forbid (old repo name, old stage name, removed flag or path, a doctrine section in `CLAUDE.md`) is shown in the plain wording of `tests/test_site_changelog.py` `REWRITES`. | tasks named with titles |
+| 5 | Placement rule: every `- [x]` task on `PROJECT_KANBAN.md` appears exactly once across the section, and so does every task a `RUNBOOK.md` Release Log scope names (before its "Not in scope" words) that has no board row but has a guide (titled from the guide's first line; T083, T084, T087, T089, T181, T183, T185, T187). A named task with no guide (T086, superseded by T089) or with a board row not Done (T184, "closed, will not do") is left out. A task named in a `RUNBOOK.md` Release Log scope goes to that release; any other task goes to the earliest release tag whose history contains the commit where its board row first became `- [x]` (merge diffs included); a task no tag contains is `Unreleased`. | every task, once |
+| 6 | `tests/test_site_changelog.py` (new) pins AC 1, 2 and 5 (a pinned floor of the 263 tasks known at T344's start, each listed exactly once; any other board task may be listed, so a task finished later never breaks the suite), the escaping and rewrites of AC 4, and that the section holds no email address. | testable |
+| 7 | The existing site tests and the live-docs tests pass: `tests/test_site_content.py`, `tests/test_site_story.py`, `tests/test_site_visual_first.py`, `tests/test_site_explorer.py`, `tests/test_repo_name.py`, `tests/test_stage_names.py`, `tests/test_docs_match_installer.py`, `tests/test_agents_md_primary.py`; a pin that lists the page's sections or sidebar is repointed with an inline T344 comment, never deleted. | no regression |
 
 ---
 
@@ -137,6 +137,7 @@ uv run --with pytest python -m pytest tests/test_site_changelog.py tests/test_si
 - No Features / Fixes / Internal split (type unknown for most merges).
 - No generator script in the repo and no test that recomputes placement from git history; the test checks once-only and completeness against the board, not the release each task sits in.
 - No change to `site/index.html` or the footer.
+- No regeneration: the change log is a snapshot. A later task adds its own line by hand; a title it adds that breaks a page rule needs a `REWRITES` entry (40 of the 263 needed one).
 
 ---
 
@@ -163,7 +164,7 @@ uv run --with pytest python -m pytest tests/test_site_changelog.py tests/test_si
 
 | File | Reason |
 |------|--------|
-| `site/index.html` | out of scope (user chose docs.html) |
+| `site/index.html` | out of scope (user chose docs.html); its redirect `ids` list stays as is: no old link on the story page ever targeted `#changelog`, so `tests/test_site_story.py` leaves that id out of the comparison |
 | `site/theme.css` | no new styles |
 | `RUNBOOK.md`, `PROJECT_KANBAN.md` | read only, as sources |
 | `.claude/` | not a hook or config task |
@@ -191,4 +192,6 @@ Write `tests/test_site_changelog.py` first and see it fail (no `#changelog` sect
 
 ## Questions Log
 
+- 2026-11-20 SUPERVISOR (Stage 3 finding) Eight tasks the RUNBOOK says shipped have no board row, only a guide; "add all of them" → listed, titled from the guide (AC 5 widened). T086 has no guide and was superseded by T089; T184 was closed → left out.
+- 2026-11-20 USER The T083 rule forbids task IDs on the site; the change log listed them. Options: IDs in the change log only / no IDs at all / drop the rule. User: "No IDs at all". → AC 4: titles only; 40 titles reworded (`REWRITES`).
 - 2026-11-20 USER Which page, and which scope? → page "docs.html (Recommended)", scope "Every release (Recommended)".
