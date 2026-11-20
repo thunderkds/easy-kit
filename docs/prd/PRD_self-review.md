@@ -5,7 +5,7 @@
 
 > **Scope of this document**: *What* to build and *why*. Technical decisions live in `PROJECT_SPEC.md`
 > and the Direction step (`BRAINSTORMING_LOG`). Evidence for every number here:
-> `experiments/self-review-spike/RESULTS.md` (spike, 2026-11-05).
+> `docs/experiments/self-review-spike-RESULTS.md` (spike, 2026-11-05).
 
 ---
 
