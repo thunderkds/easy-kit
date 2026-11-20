@@ -38,11 +38,30 @@ Mode: auto
 3. <what was decided> — DEBATED: <option> (Advocate 1: <its proposal>; Advocate 2: <its proposal>) ⚠ decided for you — please review
 4. <what was decided> — SAFER OPTION: <why> ⚠ decided for you — please review
 Paused: <only when a stop that stays paused the task: which one, and why>
-Checks: tests `<command>` — <result>; reviews <skill — result>; real run `<command>` — printed `<what it printed>` (auto-checked, not /verify)
+9. Six change-log titles that the live-docs tests reject (old repo name, old stage names, a removed flag and path, a doctrine section in `CLAUDE.md`) are reworded in `REWRITES`, and the v2.0.0 summary drops `setup.sh --harness`; the four tests stay unchanged — RULE: the Stage 4 review's P1 (`tasks/TASK_REVIEW_T344.md` § Stage 4 review (Reviewer: T344)): "add rewrites for these titles. Do not allowlist the pins".
+10. The completeness test pins a floor of the 263 tasks known at T344's start; any board task may be listed; T344's own line joins Unreleased — RULE: `tasks/TASK_GUIDE_T344.md` § Approach cut list ("the change log is a snapshot. A later task adds its own line by hand"); fixes the review's P1 that the test turned red when T344 (or any task) closed.
+11. `tests/test_repo_name.py` `ALLOWED` gains `tests/test_site_changelog.py`, whose `BANNED` pattern names the old repo to keep it off the page — RULE: `tests/test_repo_name.py:3` "no live file names the old repo, outside history paths and the allow list below".
+Checks: site + live-docs tests `273 passed, 18 skipped` after the Stage 4 fixes; full suite: rerun on the fix commit; reviews: inline `code-review` (1 P1, 2 P3) and `Reviewer: T344` at `82e736b9` (2 P1, 3 P2, 5 P3), all P1 fixed, a second fresh reviewer on the fix commit; real run: Playwright at 1280px and 375px, no sideways scroll — auto-checked, not /verify.
 Memory: <each entry the memory pass wrote, as `file — entry` | nothing new>
 Not done: merge (yours); <auto verify: running (T182) | auto verify: <result> | /verify (yours), with [admin] only after the one retry also ended blocked>
 
 -->
+
+## Auto decisions
+
+Mode: auto
+1. Track extended — RULE: `docs/claude-md/tracks.md` § Track rule ("a UI component" → extended): a new section on `site/docs.html`.
+2. Page `site/docs.html`, scope every release plus Unreleased — RULE: the user's forced-choice answers in chat, 2026-11-20: "docs.html (Recommended)", "Every release (Recommended)" (`tasks/TASK_GUIDE_T344.md` § Questions Log).
+3. No task ID anywhere on the page; 40 titles that carry an ID or a board word are reworded (`tests/test_site_changelog.py` `REWRITES`) — RULE: the user's answer "No IDs at all", 2026-11-20, keeping `tests/test_site_content.py:224` "page must not contain a task ID" (T083).
+4. Eight tasks the RUNBOOK says shipped but with no board row are listed, titled from their guide; T086 (no guide, superseded by T089) and T184 (board row not Done, "closed, will not do") are left out — RULE: the user's request "add all of them" and `RUNBOOK.md` § Release Log (`tasks/TASK_GUIDE_T344.md` AC 5).
+5. `site/index.html` untouched; `tests/test_site_story.py` leaves `#changelog` out of the redirect-list comparison instead — RULE: `tasks/TASK_GUIDE_T344.md:166` "`site/index.html` | out of scope" (the user rejected the tool call that edited it).
+6. A long path wraps at 375px through `<wbr>` hints in code spans, not CSS — RULE: `tasks/TASK_GUIDE_T344.md:108` "no new CSS rule and no inline `style=`".
+7. The Supervisor wrote the code; one fresh `Reviewer: T344` spawn reviews it — RULE: `AGENTS.md:171` "On the extended track the Supervisor writes the code itself" (T341, merged).
+8. The first reviewer spawn named a hand-extended commit hash; it was stopped and respawned with the real hash `82e736b9991205d8bdbc9446aebaccdfd1b1135b` — RULE: `docs/claude-md/pipeline-stages.md` § Stage 4 (the `Commit:` line is the full hash of the commit reviewed).
+Checks: Verification Command `231 passed, 18 skipped` at `82e736b9`; full suite: running; review: `Reviewer: T344` running; real run: Playwright screenshots at 1280px and 375px, no sideways scroll at 375px — auto-checked, not /verify.
+Memory: nothing new yet (pass runs after the merge)
+Not done: Stage 4 review result, Evidence rows, merge (admin: after the auto verify pass); auto verify: not started
+Paused: auto-mode check failed — no test run in memory/event-trace/T344.jsonl — write /home/thunderkds/workspace/pets/hungnguyen111/easy-kit/.claude/hooks/.state/active_task.d/$CLAUDE_CODE_SESSION_ID with the task ID (minimal-track step 1): `mkdir -p /home/thunderkds/workspace/pets/hungnguyen111/easy-kit/.claude/hooks/.state/active_task.d && printf '%s\n%s\n' "T344" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > /home/thunderkds/workspace/pets/hungnguyen111/easy-kit/.claude/hooks/.state/active_task.d/$CLAUDE_CODE_SESSION_ID`, then rerun the task's tests so the trace records them under the task, then stop [report 371f46c7515c]
 
 ## Evidence
 

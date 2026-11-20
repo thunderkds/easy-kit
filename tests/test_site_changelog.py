@@ -23,12 +23,41 @@ BOARD = ROOT / "PROJECT_KANBAN.md"
 RELEASES = ["Unreleased", "v2.2.0", "v2.1.0", "v2.0.0", "v1"]
 RUNBOOK = ROOT / "RUNBOOK.md"
 GUIDES = ROOT / "tasks"
-# The tasks at T344's start (2026-11-20): 255 Done on the board + 8 named only by the RUNBOOK.
-FLOOR_COUNT = 263
+# The tasks at T344's start (2026-11-20): 255 Done on the board + 8 named only by the RUNBOOK. Each must be
+# listed exactly once. A task finished later may be listed (any board task may) but need not be: the change
+# log is written by hand per release, so a later Done row never breaks the suite (Stage 4, T344).
+FLOOR = frozenset("""
+T001 T002 T003 T004 T005 T006 T007 T008 T009 T010 T011 T012 T015 T016 T017 T018
+T019 T020 T021 T022 T023 T024 T025 T026 T027 T028 T029 T030 T031 T032 T033 T034
+T035 T036 T037 T038 T039 T040 T041 T042 T043 T044 T045 T046 T047 T048 T049 T050
+T051 T052 T053 T054 T055 T056 T057 T058 T059 T060 T061 T062 T063 T064 T065 T066
+T067 T068 T069 T070 T071 T073 T075 T078 T079 T080 T082 T083 T084 T085 T087 T088
+T089 T090 T091 T092 T093 T094 T095 T096 T097 T098 T099 T100 T101 T102 T103 T104
+T105 T106 T107 T108 T109 T110 T111 T112 T113 T114 T115 T116 T118 T119 T120 T122
+T123 T124 T125 T126 T127 T128 T129 T130 T131 T132 T136 T137 T138 T143 T144 T145
+T146 T148 T149 T150 T151 T152 T153 T154 T155 T156 T157 T158 T159 T160 T161 T164
+T165 T166 T167 T168 T169 T170 T173 T174 T175 T176 T177 T178 T179 T180 T181 T182
+T183 T185 T186 T187 T188 T189 T190 T191 T195 T196 T197 T198 T199 T200 T201 T202
+T203 T204 T207 T208 T209 T210 T211 T212 T213 T214 T215 T216 T218 T219 T220 T221
+T222 T223 T226 T228 T229 T230 T231 T232 T233 T234 T235 T236 T238 T239 T240 T241
+T242 T243 T244 T245 T246 T248 T250 T251 T252 T255 T256 T257 T258 T259 T260 T261
+T278 T279 T280 T281 T282 T283 T284 T285 T286 T287 T288 T289 T290 T291 T292 T293
+T294 T295 T296 T297 T298 T299 T301 T302 T303 T305 T306 T307 T308 T309 T310 T311
+T312 T314 T317 T322 T323 T341 T342
+""".split())
 
 # The page shows no task ID and no board words (T083 rule, `test_no_project_state_on_page`; the user kept it
 # for the change log, 2026-11-20: "No IDs at all"). Titles that carry one are shown in this plain wording.
 REWRITES = {
+    # Titles naming an old repo name, an old stage name, a removed flag or path, or a doctrine section in
+    # CLAUDE.md: the live-docs tests (`test_repo_name`, `test_stage_names`, `test_docs_match_installer`,
+    # `test_agents_md_primary` AC 9) scan site/docs.html too (Stage 4 review, T344).
+    "T025": "craft-agent skill (optional, supplemental agent-drafting) wired into Stage 1",
+    "T035": "README.md: install/update sections rewritten for the direct-repo model (two more stale-doc gaps fixed: the pack folder is no longer auto-created, an obsolete git-submodule note removed)",
+    "T039": "Dedup the `## Skills vs Agents` section of the doctrine file (580→536 lines)",
+    "T097": "Per-harness install projection, and the `AGENTS.md` correction that unblocks Codex",
+    "T223": "Project readiness: `PROJECT_SPEC.md` `## Readiness` section; spawn hook warns `⚠ HIGH RISK` while incomplete (never blocks); stage-done defined by it; auto mode never skips Stage 0 or Stage 1",
+    "T240": "Rename the repo to easy-kit",
     "T019": "Reconcile the task board's rows (metadata fixed, two removed tasks dropped)",
     "T021": "Clean dangling references to two removed tasks in cold memory",
     "T036": "Fix `scripts/smoke-install.sh` for the direct-repo model: CI had been red unnoticed; one P1 code-review fix (a vacuous assertion)",
@@ -38,7 +67,7 @@ REWRITES = {
     "T063": "Establish whether injected memory is actually used, before compressing it",
     "T069": "An earlier fix depended on a file that is not guaranteed to reach the agent",
     "T099": "Quoted-span twin of an earlier hook defect: a hook still read a command's quoted data as command text",
-    "T101": "README and site still described the layout from before the canon move, in four places",
+    "T101": "README and site still described the layout from before the canon move and the per-CLI install, in four places",
     "T103": "The Response Standard never reached the Supervisor: `CLAUDE.md` pointed at a file the harness does not auto-inject",
     "T120": "Reinstall's closing summary under-reported which CLIs the run touched: it listed the picked CLIs, not the ones actually refreshed",
     "T123": "CI still red: a shell suite shells out to pytest and CI never installed pytest",
@@ -46,7 +75,7 @@ REWRITES = {
     "T151": "The docs and site describe what four earlier tasks changed",
     "T153": "Task IDs come from board config, so hooks accept kit IDs and tracker IDs such as `ENG-170` side by side",
     "T156": "Push + outbox: milestone comments and review-ready status reach the board; offline writes arrive later exactly once",
-    "T157": "Pull moments wired in, and only my own open tasks block my push",
+    "T157": "Pull moments wired in, and only my own tasks still being worked on block my push",
     "T161": "Online mode: a teammate's task awaiting review no longer blocks my push (assignee filter)",
     "T180": "Auto mode: with `[auto]` either track runs to review without stopping and ends with a final report of every decision",
     "T186": "Auto-mode check follow-up: a paused task stops re-blocking every later stop, new pause reasons are written, and `tracks.md` documents the auto-mode limits",
@@ -69,7 +98,8 @@ REWRITES = {
     "T302": "The docs page says how Stage 4 treats a security finding (a fold-out on `site/docs.html`)",
     "T303": "The docs page describes the effort fold-out, the step-limit row, the `[admin]` config refusal and `tasks/attempts.tsv`",
 }
-BANNED = re.compile(r"\bT\d{3}\b|KANBAN|In Progress|Ready for Review|#[0-9a-fA-F]{6}\b|\*\*")
+BANNED = re.compile(r"\bT\d{3}\b|KANBAN|In Progress|Ready for Review|#[0-9a-fA-F]{6}\b|\*\*"
+                    r"|personal-agentic-claude|--harness|~/\.supervisor|Stage (?:0\.5|1\.5)|section in CLAUDE\.md")
 
 TASK_LI = re.compile(r"<li>(.*?)</li>")
 
@@ -85,10 +115,11 @@ def _section():
     return m.group(0)
 
 
-def _done_titles():
+def _done_titles(done_only=True):
     board = BOARD.read_text(encoding="utf-8")
+    mark = "x" if done_only else "[ x]"
     return {m.group(1): m.group(2).strip() for m in
-            re.finditer(r"^- \[x\] \*\*(T\d{3})\*\* — (.+?)(?= \| |$)", board, re.M)}
+            re.finditer(r"^- \[" + mark + r"\] \*\*(T\d{3})\*\* — (.+?)(?= \| |$)", board, re.M)}
 
 
 def _runbook_only_titles():
@@ -110,7 +141,7 @@ def _runbook_only_titles():
 
 def _expected_titles():
     """{task: the title as the page must show it}, rewrites applied."""
-    titles = {**_runbook_only_titles(), **_done_titles()}
+    titles = {**_runbook_only_titles(), **_done_titles(done_only=False)}
     return {t: REWRITES.get(t, title) for t, title in titles.items()}
 
 
@@ -128,6 +159,7 @@ def render_title(title):
 
 
 # ---- AC 1 ------------------------------------------------------------------------------------
+
 
 def test_ac1_the_section_has_its_heading_after_options_and_before_the_footer():
     text = _docs()
@@ -170,26 +202,34 @@ def test_ac2_each_released_summary_gives_a_date():
 
 # ---- AC 5 ------------------------------------------------------------------------------------
 
-def test_ac4_rewrites_cover_exactly_the_titles_that_break_the_page_rule():
-    titles = {**_runbook_only_titles(), **_done_titles()}
-    assert sorted(t for t, title in titles.items() if BANNED.search(title)) == sorted(REWRITES)
+
+def test_ac4_rewrites_cover_exactly_the_floor_titles_that_break_a_page_rule():
+    titles = {**_runbook_only_titles(), **_done_titles(done_only=False)}
+    assert sorted(t for t in FLOOR if BANNED.search(titles[t])) == sorted(REWRITES)
 
 
 def test_ac5_runbook_named_tasks_without_a_board_row_are_the_known_eight():
     assert sorted(_runbook_only_titles()) == ["T083", "T084", "T087", "T089", "T181", "T183", "T185", "T187"]
 
 
-def test_ac5_every_done_task_on_the_board_appears_exactly_once():
+def test_ac5_every_floor_task_appears_exactly_once_and_nothing_unknown():
     expected = {t: render_title(title) for t, title in _expected_titles().items()}
-    assert len(expected) >= FLOOR_COUNT
+    assert len(FLOOR) == 263
+    assert FLOOR <= set(expected), f"floor tasks missing from the board: {sorted(FLOOR - set(expected))}"
     shown = _shown()
     assert len(set(expected.values())) == len(expected), "two tasks share a title"
-    missing = sorted(t for t, title in expected.items() if shown[title] == 0)
-    assert not missing, f"Done on the board but not in the change log: {missing}"
+    missing = sorted(t for t in FLOOR if shown[expected[t]] == 0)
+    assert not missing, f"in the floor but not in the change log: {missing}"
     dupes = sorted(t for t, title in expected.items() if shown[title] > 1)
     assert not dupes, f"listed more than once: {dupes}"
     extra = sorted(set(shown) - set(expected.values()))
-    assert not extra, f"in the change log but not a Done task: {extra[:5]}"
+    assert not extra, f"in the change log but not a board or RUNBOOK task: {extra[:5]}"
+
+
+def test_ac5_the_floor_is_every_done_task_at_t344_start():
+    titles = {**_runbook_only_titles(), **_done_titles()}
+    assert len(set(titles) & FLOOR) == 263
+
 
 def test_ac5_tasks_are_in_id_order_inside_each_entry():
     by_title = {render_title(title): t for t, title in _expected_titles().items()}
@@ -197,11 +237,13 @@ def test_ac5_tasks_are_in_id_order_inside_each_entry():
         ids = [by_title[title] for title in TASK_LI.findall(body)]
         assert ids == sorted(ids)
 
+
 def test_ac4_the_page_shows_no_task_id_and_no_board_word():
     for title in TASK_LI.findall(_section()):
         assert not BANNED.search(title), title
     for t, title in REWRITES.items():
         assert not BANNED.search(title), t
+
 
 def test_ac4_render_title_escapes_and_keeps_code_spans():
     assert render_title("a < b & `x<y>` c") == "a &lt; b &amp; <code>x&lt;y&gt;</code> c"
@@ -209,6 +251,7 @@ def test_ac4_render_title_escapes_and_keeps_code_spans():
 
 
 # ---- AC 3 ------------------------------------------------------------------------------------
+
 
 def test_ac3_the_section_copies_no_email_address():
     # `@AGENTS.md` (T173's title) is a file import, not an address.

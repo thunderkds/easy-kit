@@ -42,6 +42,8 @@ ALLOWED = {
         "trace records copied byte-for-byte from memory/event-trace/T043.jsonl",
     ("tests/test_repo_name.py", OLD):
         "this test names the old repo to look for it",
+    ("tests/test_site_changelog.py", OLD):
+        "T344: the change-log test names the old repo so no title on site/docs.html shows it",
 }
 
 
