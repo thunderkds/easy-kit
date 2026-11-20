@@ -42,11 +42,16 @@ prompt whose first three lines are the fixed `REVIEWER_PROMPT_PREFIX`, `Task ID:
 `Commit: <40-hex>`, carrying the diff range and the guide path and never the Supervisor's reasoning.
 
 The merge gate (`.claude/hooks/pre_bash_block_unsafe_merge.py`, `trace_shows_review`) refuses the merge
-of an extended-track task branch, and the narrowed push of one, until a trace record proves that
-reviewer ran on the exact code being merged: chain hash and anchor intact, not an error, finished as
-far as the record tells, the named commit an ancestor of the tip, and only the review file, the board,
+of an extended-track task branch, and the narrowed push of one, until a `ReviewerDone` trace record
+proves that reviewer ran on the exact code being merged: chain hash and anchor intact, the named
+commit an ancestor of the tip, and only the review file, the board,
 `tasks/MINIMAL_LOG.md` or `memory/*.md` (not `memory/MEMORY.md`) changed since. No date cutoff: every
 extended-track task merged from now on is checked.
+
+The `SubagentStop` hook (`.claude/hooks/subagent_stop_reviewer_done.py`) writes the `ReviewerDone`
+record when the reviewer ends. It reads the task ID and the commit from the reviewer's own spawn
+prompt. The gate counts only that record, not the `Agent` spawn record, so the spawn may run in the
+background.
 
 Rollout step 2 (a later task, after more replays): the Advocate counts (`### Debate size by Risk`).
 
@@ -67,6 +72,14 @@ fresh reader catches (DDR-0004 lists 3 such catches in one session).
 `Reviewed:` line was rejected: since T309 typed text counts for nothing at the merge gate. The
 trace record, bound to a commit, with the anchor check and a scan of every trace file, was chosen.
 
+**Which record (user, 2026-11-20: "so B").** Stage 4 found that every `Agent()` spawn here is
+recorded `spawn.status: async_launched`, at launch, before the review runs. The Agent tool has no
+foreground option, so a gate that counts only a `completed` spawn record could never pass. Options:
+A — count the `async_launched` spawn record; B — a `SubagentStop` hook writes a `ReviewerDone`
+record when the reviewer ends; C — keep the rule and run reviewers from a CLI. The user chose B. A
+was rejected because a reviewer that dies mid-run (as a sub-agent did that day, on an API rate limit)
+would count.
+
 ---
 
 ## Consequences
@@ -77,8 +90,10 @@ QA agent and a review pass). Review independence is kept and now enforced by the
 **Accepted, stated not hidden**: the Supervisor's context grows with implementation output; a C3 task
 still splits or spawns. The trace and anchor raise the bar and are not a proof: an agent's own Python
 can write a matching record (as for T148 and T182). The gate proves a review ran, not what it found:
-findings stay in `tasks/TASK_REVIEW_<ID>.md`. A background reviewer spawn does not count: its record
-is written at launch (`spawn.status: async_launched`), so the reviewer runs in the foreground.
+findings stay in `tasks/TASK_REVIEW_<ID>.md`. The reviewer spawn may run in the background: the gate
+counts the `ReviewerDone` record that the `SubagentStop` hook writes when the reviewer ends. The event
+does not say how the reviewer ended. A reviewer that ends on an API error fires `StopFailure`, not
+`SubagentStop`, so it leaves no record. A reviewer that is stopped or crashes can still leave one.
 
 **Revisit if**: reviewer spawns are routinely skipped by a route the gate does not see (a merge the
 resolver cannot read is already refused); or replays show the Supervisor-implemented tasks fail
