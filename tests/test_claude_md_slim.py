@@ -22,7 +22,12 @@ RAW = (ROOT / "AGENTS.md").read_bytes()
 # T317: raised 21724 -> 21886 (+162 bytes): the Tracks paragraph gains the one sentence that points to
 # `docs/claude-md/tracks.md` `### Session tags` (TASK_GUIDE_T317 AC 4: "`AGENTS.md` `## Tracks` gets
 # one line pointing to it"); the paragraph stays one line (`tests/test_auto_mode.py` AC 1 pin).
-AGENTS_MD_BYTE_CAP = 21886
+# T341: raised 21886 -> 22414 (+528 bytes): Hard-Stop Gate 1's last sentence and the Stage 3/4 lines now say
+# the Supervisor writes the code on the extended track and one fresh reviewer spawn is required by the merge
+# gate (TASK_GUIDE_T341 AC 1, DDR-0011; user request of 2026-11-20). T341's own text was cut first (-71 bytes:
+# Stage 3 points to Gate 1, Stage 4 leaves the spawn's full shape to pipeline-stages.md); every phrase
+# tests/test_t341_gate1_doctrine.py pins stays. Measured on branch feat/t341-reviewer-gate.
+AGENTS_MD_BYTE_CAP = 22414
 
 
 def _norm(t: str) -> str:
@@ -45,7 +50,7 @@ def _byte_cap_problem(data: bytes):
     )
 
 
-def test_agents_md_is_at_most_21886_bytes():
+def test_agents_md_is_at_most_22414_bytes():
     assert _byte_cap_problem(RAW) is None, _byte_cap_problem(RAW)
 
 

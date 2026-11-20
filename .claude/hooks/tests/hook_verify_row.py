@@ -184,8 +184,27 @@ def append_trace(trace_dir, root, stem, record, anchor=True):
     return len(lines) + 1
 
 
-def prove_review(trace_dir, root, task_id, commit, stem=None, **overrides):
+REAL_TRACE_DIR = os.path.realpath(os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                               "..", "..", "..", "memory", "event-trace"))
+
+
+def prove_review(trace_dir, root, task_id, commit, stem=None, anchor_dir=None, **overrides):
     """Give `task_id` a valid reviewer record for `commit`, filed under `stem` (the task's own trace
-    file by default)."""
-    return append_trace(trace_dir, root, stem or task_id, reviewer_record(task_id, commit,
-                                                                           **overrides))
+    file by default). `anchor_dir` sets `CLAUDE_TRACE_ANCHOR_DIR` for the write only, as in
+    `write_pass_record` (a subprocess gate with its own anchor directory). Refuses the real repo's
+    `memory/event-trace/`: a fixture passes its own trace directory, never a gate's `TRACE_DIR`
+    before the test patched it."""
+    if os.path.realpath(str(trace_dir)) == REAL_TRACE_DIR:
+        raise RuntimeError(f"refusing to write a fixture reviewer record into {REAL_TRACE_DIR}")
+    saved = os.environ.get("CLAUDE_TRACE_ANCHOR_DIR")
+    if anchor_dir is not None:
+        os.environ["CLAUDE_TRACE_ANCHOR_DIR"] = str(anchor_dir)
+    try:
+        return append_trace(trace_dir, root, stem or task_id,
+                            reviewer_record(task_id, commit, **overrides))
+    finally:
+        if anchor_dir is not None:
+            if saved is None:
+                os.environ.pop("CLAUDE_TRACE_ANCHOR_DIR", None)
+            else:
+                os.environ["CLAUDE_TRACE_ANCHOR_DIR"] = saved

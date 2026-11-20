@@ -188,10 +188,12 @@ def reason(command, cwd, transcript_path):
 
 
 def auto_verified(fx):
-    """T900 at Ready for Review with a hook-written pass row and its run record, committed."""
+    """T900 at Ready for Review with a hook-written pass row and its run record, committed, and
+    (T341) a fresh reviewer record for the verified commit."""
     fx.task_file("TASK_GUIDE_T900.md", GUIDE_VACATED.format(tid="T900"), commit=True)
     verified = git(fx.wt, "rev-parse", "HEAD")
     verify_record.write_record(merge_gate.ROOT, "T900", verified, "pass", "s-1", "log.txt")
+    fx.reviewed(verified)  # T341: a fresh reviewer ran on the verified commit
     cells = verify_record.row_cells(verified, "pass", "s-1", "log.txt")
     fx.task_file("TASK_REVIEW_T900.md", REVIEW.format(tid="T900", result=cells[0],
                                                       notes=cells[1]), commit=True)

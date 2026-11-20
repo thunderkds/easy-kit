@@ -30,7 +30,10 @@ BASE_REF = "c573bbf"
 # T228: `CLAUDE_LEGACY.md` gains the `dotfiles` skills-list line; the pin moves to T228's merge commit (holds the T226 and T228 lines).
 # T239: `CLAUDE_LEGACY.md` renames its stage names (Stage 1 step Agent team, Stage 0); the pin moves to T239's edit commit.
 # T245: `CLAUDE_LEGACY.md` gains the `ux-evaluate` skills-list line; the pin moves to T245's docs commit.
-CLAUDE_LEGACY_REF = "496c110f"
+# T341: `CLAUDE_LEGACY.md` Hard-Stop Gate 1 mirrors the new last sentence (the Supervisor writes the code,
+# one fresh reviewer spawn required at merge, DDR-0011; CLAUDE_LEGACY.md sync policy); the pin moves to
+# T341's doctrine commit.
+CLAUDE_LEGACY_REF = "08226d34"
 
 # AC 1 allowed edits (a) and (b): (base span, new span). Each span must hit exactly one base line.
 REPLACED_SPANS = [
@@ -56,16 +59,15 @@ REPLACED_SPANS = [
      "On the extended track the Supervisor writes the code itself, in the task's worktree, test "
      "first; it spawns an implementer only for 2+ independent tasks at once, or for a C3 task too "
      "big for one context. Each extended task gets one fresh-context reviewer spawn "
-     "(`Reviewer: <ID>`), and the merge gate refuses the merge until its trace record shows that "
-     "reviewer ran on the code being merged (DDR-0011). On the minimal track"),
+     "(`Reviewer: <ID>`), and the merge gate refuses the merge until a trace record shows that "
+     "reviewer ran on the merged code (DDR-0011). On the minimal track"),
     ("per task, worktree-isolated, `Skill({ skill: \"craft-spawn-prompt\" })` before every `Agent()` spawn,",
-     "per task, worktree-isolated, the Supervisor implements (an implementer spawn only for parallel "
-     "tasks or an oversized C3 task), `Skill({ skill: \"craft-spawn-prompt\" })` before every "
-     "`Agent()` spawn,"),
+     "per task, worktree-isolated, the Supervisor implements (implementer spawn only per Gate 1), "
+     "`Skill({ skill: \"craft-spawn-prompt\" })` before every `Agent()` spawn,"),
     ("- **Stage 4** (Review): `Skill({ skill: \"code-review\" })` always;",
      "- **Stage 4** (Review): one fresh-context reviewer spawn per extended task, `Agent({ "
-     "subagent_type: \"qa-expert\", description: \"Reviewer: <ID>\", … })`, required by the merge "
-     "gate, runs `Skill({ skill: \"code-review\" })` always;"),
+     "description: \"Reviewer: <ID>\", … })`, required by the merge gate, runs "
+     "`Skill({ skill: \"code-review\" })` always;"),
     # T200: the Stage 1 skill `settings-setup` joins the stage index.
     ("1=`git-guardrails-claude-code`,`map-codebase` |",
      "1=`git-guardrails-claude-code`,`map-codebase`,`settings-setup` |"),

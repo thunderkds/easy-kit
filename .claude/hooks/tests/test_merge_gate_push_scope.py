@@ -136,8 +136,11 @@ class Gate:
         self._write(self.root, "PROJECT_KANBAN.md", board)
 
     def review(self, tid, sha):
-        """T309: `tid`'s review file with the hook's pass for `sha`; writes the pass record too."""
+        """T309: `tid`'s review file with the hook's pass for `sha`; writes the pass record too.
+        T341: and a fresh reviewer record for `sha` in this fixture's own trace (`self.trace`; the
+        gate's `TRACE_DIR` is patched only after `__init__`). These tests are about push scope."""
         hook_verify_row.write_pass_record(merge_gate.ROOT, sha, tid)
+        hook_verify_row.prove_review(self.trace, merge_gate.ROOT, tid, sha)
         return (REVIEW_VERIFIED.format(tid=tid, row=hook_verify_row.hook_row(sha, tid))
                 + self.extra_review.get(tid, ""))
 
