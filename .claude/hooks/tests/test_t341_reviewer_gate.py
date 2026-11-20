@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 """T341 — the merge gate refuses an extended-track task branch until a fresh reviewer ran on its code.
 
-AC 4-6 and 9 of `tasks/TASK_GUIDE_T341.md`. The proof is a hook-written trace record: an `Agent`
-call with description `Reviewer: <ID>`, a prompt that starts with `REVIEWER_PROMPT_PREFIX` and names
-`Task ID: <ID>` and `Commit: <40-hex>`, not an error, completed as far as the record tells, its chain
-hash and its anchor intact. The named commit is an ancestor of the branch tip, and between the two
+AC 4-6, 9, 12 and 13 of `tasks/TASK_GUIDE_T341.md`. The proof is a hook-written trace record: a
+`ReviewerDone` record for the task, which the `SubagentStop` hook `subagent_stop_reviewer_done.py`
+writes when a sub-agent whose spawn prompt starts with `REVIEWER_PROMPT_PREFIX`, `Task ID: <ID>` and
+`Commit: <40-hex>` ends (option B), with its chain hash, its link and its anchor intact. The `Agent`
+spawn record alone no longer counts, whatever its status. The named commit is an ancestor of the
+branch tip, and between the two
 only the review file, the board, `tasks/MINIMAL_LOG.md` and `memory/*.md` (not `memory/MEMORY.md`)
 changed. A task is extended track when its guide exists at the tip, in the main checkout, or in a
 commit of `main..tip`; no date is trusted. The check runs per merged (or narrowed pushed) branch,
@@ -42,7 +44,8 @@ def load_hook_module(path, name):
 
 merge_gate = load_hook_module(HOOK_PATH, "merge_gate_t341")
 import hook_verify_row  # noqa: E402  (on sys.path: the hook put its lib/ there)
-from hook_verify_row import REVIEWER_PREFIX, append_trace, prove_review, reviewer_record  # noqa: E402
+from hook_verify_row import (REVIEWER_PREFIX, append_trace, prove_review,  # noqa: E402
+                             reviewer_done_record, reviewer_record)
 
 # Spelled in halves so this file's own text never reads as a command to the live gate.
 G = "git "
@@ -169,6 +172,8 @@ def assert_review_block(text):
     assert text is not None, "the merge must be refused: no valid reviewer record for the tip"
     assert REVIEW_BLOCK in text, text
     assert f"Reviewer: {TID}" in text and "active-task state" in text, text  # the remedy
+    assert "`SubagentStop`" in text and "`ReviewerDone`" in text, text  # AC 12
+    assert "foreground" not in text, text  # AC 12: a background spawn is fine
 
 
 # ---------------------------------------------------------------------------
@@ -294,31 +299,43 @@ def test_an_already_merged_ready_for_review_task_with_no_record_blocks_nothing_n
 # AC 5, AC 9: what a reviewer record must be
 # ---------------------------------------------------------------------------
 
-def test_a_description_naming_another_task_is_refused(gate):
+def test_a_reviewer_done_record_for_another_task_is_refused(gate):
+    """AC 13: filed in T950's own trace, but it names T999."""
     fx = gate(kanban(done=(TID,)))
     fx.extended()
-    fx.review(description="Reviewer: T999")
+    append_trace(fx.trace, merge_gate.ROOT, TID, reviewer_done_record("T999", fx.tip()))
     assert_review_block(merge(fx))
 
 
-def test_a_description_that_is_not_exact_is_refused(gate):
+@pytest.mark.parametrize("status", ["async_launched", "completed", None])
+def test_an_agent_spawn_record_alone_is_refused(gate, status):
+    """AC 12-13: the spawn record of a `Reviewer: <ID>` call with the documented prompt does not
+    count, whether it says `async_launched` (every spawn here), `completed` or nothing."""
     fx = gate(kanban(done=(TID,)))
     fx.extended()
-    fx.review(description=f"Reviewer: {TID} (round 2)")
+    record = reviewer_record(TID, fx.tip())
+    if status is None:
+        del record["spawn"]
+    else:
+        record["spawn"]["status"] = status
+    append_trace(fx.trace, merge_gate.ROOT, TID, record)
     assert_review_block(merge(fx))
 
 
-def test_a_task_id_line_naming_another_task_is_refused(gate):
+@pytest.mark.parametrize("commit", ["0123456789ab", "0123456789ABCDEF0123456789ABCDEF01234567",
+                                    None, 12345])
+def test_a_reviewer_done_record_with_no_full_commit_is_refused(gate, commit):
     fx = gate(kanban(done=(TID,)))
     fx.extended()
-    fx.review(task_line="Task ID: T999")
+    append_trace(fx.trace, merge_gate.ROOT, TID, reviewer_done_record(TID, commit))
     assert_review_block(merge(fx))
 
 
-def test_a_prompt_without_the_prefix_is_refused(gate):
+def test_a_record_of_another_tool_naming_the_task_and_commit_is_refused(gate):
     fx = gate(kanban(done=(TID,)))
     fx.extended()
-    fx.review(prefix="Please review this change:")
+    append_trace(fx.trace, merge_gate.ROOT, TID,
+                 reviewer_done_record(TID, fx.tip(), tool_name="Agent"))
     assert_review_block(merge(fx))
 
 
@@ -337,42 +354,10 @@ def test_an_unknown_commit_is_refused(gate):
     assert_review_block(merge(fx))
 
 
-def test_an_error_record_is_refused(gate):
-    fx = gate(kanban(done=(TID,)))
-    fx.extended()
-    fx.review(is_error=True)
-    assert_review_block(merge(fx))
-
-
-def test_a_background_spawn_that_only_launched_is_refused(gate):
-    """Spike (T341): a background spawn's record carries `spawn.status: async_launched` — it tells
-    the review had not finished when the record was written."""
-    fx = gate(kanban(done=(TID,)))
-    fx.extended()
-    fx.review(spawn={"resolved_model": "claude-opus-5-5", "status": "async_launched"})
-    assert_review_block(merge(fx))
-
-
-def test_a_record_with_no_status_counts_as_far_as_it_tells(gate):
-    fx = gate(kanban(done=(TID,)))
-    fx.extended()
-    record = reviewer_record(TID, fx.tip())
-    del record["spawn"]
-    append_trace(fx.trace, merge_gate.ROOT, TID, record)
-    assert merge(fx) is None
-
-
-def test_a_summary_cut_before_the_commit_line_is_refused(gate):
-    fx = gate(kanban(done=(TID,)))
-    fx.extended()
-    fx.review(lead={"model": "x" * 200})
-    assert_review_block(merge(fx))
-
-
 @pytest.mark.parametrize("stem", ["_untagged", "T777"])
 def test_a_record_filed_under_another_trace_file_still_counts(gate, stem):
-    """A main-session spawn is filed by the session's active-task state before its prompt: the
-    record is the task's by its description, not by its file."""
+    """The hook files it under the task's own name; a record is still the task's by its content,
+    not by its file."""
     fx = gate(kanban(done=(TID,)))
     fx.extended()
     fx.review(stem=stem)
@@ -396,7 +381,7 @@ def test_sc6_a_record_edited_after_anchoring_with_its_hash_recomputed_is_refused
     fx.review(reviewed)
 
     def retarget(rec):
-        rec["summary"] = rec["summary"].replace(reviewed, fx.tip())
+        rec["commit"] = fx.tip()
         rec["hash"] = merge_gate.chain_hash(rec)
         return rec
     _rewrite_last_line(os.path.join(fx.trace, f"{TID}.jsonl"), retarget)
@@ -410,7 +395,7 @@ def test_a_record_edited_without_recomputing_its_hash_is_refused(gate):
     fx.review(reviewed)
 
     def retarget(rec):
-        rec["summary"] = rec["summary"].replace(reviewed, fx.tip())
+        rec["commit"] = fx.tip()
         return rec
     _rewrite_last_line(os.path.join(fx.trace, f"{TID}.jsonl"), retarget)
     assert_review_block(merge(fx))
@@ -420,14 +405,23 @@ def test_a_forged_append_with_a_valid_chain_but_no_anchor_is_refused(gate):
     """`echo >>` from an agent's own shell: the chain links, the anchor directory is denied."""
     fx = gate(kanban(done=(TID,)))
     fx.extended()
-    append_trace(fx.trace, merge_gate.ROOT, TID, reviewer_record(TID, fx.tip()), anchor=False)
+    append_trace(fx.trace, merge_gate.ROOT, TID, reviewer_done_record(TID, fx.tip()), anchor=False)
+    assert_review_block(merge(fx))
+
+
+def test_a_record_typed_into_the_trace_by_hand_is_refused(gate):
+    """AC 13: `echo '{"tool_name": "ReviewerDone", ...}' >> memory/event-trace/T950.jsonl`."""
+    fx = gate(kanban(done=(TID,)))
+    fx.extended()
+    with open(os.path.join(fx.trace, f"{TID}.jsonl"), "a", encoding="utf-8") as f:
+        f.write(json.dumps(reviewer_done_record(TID, fx.tip())) + "\n")
     assert_review_block(merge(fx))
 
 
 def test_a_record_whose_prev_does_not_link_is_refused_even_when_anchored(gate):
     fx = gate(kanban(done=(TID,)))
     fx.extended()
-    record = reviewer_record(TID, fx.tip())
+    record = reviewer_done_record(TID, fx.tip())
     path = os.path.join(fx.trace, f"{TID}.jsonl")
     record["prev"] = "f" * 64  # the line before it is a pre-chain record: prev must be genesis
     record["hash"] = merge_gate.chain_hash(record)
@@ -443,7 +437,7 @@ def test_a_record_whose_prev_does_not_link_is_refused_even_when_anchored(gate):
 def test_a_record_marked_anchor_failed_is_refused(gate):
     fx = gate(kanban(done=(TID,)))
     fx.extended()
-    append_trace(fx.trace, merge_gate.ROOT, TID, dict(reviewer_record(TID, fx.tip()),
+    append_trace(fx.trace, merge_gate.ROOT, TID, dict(reviewer_done_record(TID, fx.tip()),
                                                       anchor="failed"))
     assert_review_block(merge(fx))
 
@@ -475,11 +469,44 @@ def test_the_prefix_is_the_documented_literal():
     assert merge_gate.REVIEWER_PROMPT_PREFIX == REVIEWER_PREFIX
 
 
-def test_the_documented_prompt_fits_the_summary_for_a_long_board_id():
-    tid, sha = "ENGINEERING-12345", "a" * 40
-    record = reviewer_record(tid, sha)
-    assert len(record["summary"]) == 300  # the cut really happened
-    assert merge_gate.reviewer_commit(record, tid) == sha
+def test_the_remedy_names_the_spawn_shape_and_the_hook_record(gate):
+    """AC 12: the block line names the spawn shape, says the record is written when the reviewer
+    ends, and no longer asks for a foreground spawn (`assert_review_block` checks all three)."""
+    fx = gate(kanban(done=(TID,)))
+    fx.extended()
+    text = merge(fx)
+    assert_review_block(text)
+    assert f"{REVIEWER_PREFIX}\\nTask ID: {TID}\\nCommit: {fx.tip()}" in text, text
+
+
+# ---------------------------------------------------------------------------
+# AC 13 end to end: the real `SubagentStop` hook writes the record the gate counts
+# ---------------------------------------------------------------------------
+
+def _hook_run(fx, prompt, monkeypatch, tmp_path):
+    monkeypatch.setattr(merge_gate, "ROOT", fx.main)  # the hook's project is the main checkout
+    transcript = hook_verify_row.spawn_transcript(tmp_path / "home", prompt)
+    event = hook_verify_row.subagent_stop_event(transcript, fx.wt)
+    done = hook_verify_row.run_reviewer_done_hook(fx.main, event, os.environ["CLAUDE_TRACE_ANCHOR_DIR"])
+    assert done.returncode == 0 and done.stdout == "", done.stderr
+
+
+def test_the_record_the_real_hook_writes_when_the_reviewer_ends_allows_the_merge(
+        gate, monkeypatch, tmp_path):
+    fx = gate(kanban(done=(TID,)))
+    fx.extended()
+    assert_review_block(merge(fx))
+    _hook_run(fx, hook_verify_row.reviewer_prompt(TID, fx.tip()), monkeypatch, tmp_path)
+    assert merge(fx) is None
+
+
+def test_a_sub_agent_that_ends_with_a_non_reviewer_prompt_leaves_the_merge_refused(
+        gate, monkeypatch, tmp_path):
+    fx = gate(kanban(done=(TID,)))
+    fx.extended()
+    _hook_run(fx, f"Implement {TID}: tasks/TASK_GUIDE_{TID}.md\nCommit: {fx.tip()}", monkeypatch,
+              tmp_path)
+    assert_review_block(merge(fx))
 
 
 def test_trace_shows_review_is_false_on_a_git_error(gate):

@@ -5,11 +5,13 @@ AC 1  — `AGENTS.md` Hard-Stop Gate 1 keeps its title; the Supervisor writes th
         track; implementer spawns only for parallel or oversized C3 work; one fresh reviewer spawn,
         required by the merge gate. The Stage 3 and Stage 4 lines match.
 AC 2  — DDR-0011 supersedes DDR-0004 and records the evidence and the user's choice.
-AC 3  — `pipeline-stages.md` gives the reviewer spawn's exact shape, and that shape fits the trace
-        record's 300-character summary as the merge gate reads it.
+AC 3  — `pipeline-stages.md` gives the reviewer spawn's exact shape, and the `SubagentStop` hook reads
+        that shape's prompt as the task and the commit reviewed.
 AC 7  — `merge_gate_guard.AUTHORISED_TASKS` names T341; every gate commit names an authorised task.
 AC 8  — `tracks.md` names the merge-gate condition and the limit (not a proof).
 AC 10 — no live doc still says the Supervisor never writes implementation code.
+AC 14 — Stage 4 step 0, `tracks.md` and DDR-0011 say the spawn may run in the background and the gate
+        counts the `ReviewerDone` record the `SubagentStop` hook writes when the reviewer ends.
 
 Run with: python3 -m pytest tests/test_t341_gate1_doctrine.py -v
 """
@@ -47,6 +49,17 @@ def _gate():
     source = _read(path)
     assert "\nmain()" in source
     module = types.ModuleType("merge_gate_t341_doctrine")
+    module.__file__ = str(path)
+    exec(compile(source.replace("\nmain()", "\n"), str(path), "exec"), module.__dict__)
+    return module
+
+
+def _reviewer_done_hook():
+    """The `SubagentStop` hook module, loaded without running its bottom-of-file `main()`."""
+    path = HOOKS / "subagent_stop_reviewer_done.py"
+    source = _read(path)
+    assert "\nmain()" in source
+    module = types.ModuleType("reviewer_done_t341_doctrine")
     module.__file__ = str(path)
     exec(compile(source.replace("\nmain()", "\n"), str(path), "exec"), module.__dict__)
     return module
@@ -125,24 +138,42 @@ def test_ac3_stage_4_gives_the_reviewer_spawns_exact_shape():
     assert "first 300 characters" in stage4 and "MAX_SUMMARY_LEN" in stage4
     assert "never the Supervisor's reasoning" in stage4
     assert "`security-review`" in stage4 and "`tasks/TASK_REVIEW_<ID>.md`" in stage4
-    assert "in the foreground" in stage4
+    assert "in the foreground" not in stage4  # AC 14: the Agent tool has no foreground option
 
 
-def test_ac3_the_documented_prompt_fits_the_summary_the_gate_reads():
-    """Fill the documented example the way a Supervisor would, record it the way
-    `post_tool_trace.summarize` does (`json.dumps(tool_input)[:300]`), and read it back."""
+def test_ac3_the_documented_prompt_is_what_the_reviewer_done_hook_reads():
+    """Fill the documented example the way a Supervisor would; the `SubagentStop` hook reads the
+    task and the commit from it, and the gate counts the record it then writes for that pair."""
     gate = _gate()
-    trace_hook = _read(HOOKS / "post_tool_trace.py")
-    limit = int(re.search(r"^MAX_SUMMARY_LEN = (\d+)$", trace_hook, re.M).group(1))
+    hook = _reviewer_done_hook()
     example = re.search(r'prompt: "([^"]+)" \}\)', _read(PIPELINE_MD)).group(1)
     tid, sha = "PROJ-12345", "c" * 40
     prompt = (example.replace("\\n", "\n").replace("<ID>", tid).replace("<40-hex>", sha)
               .replace("…", "Run code-review and security-review. " * 20))
-    tool_input = {"subagent_type": "easy-kit:qa-expert", "description": f"Reviewer: {tid}",
-                  "prompt": prompt}
-    record = {"tool_name": "Agent", "summary": json.dumps(tool_input)[:limit]}
-    assert len(json.dumps(tool_input)) > limit  # the cut really happens
+    assert hook.reviewer_target(prompt) == (tid, sha)
+    record = {"tool_name": "ReviewerDone", "task_id": tid, "commit": sha, "agent_id": "a1"}
     assert gate.reviewer_commit(record, tid) == sha
+
+
+# ---- AC 14 -----------------------------------------------------------------------------------
+
+def test_ac14_stage_4_step_0_says_background_and_the_subagent_stop_record():
+    step0 = _norm(_section(_read(PIPELINE_MD), "## Stage 4:"))
+    step0 = step0[step0.index("0. **Reviewer spawn**"):step0.index("**Pull moment 3")]
+    assert "The spawn may run in the background" in step0
+    assert "`SubagentStop` hook (`subagent_stop_reviewer_done.py`)" in step0
+    assert "`ReviewerDone`" in step0 and "when the reviewer ends" in step0
+    assert "async_launched" in step0  # why the spawn record alone does not count
+
+
+def test_ac14_tracks_and_ddr_0011_say_the_same():
+    tracks = _norm(_read(TRACKS_MD))
+    ddr = _norm(_read(DDR_0011))
+    for text in (tracks, ddr):
+        assert "may run in the background" in text
+        assert "`SubagentStop`" in text and "`ReviewerDone`" in text
+    assert "so the reviewer runs in the foreground" not in ddr
+    assert "A background reviewer spawn does not count" not in tracks
 
 
 # ---- AC 7 ------------------------------------------------------------------------------------

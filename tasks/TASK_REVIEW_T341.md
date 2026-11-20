@@ -89,6 +89,39 @@ the unchanged gate allows every one of these merges.
 
 > The Supervisor must never write implementation code directly. On the minimal track the Supervisor writes the code itself, with no guide, and ends with a Decision record (`docs/claude-md/tracks.md`).
 
+**BEFORE (option B)**: captured by the common-infrastructure sub-agent on `feat/t341-reviewer-gate`
+at `27eacfe9a29ea40ba5dd8b00fdad6921f15fb48a`, after the red AC 11-14 tests were written and before
+any implementation commit. The gate and `.claude/settings.json` are unchanged (`git diff --stat HEAD`
+on both is empty), and `.claude/hooks/subagent_stop_reviewer_done.py` does not exist. The old gate
+still counts an `Agent` spawn record (`completed`, or no status) as proof, and refuses a `ReviewerDone`
+record on the tip:
+
+```
+$ date -u +%Y-%m-%dT%H:%M:%SZ; git rev-parse HEAD; python3 -m pytest .claude/hooks/tests/test_t341_reviewer_done.py .claude/hooks/tests/test_t341_reviewer_gate.py -q -p no:cacheprovider --tb=no -rf -k "writes_one_reviewer_done or spawn_record_alone or sc2_ or real_hook_writes or remedy_names or another_task_is"
+2026-11-20T11:03:11Z
+27eacfe9a29ea40ba5dd8b00fdad6921f15fb48a
+FFFFFFFF                                                                 [100%]
+FAILED .claude/hooks/tests/test_t341_reviewer_done.py::test_a_reviewer_that_ends_writes_one_reviewer_done_record - AssertionError: /home/thunderkds/.cache/uv/builds-v0/.tmpCmNZ4r/bin/python: can't ...
+FAILED .claude/hooks/tests/test_t341_reviewer_gate.py::test_sc2_a_valid_reviewer_record_naming_the_tip_allows_the_merge - AssertionError: assert '[hook:pre_bash] Pipeline gate failed — cannot push/...
+FAILED .claude/hooks/tests/test_t341_reviewer_gate.py::test_a_reviewer_done_record_for_another_task_is_refused - AssertionError: [hook:pre_bash] Pipeline gate failed — cannot push/merge:
+FAILED .claude/hooks/tests/test_t341_reviewer_gate.py::test_an_agent_spawn_record_alone_is_refused[async_launched] - AssertionError: [hook:pre_bash] Pipeline gate failed — cannot push/merge:
+FAILED .claude/hooks/tests/test_t341_reviewer_gate.py::test_an_agent_spawn_record_alone_is_refused[completed] - AssertionError: the merge must be refused: no valid reviewer record for the tip
+FAILED .claude/hooks/tests/test_t341_reviewer_gate.py::test_an_agent_spawn_record_alone_is_refused[None] - AssertionError: the merge must be refused: no valid reviewer record for the tip
+FAILED .claude/hooks/tests/test_t341_reviewer_gate.py::test_the_remedy_names_the_spawn_shape_and_the_hook_record - AssertionError: [hook:pre_bash] Pipeline gate failed — cannot push/merge:
+FAILED .claude/hooks/tests/test_t341_reviewer_gate.py::test_the_record_the_real_hook_writes_when_the_reviewer_ends_allows_the_merge - AssertionError: [hook:pre_bash] Pipeline gate failed — cannot p...
+8 failed, 69 deselected in 10.06s
+```
+
+(`python3 -m pytest` ran as `uv run --with pytest python -m pytest`.) `can't ...` is `can't open file
+'.../subagent_stop_reviewer_done.py'`. The refused cases show the old remedy, which asks for a spawn "in
+the foreground" and names no `SubagentStop` record. The whole changed set at 2026-11-20T11:02:29Z on the
+same commit (`test_t341_reviewer_done.py`, `test_t341_reviewer_gate.py`,
+`tests/test_t341_gate1_doctrine.py`): `78 failed, 14 passed in 12.34s`.
+
+The doctrine text of AC 14 as it is now, `docs/claude-md/pipeline-stages.md` Stage 4 step 0, verbatim:
+
+> The exact shape, in the foreground (not `run_in_background`), with this session's active-task state set to `<ID>`:
+
 **AFTER**: [same command, post-change] OR [verbatim excerpt of the new content]
 
 **DELTA**: [one sentence — what a user can now do that they could not before]
