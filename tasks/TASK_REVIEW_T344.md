@@ -68,8 +68,25 @@ Not done: merge (yours); <auto verify: running (T182) | auto verify: <result> | 
 > **before any implementation commit exists**; if it does not (docs, templates, skill-instruction
 > text), BEFORE is the **verbatim prior content** of what changed — a quoted excerpt, not a command.
 
-**BEFORE**: [pasted timestamped command output showing the thing absent/failing, captured before the
-first implementation commit] OR [verbatim excerpt of the prior content, for non-executable changes]
+**BEFORE**: the Supervisor, before any implementation commit, on `feat/t344-changelog` at `d2499ce9108fd4e27e04616a26049c44b9534175` (`site/docs.html` unchanged), the new test against the unchanged page:
+
+```
+$ date -u +%Y-%m-%dT%H:%M:%SZ; git rev-parse HEAD; uv run --with pytest python -m pytest tests/test_site_changelog.py -q -p no:cacheprovider
+2026-11-20T15:09:44Z
+d2499ce9108fd4e27e04616a26049c44b9534175
+FAILED tests/test_site_changelog.py::test_ac1_the_section_has_its_heading_after_options_and_before_the_footer
+FAILED tests/test_site_changelog.py::test_ac1_the_reference_nav_group_ends_with_the_changelog_link
+FAILED tests/test_site_changelog.py::test_ac2_one_entry_per_release_newest_first_only_unreleased_open
+FAILED tests/test_site_changelog.py::test_ac2_each_summary_gives_its_task_count
+FAILED tests/test_site_changelog.py::test_ac2_each_released_summary_gives_a_date
+FAILED tests/test_site_changelog.py::test_ac5_every_done_task_on_the_board_appears_exactly_once
+FAILED tests/test_site_changelog.py::test_ac5_tasks_are_in_id_order_inside_each_entry
+FAILED tests/test_site_changelog.py::test_ac4_each_task_shows_its_board_title_escaped_with_code_spans
+FAILED tests/test_site_changelog.py::test_ac3_the_section_copies_no_email_address
+9 failed, 1 passed in 0.06s
+```
+
+The one pass is `test_ac4_render_title_escapes_and_keeps_code_spans`, a pure helper check. The page has no `#changelog` section and no sidebar link.
 
 **AFTER**: [same command, post-change] OR [verbatim excerpt of the new content]
 
