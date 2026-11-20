@@ -51,6 +51,16 @@ Recorded limitations (cut list, TASK_GUIDE_T146):
 * Paths built from variables (`cat "$F"`) are not resolved.
 * A Bash command that only *reads* a sensitive path (`grep KEY .env`) asks too —
   reads and writes are not cheaply distinguishable in a command string.
+* A glob inside a kept quoted span is expanded too, as code (T342), except when the
+  span's segment command is on `NO_GLOB_COMMAND_PATTERN` (`grep`, `egrep`, `fgrep`,
+  `rg`, `sed`, `sort`, `cut`, `tr`: they neither glob nor run a shell) and the span
+  carries no executor (`SPAN_EXECUTOR_PATTERN`) and, for `sed`, no `e` command
+  (`SED_EXECUTE_PATTERN`). The outer shell does not expand quoted text, so
+  `sed 's/ - .*//'` names no file. Every other quoted span (`su -c`, `xargs`, `awk`,
+  `git add '.c*'`, `find -name`) still expands: unknown resolves toward code. Its
+  literal tokens are still checked in every case.
+* Globs are expanded against the project root (the hook's `cwd`), not against the
+  directory a `cd` in the command moves to.
 """
 import glob
 import itertools
@@ -96,6 +106,7 @@ try:
     exit_outside_kit_project()  # T232: first, so a broken lib stays silent in a non-kit project
     from guide_sections import read_guide_section  # noqa: E402
     from shell_data import strip_heredoc_bodies, strip_quoted_spans  # noqa: E402
+    from shell_data import SEGMENT_BOUNDARY_PATTERN, SPAN_EXECUTOR_PATTERN  # noqa: E402
     from task_context import resolve_task_id  # noqa: E402
     from board.moments import board_mode  # noqa: E402
     IMPORT_ERROR = None
@@ -105,8 +116,20 @@ except Exception as exc:  # pragma: no cover - exercised via subprocess test
 # Where a shell token ends. Quote characters are separators too, because a
 # quoted span T099 keeps as code (`bash -c "cat > .env"`) arrives with its quotes.
 # `:` too (T314): `git show :.env` and `HEAD:.env` read the file; splitting only adds asks.
-TOKEN_SPLIT_PATTERN = re.compile(r"[\s;&|<>()`'\"=:]+")
+TOKEN_PATTERN = re.compile(r"[^\s;&|<>()`'\"=:]+")
 GLOB_CHARS = re.compile(r"[*?\[]")
+# T342: a segment whose command neither globs its arguments nor runs a shell. Anchored at the
+# segment start like shell_data's DATA_COMMAND_PATTERN: only `VAR=value` and a path may come
+# first, so `sudo sed`, `xargs grep` keep the default (expand). Short on purpose: a command
+# missing here over-asks, a command wrongly added here hides a path.
+NO_GLOB_COMMAND_PATTERN = re.compile(
+    r"\s*(?:[A-Za-z_]\w*=\S*\s+)*(?:[\w.\-/]*/)?"
+    r"(grep|egrep|fgrep|rg|sed|sort|cut|tr)(?:\s|\Z)"
+)
+# GNU sed runs a shell for the `e` command (`1e cmd`, `e cmd`) and the `s///e` flag, which may
+# sit anywhere in the flag run (`/ge`, `/eg`, `/3ew f`). Any `e` inside a run of flag letters
+# and digits counts, so a word like `gem` over-asks: the safe side.
+SED_EXECUTE_PATTERN = re.compile(r"(?<![A-Za-z])[gpIiMmw0-9]*e[gpIiMmw0-9]*(?![A-Za-z])")
 MAX_GLOB_MATCHES = 200
 BACKTICK_SPAN_PATTERN = re.compile(r"`([^`]+)`")
 # A quoted word right after an output redirect (`>`, `>>`, `>|`, `&>`, `2>`).
@@ -261,20 +284,60 @@ def command_tokens(command, cwd):
     A token carrying glob characters is expanded against the filesystem the way
     the shell would (`cat .env*`), and kept as written too. Quoted redirect
     targets are collected before shell_data strips them as data (`echo x > ".env"`).
+    A glob in a quoted span `unexpanded_globs` marks is not expanded (T342).
     """
     unheredoc = strip_heredoc_bodies(command)
     tokens = [double or single
               for double, single in QUOTED_REDIRECT_TARGET_PATTERN.findall(unheredoc)
               if double or single]
     text = strip_quoted_spans(unheredoc)
-    for token in TOKEN_SPLIT_PATTERN.split(text):
-        if not token:
-            continue
-        tokens.append(token)
-        if GLOB_CHARS.search(token):
-            matches = glob.iglob(os.path.join(cwd, token), recursive=True)
+    masked = unexpanded_globs(text)
+    for match in TOKEN_PATTERN.finditer(text):
+        start, end = match.span()
+        tokens.append(match.group())
+        if GLOB_CHARS.search(masked[start:end]):
+            matches = glob.iglob(os.path.join(cwd, match.group()), recursive=True)
             tokens.extend(itertools.islice(matches, MAX_GLOB_MATCHES))
     return tokens
+
+
+def unexpanded_globs(text):
+    """`text` with the glob characters of every quoted span the shell leaves unexpanded
+    replaced by `_`, same length, so token offsets line up (T342).
+
+    A span counts only when its segment command matches `NO_GLOB_COMMAND_PATTERN`, the span
+    has no executor and, behind `sed`, no `e` command. The scan mirrors shell_data's
+    `strip_quoted_spans`: quotes pair with the next same quote, a segment boundary outside a
+    span starts a new segment, and an unterminated quote or a backslash-escaped opening quote
+    ends the scan, so the tail keeps its globs (`\\\\"` over-asks: the safe side). Quote characters are token separators, so no token mixes a span with outside text.
+    """
+    out = list(text)
+    segment_start = 0
+    i = 0
+    while i < len(text):
+        char = text[i]
+        if char in "\"'":
+            if i and text[i - 1] == "\\":
+                break  # `\"` is a literal quote: what follows is unquoted (Stage 4 P1)
+            close = text.find(char, i + 1)
+            if close == -1:
+                break
+            span = text[i:close + 1]
+            command = NO_GLOB_COMMAND_PATTERN.match(text[segment_start:i])
+            if (command and not SPAN_EXECUTOR_PATTERN.search(span)
+                    and not (command.group(1) == "sed" and SED_EXECUTE_PATTERN.search(span))):
+                for k in range(i + 1, close):
+                    if GLOB_CHARS.match(text, k):
+                        out[k] = "_"
+            i = close + 1
+            continue
+        boundary = SEGMENT_BOUNDARY_PATTERN.match(text, i)
+        if boundary:
+            segment_start = boundary.end()
+            i = boundary.end()
+            continue
+        i += 1
+    return "".join(out)
 
 
 # --- Predicted paths ---------------------------------------------------------
