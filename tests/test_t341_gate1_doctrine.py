@@ -87,7 +87,7 @@ def test_ac1_the_stage_3_and_stage_4_lines_match():
     text = _read(AGENTS_MD)
     stage3 = re.search(r"^- \*\*Stage 3\*\*.+$", text, re.M).group(0)
     stage4 = re.search(r"^- \*\*Stage 4\*\*.+$", text, re.M).group(0)
-    assert "the Supervisor implements" in stage3 and "implementer spawn only" in stage3
+    assert "the Supervisor implements" in stage3 and "implementer spawn only per Gate 1" in stage3
     assert 'description: "Reviewer: <ID>"' in stage4 and "required by the merge gate" in stage4
 
 

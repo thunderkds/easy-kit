@@ -32,6 +32,7 @@ import test_stop_auto_mode_check as stop_check  # noqa: E402
 
 import auto_mode as am  # noqa: E402  (on sys.path: the hook put its lib/ there)
 import verify_record  # noqa: E402
+import hook_verify_row  # noqa: E402
 
 assert gate  # the fixture, imported for pytest
 
@@ -192,6 +193,7 @@ def auto_verified(fx):
     fx.task_file("TASK_GUIDE_T900.md", GUIDE_VACATED.format(tid="T900"), commit=True)
     verified = git(fx.wt, "rev-parse", "HEAD")
     verify_record.write_record(merge_gate.ROOT, "T900", verified, "pass", "s-1", "log.txt")
+    hook_verify_row.reviewed(merge_gate, "T900", verified)  # T341: a fresh reviewer ran on it
     cells = verify_record.row_cells(verified, "pass", "s-1", "log.txt")
     fx.task_file("TASK_REVIEW_T900.md", REVIEW.format(tid="T900", result=cells[0],
                                                       notes=cells[1]), commit=True)

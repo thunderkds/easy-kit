@@ -113,7 +113,7 @@ class Fixture:
     def hook_pass(self, where=None, tid="T900"):
         """T309: the hook's own pass for the head commit of `where` (the worktree by default),
         with its run record: `(Result, Notes)`. A hand-typed row no longer counts."""
-        sha = hook_verify_row.prove(merge_gate.ROOT, where or self.wt, tid)
+        sha = hook_verify_row.prove(merge_gate.ROOT, where or self.wt, tid, gate=merge_gate)
         return tuple(hook_verify_row.hook_cells(sha, tid).split(" | ", 1))
 
     def review(self, result=None, commit=False):
@@ -302,6 +302,7 @@ def test_ac4_the_auto_verify_flow_passes_once_the_hook_row_is_committed(gate):
     assert text is not None and UNCOMMITTED in text, text
     git(fx.wt, "add", "-A")
     git(fx.wt, "commit", "-qm", "T900: hook-written verify row")
+    hook_verify_row.reviewed(merge_gate, "T900", verified)  # T341: a fresh reviewer ran on V
     assert reason(MERGE + " feat/t900-x", fx.main) is None
 
 
@@ -331,6 +332,7 @@ def test_ac4_guide_first_a_row_committed_in_the_guide_counts(gate, tmp_path, mon
     fx.task_file("TASK_GUIDE_T900.md", REVIEW.format(
         tid="T900", result="☑ pass", notes=f"/verify by the user, session {SID}, commit {sha}"),
         commit=True)
+    hook_verify_row.reviewed(merge_gate, "T900", git(fx.wt, "rev-parse", "HEAD"))  # T341
     assert reason(MERGE + " feat/t900-x", fx.main, transcript) is None
 
 
@@ -387,7 +389,11 @@ def test_ac5_unresolved_branch_reads_the_working_trees_as_before(gate, command):
     fx = gate(kanban(ready=("T900",)))
     fx.review(commit=False)
     assert merge_gate.branch_target(command, fx.main) is None or "gone" in command
-    assert reason(command, fx.main) is None  # pre-T210: the working-tree row allows
+    text = reason(command, fx.main)
+    if "gone" in command:  # T341: a branch it cannot resolve has no checkable reviewer record
+        assert_only_unresolved_review_block(text, "feat/t900-gone")
+    else:
+        assert text is None  # pre-T210: the working-tree row allows
 
 
 def test_ac5_unresolved_branch_still_blocks_without_any_row(gate):
@@ -411,4 +417,14 @@ def test_ac5_a_git_failure_resolving_the_tip_reads_the_working_trees(gate, monke
     monkeypatch.setattr(merge_gate, "_git", lambda d, *a: None if a[:1] == ("rev-parse",)
                         and a[-1].endswith("^{commit}") else real(d, *a))
     assert merge_gate.committed_verify_row("T900", "feat/t900-x", fx.main) is None
-    assert reason(MERGE + " feat/t900-x", fx.main) is None
+    # T341: the verify row still reads the working trees; the reviewer check fails closed
+    assert_only_unresolved_review_block(reason(MERGE + " feat/t900-x", fx.main), "feat/t900-x")
+
+
+def assert_only_unresolved_review_block(text, branch):
+    """The gate's only block line is T341's: the branch's tip cannot be read, so no reviewer
+    record can be checked for it."""
+    assert text is not None
+    lines = [line for line in text.splitlines() if line.startswith("  • ")]
+    assert lines == [f"  • T900: cannot resolve {branch} to a commit, so its reviewer record "
+                     "cannot be checked (T341)"], text

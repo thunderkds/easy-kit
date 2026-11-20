@@ -35,6 +35,9 @@ sys.path.insert(0, str(HOOKS / "lib"))
 
 import session_work as sw  # noqa: E402
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import hook_verify_row  # noqa: E402  (T341)
+
 SID = "aaaaaaaa-1111-2222-3333-444444444444"
 OTHER_SID = "bbbbbbbb-1111-2222-3333-444444444444"
 
@@ -282,6 +285,25 @@ def gate_project(tmp_path, in_progress=(IN_PROGRESS_ROW,), ready=(), files=None)
     return project
 
 
+def review_own_branch(project, env):
+    """T341: a valid reviewer record for the tip of T900's branch, when it exists. These tests are
+    about verify rows, not the reviewer check (`test_t341_reviewer_gate.py`)."""
+    done = subprocess.run(["git", "-C", str(project), "rev-parse", "--verify", "--quiet",
+                           "fix/t900-x^{commit}"], capture_output=True, text=True, timeout=30)
+    if done.returncode != 0:
+        return
+    saved = os.environ.get("CLAUDE_TRACE_ANCHOR_DIR")
+    if env.get("CLAUDE_TRACE_ANCHOR_DIR"):
+        os.environ["CLAUDE_TRACE_ANCHOR_DIR"] = env["CLAUDE_TRACE_ANCHOR_DIR"]
+    try:
+        hook_verify_row.reviewed_in(project, "T900", done.stdout.strip())
+    finally:
+        if saved is None:
+            os.environ.pop("CLAUDE_TRACE_ANCHOR_DIR", None)
+        else:
+            os.environ["CLAUDE_TRACE_ANCHOR_DIR"] = saved
+
+
 def gate_env(project, **extra):
     env = {k: v for k, v in os.environ.items()
            if k not in ("CLAUDE_ACTIVE_TASK", "CLAUDE_PROJECT_DIR", "LINEAR_API_KEY")}
@@ -295,9 +317,11 @@ def run_gate(project, command, transcript=None, env=None):
              "session_id": SID}
     if transcript is not None:
         event["transcript_path"] = str(transcript)
+    env = env or gate_env(project)
+    review_own_branch(project, env)
     done = subprocess.run([sys.executable, str(project / ".claude" / "hooks" / GATE)],
                           input=json.dumps(event), capture_output=True, text=True, cwd=project,
-                          env=env or gate_env(project), timeout=60)
+                          env=env, timeout=60)
     out = json.loads(done.stdout) if done.stdout.strip() else {}
     return out.get("reason", "") if out.get("decision") == "block" else None, done.stderr
 
@@ -512,6 +536,9 @@ def min_project(tmp_path, line_for=lambda sha: [user_line(sha)], code_change_aft
     with its `verify:` line(s) committed at 06:10. Returns (project, code sha)."""
     project = gate_project(tmp_path, in_progress=(), ready=(RFR_MIN_ROW,),
                            files={"src/app.py": "print('v1')\n"})
+    # T341: the other task's branch (T901, no guide: minimal track) exists, so `MERGE_OTHER`
+    # resolves and only T900's row decides, as before.
+    _git(project, "branch", "fix/t901-x")
     trace = project / "memory" / "event-trace"
     trace.mkdir(parents=True)
     (trace / "T900.jsonl").write_text(json.dumps({"tool_name": "Bash", "is_error": False,

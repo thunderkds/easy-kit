@@ -54,18 +54,17 @@ REPLACED_SPANS = [
     # the T178 span on the same line. Pinned exactly by `tests/test_t341_gate1_doctrine.py`.
     ("The Supervisor must never write implementation code directly. On the minimal track",
      "On the extended track the Supervisor writes the code itself, in the task's worktree, test "
-     "first; it spawns an implementer only for 2+ independent tasks at once, or for a C3 task too "
-     "big for one context. Each extended task gets one fresh-context reviewer spawn "
-     "(`Reviewer: <ID>`), and the merge gate refuses the merge until its trace record shows that "
-     "reviewer ran on the code being merged (DDR-0011). On the minimal track"),
+     "first; an implementer spawn only for 2+ independent tasks at once, or for a C3 task too "
+     "big for one context. Each task gets one fresh-context reviewer spawn "
+     "(`Reviewer: <ID>`); the merge gate refuses the merge until its trace shows that "
+     "reviewer ran on the merged code (DDR-0011). On the minimal track"),
     ("per task, worktree-isolated, `Skill({ skill: \"craft-spawn-prompt\" })` before every `Agent()` spawn,",
-     "per task, worktree-isolated, the Supervisor implements (an implementer spawn only for parallel "
-     "tasks or an oversized C3 task), `Skill({ skill: \"craft-spawn-prompt\" })` before every "
+     "per task, worktree-isolated, the Supervisor implements (implementer spawn only per Gate 1), "
+     "`Skill({ skill: \"craft-spawn-prompt\" })` before every "
      "`Agent()` spawn,"),
     ("- **Stage 4** (Review): `Skill({ skill: \"code-review\" })` always;",
-     "- **Stage 4** (Review): one fresh-context reviewer spawn per extended task, `Agent({ "
-     "subagent_type: \"qa-expert\", description: \"Reviewer: <ID>\", … })`, required by the merge "
-     "gate, runs `Skill({ skill: \"code-review\" })` always;"),
+     "- **Stage 4** (Review): a fresh `Agent({ description: \"Reviewer: <ID>\" })` spawn, required "
+     "by the merge gate, runs `Skill({ skill: \"code-review\" })` always;"),
     # T200: the Stage 1 skill `settings-setup` joins the stage index.
     ("1=`git-guardrails-claude-code`,`map-codebase` |",
      "1=`git-guardrails-claude-code`,`map-codebase`,`settings-setup` |"),
@@ -266,8 +265,19 @@ def test_ac9_no_shipped_text_points_at_a_claude_md_section():
 
 
 # ── AC 10 ─────────────────────────────────────────────────────────────────────
+# T341 mirrors the new Hard-Stop Gate 1 sentence into CLAUDE_LEGACY.md; nothing else may change.
+T341_LEGACY_OLD = b"The Supervisor must never write implementation code directly.\n"
+T341_LEGACY_NEW = (b"The Supervisor writes the code itself, in the task's worktree, test first; "
+                   b"it spawns an implementer only for 2+ independent tasks at once, "
+                   b"or for a C3 task too big for one context. Each task gets one fresh-context reviewer "
+                   b"spawn (`Reviewer: <ID>`), and the merge gate refuses the merge until its trace record "
+                   b"shows that reviewer ran on the code being merged (DDR-0011).\n")
+
+
 def test_ac10_claude_legacy_md_unchanged():
-    assert (ROOT / "CLAUDE_LEGACY.md").read_bytes() == _git_show("CLAUDE_LEGACY.md", CLAUDE_LEGACY_REF)
+    base = _git_show("CLAUDE_LEGACY.md", CLAUDE_LEGACY_REF)
+    assert base.count(T341_LEGACY_OLD) == 1
+    assert (ROOT / "CLAUDE_LEGACY.md").read_bytes() == base.replace(T341_LEGACY_OLD, T341_LEGACY_NEW)
 
 
 OUT_OF_SCOPE = ("CLAUDE_LEGACY.md", "docs/ddr/", "docs/adr/", "RUNBOOK.md", "BRAINSTORMING_LOG",

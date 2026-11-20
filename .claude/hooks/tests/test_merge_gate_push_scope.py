@@ -138,6 +138,7 @@ class Gate:
     def review(self, tid, sha):
         """T309: `tid`'s review file with the hook's pass for `sha`; writes the pass record too."""
         hook_verify_row.write_pass_record(merge_gate.ROOT, sha, tid)
+        hook_verify_row.prove_review(self.trace, merge_gate.ROOT, tid, sha)  # T341
         return (REVIEW_VERIFIED.format(tid=tid, row=hook_verify_row.hook_row(sha, tid))
                 + self.extra_review.get(tid, ""))
 

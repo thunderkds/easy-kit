@@ -102,6 +102,9 @@ def ext_project(tmp_path, rows_for, inline=False, worktree=False):
     (project, sha)."""
     project = gate_project(tmp_path, in_progress=(), ready=(RFR_EXT_ROW,),
                            files={"src/app.py": "print('v1')\n", GUIDE_REL: POINTER_GUIDE})
+    # T341: the other task's branch (T901, no guide: minimal track) exists, so `MERGE_OTHER`
+    # resolves and only T900's working-tree row decides, as before.
+    _git(project, "branch", "fix/t901-x")
     trace = project / "memory" / "event-trace"
     trace.mkdir(parents=True)
     (trace / "T900.jsonl").write_text(json.dumps({"tool_name": "Bash", "is_error": False,
