@@ -5,6 +5,25 @@
 > this template and deletes the example comment. The same block is the Supervisor's final chat message.
 
 
+## T340 — Remove kit files nothing uses (lean-kit Part 1) · minimal
+Mode: auto
+**Asked:** "should start the enhance now" — then "run by automate, [admin]" (lean-kit proposal, Part 1: f1–f4, f7)
+**Decisions:**
+1. Track minimal — RULE: `docs/claude-md/tracks.md` `## Track rule` (C1, Risk Low, kit-only files not in `MANIFEST`, no user data, one session).
+2. Task ID T340, not T328 — FACT: machine 2 holds its own T327 and T328 (lean-kit proposal page), so T328–T339 are left free to avoid a second collision.
+3. f1–f4 removed: `scripts/measure_agent_guide_tokens.py`, `scripts/test-claude-md-refs.sh`, `experiments/plugin-spike/` + `tests/test_plugin_spike.py`, `experiments/self-review-spike/` — FACT: `git grep` finds no live reference outside task, memory and archive records; none is in `MANIFEST`, so no installed project holds them.
+4. The self-review spike's `RESULTS.md` kept, moved to `docs/experiments/self-review-spike-RESULTS.md` — FACT: `docs/prd/PRD_self-review.md:8` cites it as the evidence for every number in that PRD; the citation now names the new path.
+5. f7 dropped: the root `BRAINSTORMING_LOG.md` stays — RULE: `tasks/TASK_GUIDE_T215.md:32` ("Root `BRAINSTORMING_LOG.md` — the `brainstorming` skill's output path … stays at root"), pinned by `tests/test_repo_layout_t215.py:74`.
+6. f5 (kit-arms) and f6 (August token audits) not in this task — FACT: `docs/claude-md/tracks.md:4` cites the kit-arms experiment and machine 2's T328 reuses its runner; `.claude/hooks/tests/test_token_audit_generator.py:226,236` read `reports/token-audit_2026-07-17.md` and `…07-21.md` (SAFER OPTION: keep).
+**Checked:**
+- New test `tests/test_t340_remove_unused_files.py` — before the change `3 failed`; after it `2 passed` (the f7 assertion was removed with decision 5).
+- Suite: `python -m pytest .claude/hooks/tests tests -q -p no:cacheprovider` — `53 failed, 7522 passed, 24 skipped` with f7 still in; the extra failure was `tests/test_repo_layout_t215.py::test_moved_files_left_the_root_and_kept_their_bytes` (decision 5), now `7 passed`. The other 52 fail the same way on unchanged `main` (`52 failed, 141 passed` on those files): shells this machine lacks (`busybox`, `zsh` variants) and environment-bound timestamp tests. Python here has no pytest; runs used a scratch venv with pytest 9.2.0.
+- Real run: `sh scripts/validate.sh` — `validate.sh: PASS` on the branch and on `main`.
+- Simplify: skipped: the change outside tests and docs is deletions only.
+**Files:** `scripts/measure_agent_guide_tokens.py` (deleted), `scripts/test-claude-md-refs.sh` (deleted), `experiments/plugin-spike/` (deleted), `tests/test_plugin_spike.py` (deleted), `experiments/self-review-spike/` (deleted, `RESULTS.md` moved), `docs/experiments/self-review-spike-RESULTS.md`, `docs/prd/PRD_self-review.md`, `tests/test_t340_remove_unused_files.py`, `tasks/MINIMAL_LOG.md`, `PROJECT_KANBAN.md`
+**Memory:** nothing new
+**Not done:** merge (admin: after the auto verify pass); push: this repo has no `origin` remote (remote is `github`), and the `[admin]` gate pushes to `origin` only — T321 covers that; f5 after machine 2's T328 merges; follow-up: T326 and T327 still sit in Ready for Review although merged on 2026-11-18.
+
 ## T303 — The docs page says what T285, T288, T295 and T297–T299 changed · minimal
 Mode: auto
 **Asked:** "let check all the change, and make sure all of them avail from the docs and the index" — then "yes, let go, good to start the prallel also [admin]"
