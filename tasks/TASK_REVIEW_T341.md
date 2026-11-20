@@ -22,6 +22,7 @@ Mode: auto
 Checks: <filled at Stage 4>
 Memory: <filled after merge>
 Not done: merge (admin: after the auto verify pass); auto verify: running (T182)
+Paused: auto-mode check failed — no `Memory:` line in the report — run the memory pass before you stop and record it there (each entry written, or `Memory: nothing new`); no test run in memory/event-trace/T341.jsonl — write /home/thunderkds/workspace/pets/hungnguyen111/easy-kit/.claude/hooks/.state/active_task.d/$CLAUDE_CODE_SESSION_ID with the task ID (minimal-track step 1): `mkdir -p /home/thunderkds/workspace/pets/hungnguyen111/easy-kit/.claude/hooks/.state/active_task.d && printf '%s\n%s\n' "T341" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > /home/thunderkds/workspace/pets/hungnguyen111/easy-kit/.claude/hooks/.state/active_task.d/$CLAUDE_CODE_SESSION_ID`, then rerun the task's tests so the trace records them under the task, then stop; Risk High: decision 1 (`RULE`) is a choice — its RULE cites no written rule (`path:line`, `path § <heading>` or `docs/claude-md/tracks.md` `### <section>`) — so it must be `DEBATED` with exactly 3 Advocates named; Risk High: decision 4 (`SAFER OPTION`) is a choice — it is flagged ⚠ — so it must be `DEBATED` with exactly 3 Advocates named; Risk High: decision 5 (`RULE`) is a choice — its RULE cites no written rule (`path:line`, `path § <heading>` or `docs/claude-md/tracks.md` `### <section>`) — so it must be `DEBATED` with exactly 3 Advocates named; extended track, but the trace has no `code-review` Skill call (Stage 4 runs in auto mode); Risk High, but the trace has no `security-review` Skill call [report 51f5a2a68a7d]
 
 
 ## Evidence
@@ -48,8 +49,44 @@ Not done: merge (admin: after the auto verify pass); auto verify: running (T182)
 > **before any implementation commit exists**; if it does not (docs, templates, skill-instruction
 > text), BEFORE is the **verbatim prior content** of what changed — a quoted excerpt, not a command.
 
-**BEFORE**: [pasted timestamped command output showing the thing absent/failing, captured before the
-first implementation commit] OR [verbatim excerpt of the prior content, for non-executable changes]
+**BEFORE**: captured by the common-infrastructure sub-agent before any implementation commit, on
+`feat/t341-reviewer-gate` at `62b45ec62ca62ba229a11984b3b36869df5fb341` (the merge gate unchanged:
+`git diff --stat HEAD -- .claude/hooks/pre_bash_block_unsafe_merge.py` empty). The new test
+`.claude/hooks/tests/test_t341_reviewer_gate.py` runs against the unchanged gate.
+
+(1) The gate allows the merge of an extended-task branch that has a committed hook verify pass and
+no reviewer record (`merge(fx)` returns `None`: the gate printed no block):
+
+```
+$ date -u +%Y-%m-%dT%H:%M:%SZ; git rev-parse HEAD; python3 -m pytest .claude/hooks/tests/test_t341_reviewer_gate.py -q -p no:cacheprovider -k "sc1 or sc2 or done_row or backdated"
+2026-11-20T05:06:26Z
+62b45ec62ca62ba229a11984b3b36869df5fb341
+F.FF                                                                     [100%]
+_ test_sc1_ready_for_review_with_a_verify_pass_but_no_reviewer_record_is_refused _
+    def test_sc1_ready_for_review_with_a_verify_pass_but_no_reviewer_record_is_refused(gate):
+        fx = gate(kanban(ready=(TID,)))
+        fx.extended()
+        fx.verified()
+>       assert_review_block(merge(fx))
+text = None
+    def assert_review_block(text):
+>       assert text is not None, "the merge must be refused: no valid reviewer record for the tip"
+E       AssertionError: the merge must be refused: no valid reviewer record for the tip
+E       assert None is not None
+FAILED .claude/hooks/tests/test_t341_reviewer_gate.py::test_sc1_ready_for_review_with_a_verify_pass_but_no_reviewer_record_is_refused
+FAILED .claude/hooks/tests/test_t341_reviewer_gate.py::test_a_guide_committed_with_a_backdated_committer_date_is_still_checked
+FAILED .claude/hooks/tests/test_t341_reviewer_gate.py::test_the_done_row_of_an_extended_task_is_checked_too
+3 failed, 1 passed, 33 deselected in 0.51s
+```
+
+The whole new file at 2026-11-20T05:06:08Z on the same commit: `30 failed, 7 passed in 11.37s`. Every
+"is refused" case fails with `assert None is not None`, or on a missing `trace_shows_review` /
+`reviewer_commit` / `REVIEWER_PROMPT_PREFIX` / `chain_hash`. The 7 "is allowed" cases already pass:
+the unchanged gate allows every one of these merges.
+
+(2) The current last two sentences of `AGENTS.md` Hard-Stop Gate 1 (line 171), verbatim:
+
+> The Supervisor must never write implementation code directly. On the minimal track the Supervisor writes the code itself, with no guide, and ends with a Decision record (`docs/claude-md/tracks.md`).
 
 **AFTER**: [same command, post-change] OR [verbatim excerpt of the new content]
 

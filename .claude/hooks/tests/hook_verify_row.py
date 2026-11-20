@@ -115,3 +115,77 @@ def _fixed_code_sha():
 
 CODE_SHA = _fixed_code_sha()
 HOOK_PASS_ROW = hook_row(CODE_SHA)
+
+
+# --- T341: a reviewer spawn's trace record, the way `post_tool_trace.py` writes it -------------
+#
+# Since T341 the merge gate refuses the merge of an extended-track task branch until the trace holds
+# a `Reviewer: <ID>` `Agent` record that names the reviewed commit, with its chain hash and its
+# anchor intact. A test whose point is something else gives its fixture that record here.
+
+import json  # noqa: E402
+
+from trace_chain import GENESIS, anchor_path, chain_hash, safe_name  # noqa: E402
+
+REVIEWER_PREFIX = "Review alone, from the repo only:"
+
+
+def reviewer_summary(task_id, commit, description=None, prefix=REVIEWER_PREFIX, task_line=None,
+                     lead=None):
+    """`json.dumps(tool_input)[:300]` of the documented reviewer spawn (`post_tool_trace.summarize`).
+    `lead` puts extra keys before the documented ones (they then use up the 300 characters)."""
+    tool_input = dict(lead or {})
+    tool_input.update({
+        "subagent_type": "easy-kit:qa-expert",
+        "description": f"Reviewer: {task_id}" if description is None else description,
+        "prompt": (f"{prefix}\n{task_line or f'Task ID: {task_id}'}\nCommit: {commit}\n"
+                   f"Diff: main...{commit}\nGuide: tasks/TASK_GUIDE_{task_id}.md\n"
+                   + "Run code-review and security-review; write tasks/TASK_REVIEW_<ID>.md. " * 5),
+    })
+    return json.dumps(tool_input)[:300]
+
+
+def reviewer_record(task_id, commit, **overrides):
+    """The trace record a finished foreground reviewer spawn leaves (`spawn.status: completed`)."""
+    summary_args = {k: overrides.pop(k) for k in ("description", "prefix", "task_line", "lead")
+                    if k in overrides}
+    record = {"timestamp": "2026-11-20T00:00:00+00:00", "tool_name": "Agent",
+              "summary": reviewer_summary(task_id, commit, **summary_args), "is_error": False,
+              "spawn": {"resolved_model": "claude-opus-5-5", "status": "completed"}}
+    record.update(overrides)
+    return record
+
+
+def append_trace(trace_dir, root, stem, record, anchor=True):
+    """Append `record` to `<trace_dir>/<stem>.jsonl` hash-chained, and (with `anchor`) its anchor
+    line under `CLAUDE_TRACE_ANCHOR_DIR`, as `post_tool_trace.append_record` does for the gate's
+    `ROOT` (`root`). Returns the line number."""
+    os.makedirs(str(trace_dir), exist_ok=True)
+    path = os.path.join(str(trace_dir), f"{stem}.jsonl")
+    lines = open(path, "rb").read().split(b"\n")[:-1] if os.path.exists(path) else []
+    prev = GENESIS
+    for raw in reversed(lines):
+        try:
+            rec = json.loads(raw)
+        except Exception:
+            continue
+        if isinstance(rec, dict) and isinstance(rec.get("hash"), str):
+            prev = rec["hash"]
+            break
+    record = dict(record, prev=prev)
+    record["hash"] = chain_hash(record)
+    with open(path, "a", encoding="utf-8") as f:
+        f.write(json.dumps(record) + "\n")
+    if anchor:
+        target = anchor_path(str(root), stem)
+        os.makedirs(os.path.dirname(target), exist_ok=True)
+        with open(target, "a", encoding="utf-8") as f:
+            f.write("%s %d %s\n" % (safe_name(stem, "_untagged"), len(lines) + 1, record["hash"]))
+    return len(lines) + 1
+
+
+def prove_review(trace_dir, root, task_id, commit, stem=None, **overrides):
+    """Give `task_id` a valid reviewer record for `commit`, filed under `stem` (the task's own trace
+    file by default)."""
+    return append_trace(trace_dir, root, stem or task_id, reviewer_record(task_id, commit,
+                                                                           **overrides))
