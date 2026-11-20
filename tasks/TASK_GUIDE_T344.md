@@ -58,7 +58,7 @@ User, 2026-11-20: "create a section that about the change logs in the index docs
 | 2 | Inside it, one `<details>` per release, newest first: `Unreleased`, `v2.2.0`, `v2.1.0`, `v2.0.0`, `v1`. Each `<summary>` names the release, its date (the tag's commit date; none for Unreleased) and its task count. Only `Unreleased` is `open`. | every release, newest first |
 | 3 | Each released entry starts with one sentence summarising it, written from `RUNBOOK.md` `## Release Log` (`v1` covers that log's `v1.0.0` and `v1.1.0` rows). The Deployer and Approved columns are not copied (the Deployer cell is an email address). | release summaries |
 | 4 | Each entry lists its tasks in ID order as `<li><code>Txxx</code> — <title></li>`, the title being the task's current `PROJECT_KANBAN.md` title, HTML-escaped, with Markdown backtick spans turned into `<code>`. | tasks named with titles |
-| 5 | Placement rule: every `- [x]` task on `PROJECT_KANBAN.md` appears exactly once across the section. A task named in a `RUNBOOK.md` Release Log scope goes to that release; any other task goes to the earliest release tag whose history contains the commit where its board row first became `- [x]` (merge diffs included); a task no tag contains is `Unreleased`. | every task, once |
+| 5 | Placement rule: every `- [x]` task on `PROJECT_KANBAN.md` appears exactly once across the section, and so does every task a `RUNBOOK.md` Release Log scope names (before its "Not in scope" words) that has no board row but has a guide (titled from the guide's first line; T083, T084, T087, T089, T181, T183, T185, T187). A named task with no guide (T086, superseded by T089) or with a board row not Done (T184, "closed, will not do") is left out. A task named in a `RUNBOOK.md` Release Log scope goes to that release; any other task goes to the earliest release tag whose history contains the commit where its board row first became `- [x]` (merge diffs included); a task no tag contains is `Unreleased`. | every task, once |
 | 6 | `tests/test_site_changelog.py` (new) pins AC 1, 2, 5 (count and once-only against the live board's Done rows at test time, with the T344 Done set as the floor), the escaping of AC 4, and that the section holds no `@` character. | testable |
 | 7 | The existing site tests pass: `tests/test_site_content.py`, `tests/test_site_story.py`, `tests/test_site_visual_first.py`, `tests/test_site_explorer.py`; any baseline they pin is repointed with a `CHANGED_BY_T344` record, not deleted. | no regression |
 
@@ -163,7 +163,7 @@ uv run --with pytest python -m pytest tests/test_site_changelog.py tests/test_si
 
 | File | Reason |
 |------|--------|
-| `site/index.html` | out of scope (user chose docs.html) |
+| `site/index.html` | out of scope (user chose docs.html); its redirect `ids` list stays as is: no old link on the story page ever targeted `#changelog`, so `tests/test_site_story.py` leaves that id out of the comparison |
 | `site/theme.css` | no new styles |
 | `RUNBOOK.md`, `PROJECT_KANBAN.md` | read only, as sources |
 | `.claude/` | not a hook or config task |
@@ -191,4 +191,5 @@ Write `tests/test_site_changelog.py` first and see it fail (no `#changelog` sect
 
 ## Questions Log
 
+- 2026-11-20 SUPERVISOR (Stage 3 finding) Eight tasks the RUNBOOK says shipped have no board row, only a guide; "add all of them" → listed, titled from the guide (AC 5 widened). T086 has no guide and was superseded by T089; T184 was closed → left out.
 - 2026-11-20 USER Which page, and which scope? → page "docs.html (Recommended)", scope "Every release (Recommended)".
