@@ -25,6 +25,7 @@
      run; read them there. The enforced gate is the whole-file character budget above. -->
 
 ### Decisions
+- [T344: docs.html Change log, every release, titles only](decisions.md) — floor of 263 pinned; later tasks add their own line
 - [T341: Supervisor writes extended-track code; merge gate needs a `ReviewerDone` from a `SubagentStop` hook](decisions.md) — DDR-0011 supersedes DDR-0004; merge with `--no-ff`
 - [T340: unused kit files removed; root brainstorming log stays (T215)](decisions.md) — IDs T328–T339 left free for machine 2
 - [T322: session tags on site; T321 updates `origin`](decisions.md)
@@ -161,6 +162,7 @@
 - [T215: Done rows are one-line; full text in docs/archive/KANBAN_DONE_DETAIL.md](decisions.md) — logs moved to docs/brainstorming, docs/prd; write new Done rows short
 
 ### Patterns & Gotchas
+- [T344: Gate 5 ignores `uv run` pytest; `<tag>` in Evidence reads as placeholder; verifier with no verdict](learnings.md) — scratchpad venv + `python -m pytest`; T306 retry steps
 - [T341: spawns record `async_launched`; `security-review` needs `origin/HEAD`](learnings.md) — prove a sub-agent ended with `SubagentStop`; fix shared gate fixtures, not 400 tests
 - [`[admin]` binds by ID, new guide, `--start`, or a yes](learnings.md) — T322/T323; 2 new guides bind neither; no `origin`, no push
 - [A text gate over shell input: allowlist plain shapes; author fuzz proves little](learnings.md) — T294/T296: 12 then 11 bypass classes; stop at documented limits
