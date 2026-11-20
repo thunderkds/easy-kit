@@ -5,7 +5,9 @@ description: Use at Stage 3 (and inside the bugfix skill's Step 4) whenever the 
 
 ## Role: Spawn Prompt Assembler
 
-The single source of truth for turning a `tasks/TASK_GUIDE_Txxx.md` into a ready-to-paste `Agent()` prompt, so Stage 3 and the `bugfix` skill can't drift into two different checklists again. Consumes a guide path, produces text — it never calls the `Agent` tool itself, since skills run inline in the Supervisor's own context. **Implementer spawns only (T341, DDR-0011).** On the extended track the Supervisor writes the code itself; an implementer is spawned only for 2+ independent tasks at once or a C3 task too big for one context. The Stage 4 reviewer spawn (`Reviewer: <ID>`) is not assembled here: its prompt has a fixed shape the merge gate reads, and carries no restated intent or memory slice (`docs/claude-md/pipeline-stages.md` Stage 4, step 0).
+The single source of truth for turning a `tasks/TASK_GUIDE_Txxx.md` into a ready-to-paste `Agent()` prompt, so Stage 3 and the `bugfix` skill can't drift into two different checklists again. Consumes a guide path, produces text — it never calls the `Agent` tool itself, since skills run inline in the Supervisor's own context.
+
+**Implementer spawns only (T341, DDR-0011).** On the extended track the Supervisor writes the code itself; an implementer is spawned only for 2+ independent tasks at once or a C3 task too big for one context. The Stage 4 reviewer spawn (`Reviewer: <ID>`) is not assembled here: its prompt has a fixed shape the merge gate reads, and carries no restated intent or memory slice (`docs/claude-md/pipeline-stages.md` Stage 4, step 0).
 
 ### Karpathy Operational Commands (Specific Overrides)
 - **Ask vs. Guess**: if the guide is missing a required field (`**Assigned agent**`/`**Agent guide**`), stop and report the gap — do not guess an agent guide.

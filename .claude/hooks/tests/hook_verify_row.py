@@ -97,14 +97,11 @@ def write_pass_record(root, sha, task_id=TASK, anchor_dir=None):
                 os.environ["CLAUDE_TRACE_ANCHOR_DIR"] = saved
 
 
-def prove(root, checkout, task_id=TASK, anchor_dir=None, gate=None):
+def prove(root, checkout, task_id=TASK, anchor_dir=None):
     """Make a hook row for `checkout`'s head commit true: commit the code (`code_commit`) and write
-    the pass record. With `gate` (the loaded merge-gate module) the commit also gets a T341
-    reviewer record in that gate's trace (`reviewed`). Returns the commit hash."""
+    the pass record. Returns the commit hash."""
     sha = code_commit(checkout)
     write_pass_record(root, sha, task_id, anchor_dir)
-    if gate is not None:
-        reviewed(gate, task_id, sha)
     return sha
 
 
@@ -192,17 +189,3 @@ def prove_review(trace_dir, root, task_id, commit, stem=None, **overrides):
     file by default)."""
     return append_trace(trace_dir, root, stem or task_id, reviewer_record(task_id, commit,
                                                                            **overrides))
-
-
-def reviewed(gate, task_id, commit):
-    """Give `task_id` a valid reviewer record for `commit` in `gate`'s current trace (its
-    `TRACE_DIR` and `ROOT`, as the test patched them). For a fixture whose point is not the T341
-    reviewer check. `gate` is the loaded merge-gate module: each test file loads its own copy."""
-    return prove_review(gate.TRACE_DIR, gate.ROOT, task_id, commit)
-
-
-def reviewed_in(project, task_id, commit):
-    """`reviewed` for a gate run as a subprocess from a copied project: its `ROOT` is `project`
-    and its trace is `<project>/memory/event-trace`."""
-    return prove_review(os.path.join(str(project), "memory", "event-trace"), str(project),
-                        task_id, commit)
