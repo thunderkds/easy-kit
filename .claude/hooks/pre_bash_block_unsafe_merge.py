@@ -2707,10 +2707,6 @@ def reviewer_commit(record, task_id):
     return commit if REVIEWED_COMMIT.fullmatch(commit) else None
 
 
-def is_reviewer_call(record, task_id):
-    return reviewer_commit(record, task_id) is not None
-
-
 def _read_anchors(path, name):
     """`{line_no: {hash, ...}}`, as `scripts/verify_trace.py` `read_anchors` reads them."""
     anchors = {}
@@ -2803,9 +2799,44 @@ def review_in_scope(task_id, tip, directory):
     return bool(history.stdout.strip())
 
 
+MERGE_CONTROL_FLAGS = frozenset({"--abort", "--continue", "--quit"})
+UNREAD_MERGE_REASON = ("cannot tell which branch this merge brings in, so its reviewer record "
+                       "cannot be checked (T341) — run `git merge <branch>` on its own")
+
+
+def _per_action_review_targets(actions):
+    """Stage 4 P1: `(targets, doubts)` for a command of two or more git actions, which
+    `branch_targets` does not resolve. Each `git merge` action's sources, and each `git push`
+    action's task-branch refspecs, are read on their own, so `git checkout main && git merge <b>`
+    and `git merge <b> && git push` are checked like `git merge <b>`. A merge that names no source
+    (other than `--abort`, `--continue`, `--quit`) or whose directory is unknown is a doubt (AC 5).
+    A source that names no task is not a task branch and is not checked."""
+    id_regex = re.compile(task_id_pattern(ROOT, bounded=True), re.IGNORECASE)
+    sources, doubts = [], []
+    for args, where in actions:
+        if args[0] == "merge":
+            merged = _merge_sources(args[1:], where)
+            if (not merged and not MERGE_CONTROL_FLAGS.intersection(args[1:])) or (
+                    merged and where is None):
+                doubts.append(UNREAD_MERGE_REASON)
+                continue
+            sources.extend(merged)
+        elif args[0] == "push":
+            pushed = []
+            _push_task_id(args[1:], where, id_regex, pushed)  # collects each task-named refspec
+            sources.extend(pushed)
+    targets = []
+    for directory, branch in sources:
+        task_id = _ref_task_id(branch, id_regex)
+        if task_id and (task_id, branch, directory) not in targets:
+            targets.append((task_id, branch, directory))
+    return targets, doubts
+
+
 def review_blockers(command, cwd, scannable, narrowed_push):
     """The block lines for each extended-track task branch `command` merges, or pushes when the
-    push is narrowed to that task (T197), with no fresh reviewer record. Never raises."""
+    push is narrowed to that task (T197) or chained with another git action (Stage 4 P1), with no
+    fresh reviewer record. Never raises."""
     try:
         actions = _git_actions(command, cwd)
         if actions is None:
@@ -2816,10 +2847,14 @@ def review_blockers(command, cwd, scannable, narrowed_push):
                 return ["cannot tell which branch this merge brings in, so its reviewer record "
                         "cannot be checked (T341) — run `git merge <branch>` on its own"]
             return []
-        if not any(args[0] == "merge" for args, _ in actions) and not narrowed_push:
+        chained = len(actions) > 1 and any(args[0] in ("merge", "push") for args, _ in actions)
+        if not any(args[0] == "merge" for args, _ in actions) and not narrowed_push and not chained:
             return []
         targets, _ = branch_targets(command, cwd)
         found = []
+        if not targets and chained:
+            targets, found = _per_action_review_targets(actions)
+            found = list(dict.fromkeys(found))
         for task_id, branch, where in targets:
             tid = task_id.upper()
             done = _git(where, "rev-parse", "--verify", "--quiet", f"{branch}^{{commit}}")
