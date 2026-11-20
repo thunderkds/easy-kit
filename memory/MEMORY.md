@@ -25,6 +25,7 @@
      run; read them there. The enforced gate is the whole-file character budget above. -->
 
 ### Decisions
+- [T340: unused kit files removed; root brainstorming log stays (T215)](decisions.md) — IDs T328–T339 left free for machine 2
 - [T322: session tags on site; T321 updates `origin`](decisions.md)
 - [T311–T312: kit data and Explorer on `site/docs.html`](decisions.md) — `39ab138e`
 - [T310: `[admin]` stops when unsure](decisions.md) — `Paused: unsure`; `d839663d`

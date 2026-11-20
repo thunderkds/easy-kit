@@ -4,6 +4,11 @@
 
 ## Architecture
 
+### 2026-11-20 — T340: kit files nothing uses removed (lean-kit Part 1); root brainstorming log stays
+**Decision** ([admin], minimal track): removed `scripts/measure_agent_guide_tokens.py`, `scripts/test-claude-md-refs.sh`, `experiments/plugin-spike/` + `tests/test_plugin_spike.py`, `experiments/self-review-spike/`; kept the spike's `RESULTS.md` at `docs/experiments/self-review-spike-RESULTS.md` (cited by `docs/prd/PRD_self-review.md`). Not done: root `BRAINSTORMING_LOG.md` stays (T215 rule, `tasks/TASK_GUIDE_T215.md:32`); `reports/token-audit_2026-07-*.md` stay (read by `test_token_audit_generator.py`); `experiments/kit-arms/` waits for machine 2's T328. Task IDs T328–T339 left free: machine 2 has its own T327/T328.
+**Why**: lean-kit proposal Part 1 (`docs/brainstorming/BRAINSTORMING_LOG_lean-kit.md`); none of the files is in `MANIFEST`, so installed projects never held them.
+**Files**: tests/test_t340_remove_unused_files.py, docs/prd/PRD_self-review.md, tasks/MINIMAL_LOG.md
+
 ### 2026-11-18 — T326 and T327 merged: old-git `[admin]` main push, cleanup after Done
 **Decision** ([admin], Debates of 3 Advocates each; merged by the user's "merge and push to main"): T326 — on git < 2.38 `_main_push_refusal` builds the clean-merge tree with `read-tree -i -m --aggressive <base> <remote> <tip>` + `write-tree` in a temporary `GIT_INDEX_FILE` (one merge base only; a file changed on both sides, a rename or any git error refuses); `T326` in `merge_gate_guard.AUTHORISED_TASKS`. T327 — `python3 scripts/cleanup_task.py <ID>` from the main checkout after the merge, row in Done: `git worktree remove` (no `--force`), `git branch -d`; it lists processes whose cwd is inside the worktree and refuses while any runs, never signals (Debate B, `skills/wake/SKILL.md:69`); doctrine step in Stage 5 and `### Admin tag` / `### Session tags`, no hook trigger. Stale In Progress rows T324/T321 (no branch, no worktree) moved to Todo by the user's choice: the merge gate's board check blocked every merge on them.
 **Files**: .claude/hooks/pre_bash_block_unsafe_merge.py, .claude/hooks/tests/merge_gate_guard.py, scripts/cleanup_task.py, docs/claude-md/tracks.md, docs/claude-md/pipeline-stages.md
@@ -251,7 +256,7 @@ section cannot silently re-grow. Version bumped 1.15 → 1.16.
 with DDR-0001's deferral of CLAUDE.md trims pending token data. `CLAUDE_LEGACY.md` deliberately NOT
 mirrored: the sync policy covers *additions*, not removals. That divergence is tracked, not accidental.
 
-**Guard**: `scripts/test-claude-md-refs.sh` — AC1 (section ≤30 lines), AC2 (every `Skill({ skill:
+**Guard**: `scripts/test-claude-md-refs.sh` (removed by T340, 2026-11-20; in git history) — AC1 (section ≤30 lines), AC2 (every `Skill({ skill:
 "X" })` ref resolves to a SKILL.md or a documented built-in), AC3 (every `subagent_type` resolves to
 an agent file whose `name:` matches) are permanent invariants; AC5/AC6 (untouched-sections checksum,
 line-delta bounds) are a one-shot scope guard pinned to `BASELINE_REF=99940b8`. **Not wired into
@@ -2634,7 +2639,7 @@ The log refuses a symlink/non-file path, writes via `mktemp` in `.claude/` + `mv
 
 **Decision** (user "so what is your final solution", then "go spike", then "merge to main and push"): the kit gains a Claude Code plugin path for "just run it" users; `setup.sh` stays unchanged for other CLIs and for devs who want plain files; optional pieces (easy-memory, reports, packs) become separate small plugins in one marketplace; Docker MCPs get a link only. Order: spike (done) → easy-memory plugin → core kit plugin. Log: `docs/brainstorming/BRAINSTORMING_LOG_distribution.md` (Options A–F; Q1–Q4 answered with Supervisor defaults: Claude Code first, no new runtime).
 **Why**: no CLI's package format writes project files or (on Claude Code/Codex) loads always-on context, so doctrine + state stay in the repo; only tools can be packaged. A plugin can't set permissions (only `agent`, `subagentStatusLine`).
-**Spike facts** (`experiments/plugin-spike/README.md`, Claude Code 2.1.314, codex-cli 0.163.0): plugin skills/agents are prefixed — `ekspike:probe` works, bare `probe` → `Agent type 'probe' not found`; `${CLAUDE_PLUGIN_ROOT}` and `${CLAUDE_SKILL_DIR}` both expand in SKILL.md; a plugin PreToolUse hook blocks (exit 2) and must no-op outside a kit project (`PROJECT_KANBAN.md` check); hooks see `subagent_type` prefixed, but the kit's agent hooks key on the Task ID in the prompt, so they are unaffected. Codex installs the same folder from `.claude-plugin/marketplace.json` and lists `ekspike:hello`, but the gate did not fire (plugin hooks need `/hooks` trust — unconfirmed; the bypass flag was refused by the session safety check).
+**Spike facts** (`experiments/plugin-spike/README.md`, removed by T340, 2026-11-20; in git history; Claude Code 2.1.314, codex-cli 0.163.0): plugin skills/agents are prefixed — `ekspike:probe` works, bare `probe` → `Agent type 'probe' not found`; `${CLAUDE_PLUGIN_ROOT}` and `${CLAUDE_SKILL_DIR}` both expand in SKILL.md; a plugin PreToolUse hook blocks (exit 2) and must no-op outside a kit project (`PROJECT_KANBAN.md` check); hooks see `subagent_type` prefixed, but the kit's agent hooks key on the Task ID in the prompt, so they are unaffected. Codex installs the same folder from `.claude-plugin/marketplace.json` and lists `ekspike:hello`, but the gate did not fire (plugin hooks need `/hooks` trust — unconfirmed; the bypass flag was refused by the session safety check).
 **Open**: Codex gate cause; real gates must fail closed on bad input (spike gate exits 1 → command runs); plugin directory needs a repo `LICENSE`; `AGENTS.md` Codex line (`.codex/skills`, "8 KB skill-body cap") disagrees with current Codex docs (`.agents/skills`; 8,000 chars is the skills-list budget) — check live before fixing.
 **Verified**: auto verify pass at `79b59ad7` ($0.43); merged `69eca4be`.
 
