@@ -13,14 +13,15 @@
 ## Auto decisions
 
 Mode: auto
-1. Track extended — RULE: `docs/claude-md/tracks.md` `## Track rule` (Risk High: changes a safety hook; C2).
+1. Track extended — RULE: `docs/claude-md/tracks.md` § Track rule (Risk High: changes a safety hook; C2).
 2. Split the user's "[admin] has all rights" change into T342 (this hook fix, no shared file with T341) and T343 (merge-gate binding of every task the session started + `### Stops that stay` list; waits for T341, which edits `.claude/hooks/pre_bash_block_unsafe_merge.py` and `docs/claude-md/tracks.md` now) — RULE: `AGENTS.md` § Karpathy Engineering Principles (Surgical Changes: "Touch only code required by the task").
-3. Fix shape: no glob expansion for a token from a quoted span unless the span runs in a shell (`SPAN_EXECUTOR_PATTERN`); literal checks of every token stay; `sed` stays a code command — FACT: `docs/claude-md/tracks.md:355` "a `*`, `?` or `[` outside quotes (a glob)" and `.claude/hooks/pre_tool_sensitive_path.py:261` "A token carrying glob characters is expanded against the filesystem the way the shell would".
+3. Fix shape: A, default direction "expand" — a glob in a quoted span is not expanded only when the span's segment command is on a short allowlist of commands that neither glob nor run a shell (`grep`/`egrep`/`fgrep`/`rg`, `sed` without an `e` command, `sort`, `cut`, `tr`); every other quoted span (unknown wrappers such as `su -c`, `xargs`, `watch`, self-globbing `git`/`rsync`/`tar`) still expands; literal checks of every token stay; `sed`/`awk` stay out of `DATA_COMMAND_PATTERN` — DEBATED: A (Advocate 1: A, skip only for known non-executing commands so an unknown wrapper still expands; Advocate 2: A, keyed on `SPAN_EXECUTOR_PATTERN`, plus expand for self-globbing `git`/`rsync`/`tar`; Advocate 3: A, keyed on the segment's command, skip only for a short known list) — all three reject B (`cd .cl*` lands in `.claude` and stops being caught) and C (`sed e`/`w`, `awk system()` execute). The direction split is settled by RULE: `.claude/hooks/lib/shell_data.py:384` "Unknown must resolve toward **code**".
 4. No `[admin]` bypass of the sensitive-path hook; a planned path is already silent in every mode (guide `## Files to Change (Predicted)`) — RULE: `.claude/hooks/pre_tool_sensitive_path.py:7` "unless the active task's guide predicted that exact path".
-5. Implementer: a `common-infrastructure` sub-agent, not the Supervisor — RULE: `AGENTS.md` Hard-Stop Gate 1 (T341 has not merged).
+5. Implementer: a `common-infrastructure` sub-agent, not the Supervisor — RULE: `AGENTS.md:171` "The Supervisor must never write implementation code directly." (Hard-Stop Gate 1; T341 has not merged).
 Checks: <filled at Stage 4>
 Memory: <filled after merge>
 Not done: merge (admin: after the auto verify pass); auto verify: <filled at Ready for Review>
+Paused: auto-mode check failed — no `Memory:` line in the report — run the memory pass before you stop and record it there (each entry written, or `Memory: nothing new`); no test run in memory/event-trace/T342.jsonl — write /home/thunderkds/workspace/pets/hungnguyen111/easy-kit/.claude/hooks/.state/active_task.d/$CLAUDE_CODE_SESSION_ID with the task ID (minimal-track step 1): `mkdir -p /home/thunderkds/workspace/pets/hungnguyen111/easy-kit/.claude/hooks/.state/active_task.d && printf '%s\n%s\n' "T342" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > /home/thunderkds/workspace/pets/hungnguyen111/easy-kit/.claude/hooks/.state/active_task.d/$CLAUDE_CODE_SESSION_ID`, then rerun the task's tests so the trace records them under the task, then stop; extended track, but the trace has no `code-review` Skill call (Stage 4 runs in auto mode); Risk High, but the trace has no `security-review` Skill call [report 2d2e8c5a2443]
 
 ## Evidence
 
