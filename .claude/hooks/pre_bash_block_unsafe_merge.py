@@ -2661,17 +2661,16 @@ def auto_mode_blocker(command, cwd, transcript_path):
 # not prose, holds that: a merge of an extended-track task branch (and the narrowed push of one)
 # is refused until a hook-written trace record proves the reviewer ran on the code being merged.
 #
-#   * The record: an `Agent` call with description exactly `Reviewer: <ID>`, whose prompt's first
-#     three lines are `REVIEWER_PROMPT_PREFIX`, `Task ID: <ID>` and `Commit: <40-hex>`, all inside
-#     the 300-character `summary` (`post_tool_trace.py` `MAX_SUMMARY_LEN`). A cut record fails.
-#   * Not an error, and finished as far as the record tells. Spike (T341, real records in
-#     `memory/event-trace/`): a foreground spawn's record carries `spawn.status: completed`
-#     (T061's probe capture); a background spawn's carries `async_launched`, written before the
-#     review ran, so it does not count. A record with no status tells nothing either way.
+#   * The record (option B, AC 12): a `ReviewerDone` record for the task, which the `SubagentStop`
+#     hook `subagent_stop_reviewer_done.py` writes when a sub-agent ends whose spawn prompt's first
+#     three lines are `REVIEWER_PROMPT_PREFIX`, `Task ID: <ID>` and `Commit: <40-hex>` (the hook
+#     reads them from the sub-agent's own transcript). The `Agent` spawn record alone does not
+#     count, whatever its `spawn.status`: every spawn here is recorded `async_launched`, at launch,
+#     before the review ran. A sub-agent that ends on an API error fires `StopFailure`, not
+#     `SubagentStop`, so it leaves no record (T341 spike, Claude Code 2.1.329).
 #   * Hook-written: the line's chain hash, its link to the chained line before it and its anchor
 #     line check out, as `scripts/verify_trace.py` reads them (T148). An `echo >>` has no anchor.
-#   * Any trace file: a main-session spawn is filed by the session's active-task state before
-#     its prompt, so the record is the task's by its description, not by its file.
+#   * Any trace file: the record is the task's by its `task_id`, not by its file.
 #   * Fresh: the named commit is an ancestor of the tip, and between the two only the review
 #     file, the board, `tasks/MINIMAL_LOG.md` and `memory/*.md` (not `memory/MEMORY.md`) changed.
 #
@@ -2682,7 +2681,8 @@ def auto_mode_blocker(command, cwd, transcript_path):
 # nothing new. Any doubt (git error, unreadable trace, bad hash, missing anchor, unknown commit)
 # is a refusal. Known limit: the anchor raises the bar and is not a proof (T148).
 REVIEWER_PROMPT_PREFIX = "Review alone, from the repo only:"
-REVIEWER_COMMIT = re.compile(r"Commit: ([0-9a-f]{40})")
+REVIEWER_DONE = "ReviewerDone"
+REVIEWED_COMMIT = re.compile(r"[0-9a-f]{40}")
 REVIEW_FREE_MEMORY = re.compile(r"memory/[^/]+\.md")
 REVIEW_FREE_FILES = ("PROJECT_KANBAN.md", MINIMAL_LOG_REL)
 REVIEW_BASE_REF = "refs/heads/main"
@@ -2690,53 +2690,25 @@ UNRESOLVED_MERGE = re.compile(GIT_VERB_PREFIX + r"merge(?=\s|$)")
 REVIEW_REMEDY = (
     "{tid} (extended track) has no fresh reviewer record for {branch} at {tip}: spawn "
     "`Agent({{ subagent_type: \"qa-expert\", description: \"Reviewer: {tid}\", prompt: "
-    "\"{prefix}\\nTask ID: {tid}\\nCommit: {tip}\\n…\" }})` in the foreground on that commit, "
-    "with this session's active-task state set to {tid} (docs/claude-md/pipeline-stages.md, "
+    "\"{prefix}\\nTask ID: {tid}\\nCommit: {tip}\\n…\" }})` on that commit (it may run in the "
+    "background), with this session's active-task state set to {tid}; the `SubagentStop` hook "
+    "writes the `ReviewerDone` record when the reviewer ends (docs/claude-md/pipeline-stages.md, "
     "Stage 4)")
 
 
-def _summary_field(summary, key):
-    """`key` of a trace record's `summary` (`json.dumps(tool_input)[:300]`): JSON first, then the
-    cut-JSON fallback, decoded. "" when absent or unreadable."""
-    try:
-        value = json.loads(summary).get(key)
-        return value if isinstance(value, str) else ""
-    except Exception:
-        pass
-    found = re.search(rf'"{key}"\s*:\s*"((?:[^"\\]|\\.)*)', summary or "")
-    if not found:
-        return ""
-    try:  # a cut inside a `\uXXXX` escape drops that escape
-        return json.loads('"' + re.sub(r"\\u[0-9a-fA-F]{0,3}$", "", found.group(1)) + '"')
-    except Exception:
-        return ""
-
-
 def reviewer_commit(record, task_id):
-    """The commit a `Reviewer: <task_id>` spawn record names, or None when the record is not one
-    (tool, exact description, prefix line, `Task ID:` line, full `Commit:` line, in that order)."""
-    if not isinstance(record, dict) or record.get("tool_name") != "Agent":
+    """The commit a `ReviewerDone` record for `task_id` names, or None when the record is not one
+    (tool name, exact task ID, a full lower-case commit hash)."""
+    if not isinstance(record, dict) or record.get("tool_name") != REVIEWER_DONE:
         return None
-    summary = record.get("summary")
-    if not isinstance(summary, str) or _summary_field(summary, "description") != f"Reviewer: {task_id}":
+    commit = record.get("commit")
+    if record.get("task_id") != task_id or not isinstance(commit, str):
         return None
-    lines = _summary_field(summary, "prompt").split("\n")
-    if len(lines) < 3 or lines[0] != REVIEWER_PROMPT_PREFIX or lines[1] != f"Task ID: {task_id}":
-        return None
-    named = REVIEWER_COMMIT.fullmatch(lines[2])
-    return named.group(1) if named else None
+    return commit if REVIEWED_COMMIT.fullmatch(commit) else None
 
 
 def is_reviewer_call(record, task_id):
     return reviewer_commit(record, task_id) is not None
-
-
-def _spawn_finished(record):
-    """Not an error, and completed as far as the record tells (see the spike note above)."""
-    if record.get("is_error") is not False:
-        return False
-    spawn = record.get("spawn", {})
-    return isinstance(spawn, dict) and spawn.get("status", "completed") == "completed"
 
 
 def _read_anchors(path, name):
@@ -2754,12 +2726,12 @@ def _read_anchors(path, name):
 
 
 def _reviewed_commits(path, task_id):
-    """The commits named by the hook-written reviewer records for `task_id` in one trace file:
+    """The commits named by the hook-written `ReviewerDone` records for `task_id` in one trace file:
     each line's hash matches its content, its `prev` is the chained line before it (genesis for the
     first), and its anchor line holds that hash. Raises on an unreadable file or anchor."""
     with open(path, "rb") as f:
         data = f.read()
-    if f"Reviewer: {task_id}".encode() not in data:
+    if REVIEWER_DONE.encode() not in data:
         return []
     stem = os.path.basename(path)[:-len(".jsonl")]
     anchors = _read_anchors(anchor_path(ROOT, stem), safe_name(stem, "_untagged"))
@@ -2774,7 +2746,7 @@ def _reviewed_commits(path, task_id):
         linked = record.get("prev") == prev
         prev = record["hash"]
         commit = reviewer_commit(record, task_id)
-        if (commit and linked and _spawn_finished(record) and "anchor" not in record
+        if (commit and linked and "anchor" not in record
                 and chain_hash(record) == record["hash"] and record["hash"] in anchors.get(number, ())):
             commits.append(commit)
     return commits
@@ -2798,8 +2770,8 @@ def _reviewed_code_is_tip(task_id, commit, tip, directory):
 
 
 def trace_shows_review(task_id, tip, directory):
-    """AC 5: True only when some trace record in `TRACE_DIR/*.jsonl` (the task's own file first)
-    proves a finished `Reviewer: <task_id>` spawn on a commit whose code is `tip`'s. Any doubt is
+    """AC 5, AC 12: True only when some `ReviewerDone` record in `TRACE_DIR/*.jsonl` (the task's own
+    file first) proves a reviewer of `task_id` ended on a commit whose code is `tip`'s. Any doubt is
     False."""
     try:
         own = os.path.join(TRACE_DIR, f"{task_id}.jsonl")
