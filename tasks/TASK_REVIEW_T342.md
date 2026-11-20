@@ -22,7 +22,8 @@ Mode: auto
 7. Security review by hand: the built-in `security-review` skill fails (`git diff origin/HEAD...`: "fatal: ambiguous argument 'origin/HEAD...': unknown revision") — RULE: precedent `tasks/TASK_REVIEW_T326.md:55` "Security review done by hand: the built-in `security-review` skill fails here". Result: 0 open P0/P1; recorded limit (not new): output piped into a shell (`sed -n '1i rm -rf .c*' /dev/null | sh`) is not seen, as `printf 'rm -rf .c*' | sh` is not seen on main.
 Checks: code-review 0 P0 / 1 P1 (fixed, 78b76f2) / 0 P2 / 1 P3 (codebase-map read in full in the fix round); security-review by hand, 0 P0/P1; probe of 11 bypass shapes, each hook on its own checkout: branch 78b76f2 asks wherever main 85f2006 asks, and the T341 test command is silent; Verification Command by the Supervisor on 78b76f2 2026-11-20T11:20:18Z: `158 passed, 126 subtests passed in 13.35s`; full suite 54 failed (strict subset of main's 55); real run: auto-checked, not /verify.
 Memory: `memory/decisions.md` entry "2026-11-20 — T342: a glob in a quoted span of grep/rg/sed/sort/cut/tr is not a path" (rule, P1 fix, recorded limits, `uv run --with` not counted as a test run)
-Not done: merge (admin: after the auto verify pass); auto verify: ☑ pass — auto-run by hook, commit 771406884d2c, log `.claude/verify-runs/T342-771406884d2c.log`
+Not done: merge (admin: after the auto verify pass); auto verify: ☑ pass (session 86c8796a-4531-4067-83ac-4bf51ea78e2e, commit 96cce472bc5ae883d8c1ebc70fc1ec902cf064d5, log .claude/verify-runs/T342-96cce472bc5a.log)
+Closed: row moved to Done 2026-11-20 — auto verify pass (session 86c8796a-4531-4067-83ac-4bf51ea78e2e, commit 96cce472bc5ae883d8c1ebc70fc1ec902cf064d5); Gates 5 and 6 checked
 
 ## Evidence
 
@@ -31,7 +32,7 @@ Not done: merge (admin: after the auto verify pass); auto verify: ☑ pass — a
 | **New test(s) cover Acceptance Criteria (file paths pasted)** | ☑ pass | `.claude/hooks/tests/test_t342_quoted_glob.py` (new, AC 1-5, 7; AC 3 holds the Stage 4 escaped-quote cases). Red on 85f2006 parent of fix: `7 failed, 8 passed, 24 subtests passed in 1.19s`; P1 red on e505762: `2 failed, 10 passed, 37 subtests passed in 1.50s` |
 | Verification command run | ☑ pass | Supervisor, 78b76f2, 2026-11-20T11:20:18Z, via `uv run -q --with pytest` (python3 has no pytest here): `158 passed, 126 subtests passed in 13.35s` |
 | Negative cases hold | ☑ pass | AC 3/4/5 ask before and after; AC 7 revert test turns AC 1/2 red; Supervisor probe, each hook on its own checkout: `cd d; sed \" .c* \" f`, `cd d; sed -i -e "s/a/b/" \" .cl* \"`, `sed "s/x/$(cat .cl*)/"`, backtick, `sed 's/x/y/' .c*` ask on 78b76f2 as on main |
-| verify | ☑ pass | auto-run by hook, session 7f126e61-7978-4e2d-a257-8418c26342d8, commit 771406884d2c734c95e2554e2debed6e63ed5d14, log .claude/verify-runs/T342-771406884d2c.log — pass |
+| verify | ☑ pass | auto-run by hook, session 86c8796a-4531-4067-83ac-4bf51ea78e2e, commit 96cce472bc5ae883d8c1ebc70fc1ec902cf064d5, log .claude/verify-runs/T342-96cce472bc5a.log — pass |
 | Review scope bounded to the change's blast radius (affected set, not whole repo) | ☑ pass | `.claude/hooks/pre_tool_sensitive_path.py` diff, its imports from `.claude/hooks/lib/shell_data.py` (unchanged), its tests; `TOKEN_SPLIT_PATTERN` has no other user (grep). Merge hook not touched |
 | Full smoke suite still green (no regression) | ☑ pass | 78b76f2: `54 failed, 7530 passed, 24 skipped, 126 subtests passed in 389.04s`; main 85f2006: `55 failed, 7519 passed`; branch failures a strict subset of main's (missing shells, MEMORY.md budget, gate hunt tests) |
 | **Companion score (easy-verifier)** | ☑ N/A | neither companion tool was run |
