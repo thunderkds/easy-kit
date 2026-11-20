@@ -1,5 +1,5 @@
 # PROJECT_KANBAN.md
-**Last updated**: 2026-11-18
+**Last updated**: 2026-11-20
 
 > Compact task board. Full context lives in `PROJECT_SPEC.md`. Update this file whenever a task status changes.
 
@@ -98,6 +98,7 @@
 
 
 ### In Progress
+- [ ] **T341** — Extended track: the Supervisor writes the code, a fresh reviewer spawn is required at merge | common-infrastructure | C3 | Risk: High | P1 | Guide: `tasks/TASK_GUIDE_T341.md` | Registered and started 2026-11-20 [admin] (lean-kit Part 2 step 1, option B): branch `feat/t341-reviewer-gate`, worktree `../wt-t341` | Track: extended
 
 
 
