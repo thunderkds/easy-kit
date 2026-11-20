@@ -49,6 +49,23 @@ REPLACED_SPANS = [
      "with no guide, and ends with a Decision record (`docs/claude-md/tracks.md`)."),
     ("Stage 4 (code-review) is mandatory for every task.",
      "Stage 4 (code-review) is mandatory for every extended-track task."),
+    # T341 (DDR-0011): on the extended track the Supervisor writes the code itself; one
+    # fresh-context reviewer spawn per extended task, required by the merge gate. Applied after
+    # the T178 span on the same line. Pinned exactly by `tests/test_t341_gate1_doctrine.py`.
+    ("The Supervisor must never write implementation code directly. On the minimal track",
+     "On the extended track the Supervisor writes the code itself, in the task's worktree, test "
+     "first; it spawns an implementer only for 2+ independent tasks at once, or for a C3 task too "
+     "big for one context. Each extended task gets one fresh-context reviewer spawn "
+     "(`Reviewer: <ID>`), and the merge gate refuses the merge until its trace record shows that "
+     "reviewer ran on the code being merged (DDR-0011). On the minimal track"),
+    ("per task, worktree-isolated, `Skill({ skill: \"craft-spawn-prompt\" })` before every `Agent()` spawn,",
+     "per task, worktree-isolated, the Supervisor implements (an implementer spawn only for parallel "
+     "tasks or an oversized C3 task), `Skill({ skill: \"craft-spawn-prompt\" })` before every "
+     "`Agent()` spawn,"),
+    ("- **Stage 4** (Review): `Skill({ skill: \"code-review\" })` always;",
+     "- **Stage 4** (Review): one fresh-context reviewer spawn per extended task, `Agent({ "
+     "subagent_type: \"qa-expert\", description: \"Reviewer: <ID>\", … })`, required by the merge "
+     "gate, runs `Skill({ skill: \"code-review\" })` always;"),
     # T200: the Stage 1 skill `settings-setup` joins the stage index.
     ("1=`git-guardrails-claude-code`,`map-codebase` |",
      "1=`git-guardrails-claude-code`,`map-codebase`,`settings-setup` |"),

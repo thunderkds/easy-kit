@@ -9,7 +9,13 @@ Every implementation request goes on one of two tracks:
 - **Minimal track** — small, low-risk work. The Supervisor writes the code itself and runs straight
   through: test first, change, a `/simplify` pass, real run. No process stop. It ends with a **Decision record**.
 - **Extended track** — big, risky or multi-session work. This is the full Stage 0–5 pipeline
-  (`docs/claude-md/pipeline-stages.md`), unchanged.
+  (`docs/claude-md/pipeline-stages.md`), unchanged. Since T341 (DDR-0011) the Supervisor writes the code
+  itself here too, in the task's worktree, test first. One fresh-context reviewer spawn per task
+  (`Reviewer: <ID>`, `pipeline-stages.md` Stage 4) keeps the review independent.
+  **The merge gate requires it**: it refuses the merge of an extended-track task branch, and the narrowed push of one,
+  until a hook-written trace record shows that reviewer ran on the code being merged
+  (`trace_shows_review`). A task is extended track when its guide is at the branch tip, in the main
+  checkout, or in a commit of `main..tip`. A minimal-track task has no guide, so the gate does not check it.
 
 The rule below picks the track, never how small a task feels.
 
@@ -989,6 +995,12 @@ Read these before you rely on `[auto]`. T180 left them open, on purpose. T186 re
   no git remote, the Supervisor may add a temporary `refs/remotes/origin/HEAD` so the skill can start. It
   removes the ref afterwards and logs both steps in the final report. Without that ref, the skill cannot
   start, and the auto-mode check pauses a Medium or High risk task (you accepted this on 2026-10-27).
+- **The reviewer record raises the bar; it is not a proof (T341).** The merge gate trusts a `Reviewer: <ID>`
+  trace record only with its chain hash and its anchor intact, so an `echo >>` into the trace does not
+  count. But an agent's own Python can still write a matching record, as for T148 and T182: the anchor
+  directory is denied by permission rules, which are pattern-based. The gate proves that a review ran on
+  that commit, not what it found: the findings stay in `tasks/TASK_REVIEW_<ID>.md`. A background reviewer
+  spawn does not count, because its record is written at launch (`async_launched`).
 - **The hook cannot tell an unsettled Debate (T310).** The Advocates' disagreement is not in the trace. A Supervisor can still decide an unsettled choice and log `DEBATED`. The stop is a rule, not a gate.
 - **Two auto tasks in one session can share evidence.** The auto-mode check counts the Advocate and
   Skill calls in `memory/event-trace/_untagged.jsonl` from the last 6 hours for every task. Advocate

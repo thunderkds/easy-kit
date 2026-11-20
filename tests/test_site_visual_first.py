@@ -427,6 +427,8 @@ DUPLICATES_OF_A_VISUAL_LABEL = {
     "1a657ee69be4": "Minimal track item gains the /simplify pass (T261)",
     # T290: the locked-oracle hook is wired, so the quick-reference strip says 6 blocking hooks (of 12).
     "d3c9027831fe": "the strip says 6 blocking hooks (of 12) (T290)",
+    # T341 (DDR-0011): the lead's Pipeline item names the worktree code and the one fresh reviewer.
+    "766f417cb3d1": "the lead's Pipeline item: code in worktrees, one fresh reviewer sub-agent (T341)",
 }
 
 

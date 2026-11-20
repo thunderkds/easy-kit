@@ -1,6 +1,6 @@
 # 0004. Uphold Hard-Stop Gate 1; pursue cheaper spawns rather than fewer spawns
 
-**Status**: Accepted
+**Status**: Superseded by DDR-0011
 **Date**: 2026-08-07
 **Deciders**: hungnh1110@gmail.com (ruling), Supervisor (measurement + options)
 **Related**: T062 (closed by this decision) · T061 (the telemetry that produced the measurement) · T063/T064/T065/T066 (the path this decision selects) · LR-0001, LR-0002 · supersedes nothing
