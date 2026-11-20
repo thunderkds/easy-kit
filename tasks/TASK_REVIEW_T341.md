@@ -21,25 +21,25 @@ Mode: auto
 6. Merge-gate sign-off: T341 added to `AUTHORISED_TASKS` by the Supervisor under session `[admin]` — RULE: `.claude/hooks/tests/merge_gate_guard.py:22` "**Adding a task is the record.**" (precedent T323, T326).
 7. Supervisor-written fixture repair (`d06a85d8`, `d425b47e`: test helpers, pins, AGENTS.md wording) reverted; a `common-infrastructure` sub-agent redoes it — DEBATED: B (Advocate 1: A, keep both, record the breach of main's Gate 1 plainly, the required `Reviewer: T341` covers them; Advocate 2: B, revert both and have a `common-infrastructure` sub-agent redo them, because main's Gate 1 holds until the merge; Advocate 3: A, keep both, smallest change, the reviewer covers the tip) — settled by RULE: `AGENTS.md:171` on `main` "The Supervisor must never write implementation code directly." and `AGENTS.md:168` "not skippable by any rationale"; matches decision 5.
 8. Gate proof is a `ReviewerDone` record written by a new `SubagentStop` hook when the reviewer ends, not the spawn record (option B; `.claude/settings.json` gains that one hook entry) — RULE: the user's answer in chat, 2026-11-20, "so B" (after the Supervisor's Paused: unsure with options A/B/C; recorded in `tasks/TASK_GUIDE_T341.md` § Questions Log).
-Checks: full suite at `00b66ad` fails exactly the 54 `main` baseline tests (`comm -3` empty; 54 failed, 7572 passed); Verification Command 178 passed — auto-checked, not /verify. Stage 4 reviewer spawn, code-review and security-review NOT run (paused below).
+9. Final review's P2 (the uncertain-`cd` fix also refuses a bare `git merge`, `--ff-only`, `--no-edit` and a minimal-track branch after `cd … ;`, with a remedy that does not fit) left as a follow-up, not fixed before merge — RULE: `skills/code-review/SKILL.md` severity table "**P2** | Code quality, maintainability, non-critical test gap | Recommended" (P0/P1 must be fixed; this one fails closed, on the safe side).
+Checks: tests — Verification Command + hook tests `246 passed` at `78fa654a`; full suite at `42da381` equals the 54-test `main` baseline (`comm -3` empty); reviews — three fresh `Reviewer: T341` spawns (final, at `42da3819`: 0 P0, 0 P1, 2 P2, 5 P3, AC 1-14 pass), code-review and security-review done by hand in each (the reviewer has no Skill tool; the built-in `security-review` reads `origin/HEAD` and this repo's remote is `github`); real run — the gate probed on real commands by the Supervisor and three reviewers. Auto-checked, not /verify.
 Memory: nothing new (no merge; the async-spawn finding goes to memory when the question below is decided)
-Not done: AC 11-14 (option B), Stage 4 reviewer spawn, code-review, security-review, auto verify, merge (admin: after the auto verify pass)
-Paused: auto-mode check failed — Risk High, but the trace has no `security-review` Skill call [report 1d0c85a8196a]
+Not done: merge (admin: after the auto verify pass); auto verify: running (T182)
 
 ## Evidence
 
 | Check | Result | Notes / output snippet |
 |-------|--------|------------------------|
-| **New test(s) cover Acceptance Criteria (file paths pasted)** | ☐ pass / ☐ fail | [test file path(s) — required before Done] |
-| Verification command run | ☐ pass / ☐ fail | [paste actual output] |
-| Negative cases hold | ☐ pass / ☐ fail | [paste the red run against the prior content, or the mutation diff (`git diff --stat`, non-empty) before each verdict] |
+| **New test(s) cover Acceptance Criteria (file paths pasted)** | ☑ pass | `.claude/hooks/tests/test_t341_reviewer_gate.py` (AC 4-6, 9, 12, 13), `.claude/hooks/tests/test_t341_reviewer_done.py` (AC 11, 13), `tests/test_t341_gate1_doctrine.py` (AC 1-3, 7, 8, 10, 14), `.claude/hooks/tests/test_admin_tag.py::test_t341_admin_merge_is_refused_without_a_reviewer_record`; all written in this task |
+| Verification command run | ☑ pass | 2026-11-20T14:48:29Z at `78fa654a`: guide Verification Command + `test_t341_reviewer_done.py` → `246 passed in 5.76s` |
+| Negative cases hold | ☑ pass | Red runs before each fix are in the Demonstration BEFORE blocks (30 red on the unchanged gate; 78 red before option B; 9 red before the chained-merge fix; 2 red before the uncertain-`cd` fix). Mutation probes by Reviewer 3: removing the anchor check fails 2 tests, the freshness check 7, the ancestor check 1, the `cd` fix 2 |
 | verify | ☐ pass / ☐ fail / ☐ N/A | [leave it: the auto verify hook writes this row, with its run record. If you ran /verify yourself, tick pass and make the whole Notes cell "/verify by the user, session <id>, commit <sha>" (the full 40-character commit). The merge gate counts no other row, even with the word "pass" in it] |
-| Review scope bounded to the change's blast radius (affected set, not whole repo) | ☐ pass / ☐ fail | [what was reviewed vs. skipped, and why] |
-| Full smoke suite still green (no regression) | ☐ pass / ☐ fail | |
-| **Companion score (easy-verifier)** | ☐ pass / ☐ fail / ☐ N/A | [`overall` and `change_risk` as the tool returned them, the scope, the ref, and the absolute path of the verifier report after a literal `report:` label — e.g. "overall 86 (>= 80), change_risk pass, scope changes, ref `main...HEAD`, report: `/home/me/.easy-verifier-reports/kit/score_changes_20261028T0530Z.html`". The gate reads the path that follows `report:` and nothing else, so with no label, or a path that is absent, the row is unscored — write ☑ N/A instead. ☑ N/A with a reason when neither companion tool was run: the merge gate blocks on ☑ fail only, never on an absent or N/A row] |
-| **UI: Visual regression (diff or verdict pasted)** | ☐ pass / ☐ fail / ☐ N/A | [screenshot path or LLM verdict — required for UI tasks, Hard-Stop Gate 6] |
-| **UI: Design-system compliance (tokens/colors/typography verified)** | ☐ pass / ☐ fail / ☐ N/A | [method used + output] |
-| **UI: Responsiveness at target viewports** | ☐ pass / ☐ fail / ☐ N/A | [viewports tested, any overflow findings] |
+| Review scope bounded to the change's blast radius (affected set, not whole repo) | ☑ pass | Three fresh `Reviewer: T341` spawns on `0fb03d6e`, `cde2e785`, `42da3819`: the `main...<commit>` diff, its callers (`branch_targets`, `_git_actions`, `merge_brought_task_ids`) and the gate tests. Final review: 0 P0, 0 P1, 2 P2, 5 P3, AC 1-14 pass |
+| Full smoke suite still green (no regression) | ☑ pass | At `42da381` (code identical to `78fa654a`; only the review file differs): `54 failed, 7646 passed`; `comm -3` against the unchanged-`main` list (54 failures for missing `busybox`/`zsh`) is empty. Reviewer 3's run had 1 more (`test_auto_verify_skip_pass.py`, a timeout under probe load); that file alone: `222 passed` |
+| **Companion score (easy-verifier)** | ☑ N/A | neither companion tool was run |
+| **UI: Visual regression (diff or verdict pasted)** | ☑ N/A | no UI component: hooks, tests and docs (`site/` changes are one table row and a hook count, text only) |
+| **UI: Design-system compliance (tokens/colors/typography verified)** | ☑ N/A | no UI component: hooks, tests and docs (`site/` changes are one table row and a hook count, text only) |
+| **UI: Responsiveness at target viewports** | ☑ N/A | no UI component: hooks, tests and docs (`site/` changes are one table row and a hook count, text only) |
 
 ---
 
@@ -174,12 +174,11 @@ FAILED .claude/hooks/tests/test_t341_reviewer_gate.py::test_a_reviewed_commit_wi
 3 failed, 66 passed in 2.85s
 ```
 
-**AFTER**: [same command, post-change] OR [verbatim excerpt of the new content]
+**AFTER**: 2026-11-20T14:48:29Z at `78fa654ad384d6a668a9b845b901b2cfc1d5d715`, the guide's Verification Command plus `.claude/hooks/tests/test_t341_reviewer_done.py`: `246 passed in 5.76s` — every BEFORE red case above is green. Supervisor probe of the gate at `42da381`: `git merge --no-ff feat/t341-reviewer-gate`, `git checkout main && git merge --no-ff …`, `cd /tmp ; git merge --no-ff …`, `cd /tmp || git merge --no-ff …` are all refused with no `ReviewerDone`; `git merge --abort` passes. `AGENTS.md:171` Gate 1 now reads "On the extended track the Supervisor writes the code itself, in the task's worktree, test first; …".
 
-**DELTA**: [one sentence — what a user can now do that they could not before]
+**DELTA**: The Supervisor may now write extended-track code itself, and the merge gate refuses an extended-task branch until a `SubagentStop`-written `ReviewerDone` record shows a fresh reviewer finished on that exact code.
 
-**WITNESS**: [who ran it and when — derived from `memory/event-trace/Txxx.jsonl`, never the
-implementing agent alone]
+**WITNESS**: the Supervisor (session 4e0cb7e2), not the implementing sub-agent: `memory/event-trace/T341.jsonl` record at `2026-11-20T14:48:35Z`, a non-error `Bash` call running the Verification Command + `test_t341_reviewer_done.py` at `78fa654a`. Three fresh `Reviewer: T341` spawns re-ran the tests independently (sections below).
 
 ## Stage 4 code-review (Supervisor, inline, 2026-11-20, range `main...a7e7512f`)
 
