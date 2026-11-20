@@ -38,10 +38,7 @@ Mode: auto
 3. <what was decided> — DEBATED: <option> (Advocate 1: <its proposal>; Advocate 2: <its proposal>) ⚠ decided for you — please review
 4. <what was decided> — SAFER OPTION: <why> ⚠ decided for you — please review
 Paused: <only when a stop that stays paused the task: which one, and why>
-9. Six change-log titles that the live-docs tests reject (old repo name, old stage names, a removed flag and path, a doctrine section in `CLAUDE.md`) are reworded in `REWRITES`, and the v2.0.0 summary drops `setup.sh --harness`; the four tests stay unchanged — RULE: the Stage 4 review's P1 (`tasks/TASK_REVIEW_T344.md` § Stage 4 review (Reviewer: T344)): "add rewrites for these titles. Do not allowlist the pins".
-10. The completeness test pins a floor of the 263 tasks known at T344's start; any board task may be listed; T344's own line joins Unreleased — RULE: `tasks/TASK_GUIDE_T344.md` § Approach cut list ("the change log is a snapshot. A later task adds its own line by hand"); fixes the review's P1 that the test turned red when T344 (or any task) closed.
-11. `tests/test_repo_name.py` `ALLOWED` gains `tests/test_site_changelog.py`, whose `BANNED` pattern names the old repo to keep it off the page — RULE: `tests/test_repo_name.py:3` "no live file names the old repo, outside history paths and the allow list below".
-Checks: site + live-docs tests `273 passed, 18 skipped` after the Stage 4 fixes; full suite: rerun on the fix commit; reviews: inline `code-review` (1 P1, 2 P3) and `Reviewer: T344` at `82e736b9` (2 P1, 3 P2, 5 P3), all P1 fixed, a second fresh reviewer on the fix commit; real run: Playwright at 1280px and 375px, no sideways scroll — auto-checked, not /verify.
+Checks: tests `<command>` — <result>; reviews <skill — result>; real run `<command>` — printed `<what it printed>` (auto-checked, not /verify)
 Memory: <each entry the memory pass wrote, as `file — entry` | nothing new>
 Not done: merge (yours); <auto verify: running (T182) | auto verify: <result> | /verify (yours), with [admin] only after the one retry also ended blocked>
 
@@ -52,31 +49,33 @@ Not done: merge (yours); <auto verify: running (T182) | auto verify: <result> | 
 Mode: auto
 1. Track extended — RULE: `docs/claude-md/tracks.md` § Track rule ("a UI component" → extended): a new section on `site/docs.html`.
 2. Page `site/docs.html`, scope every release plus Unreleased — RULE: the user's forced-choice answers in chat, 2026-11-20: "docs.html (Recommended)", "Every release (Recommended)" (`tasks/TASK_GUIDE_T344.md` § Questions Log).
-3. No task ID anywhere on the page; 40 titles that carry an ID or a board word are reworded (`tests/test_site_changelog.py` `REWRITES`) — RULE: the user's answer "No IDs at all", 2026-11-20, keeping `tests/test_site_content.py:224` "page must not contain a task ID" (T083).
+3. No task ID anywhere on the page; 45 titles that carry an ID, a board word or a name the live-docs tests forbid are reworded (`tests/test_site_changelog.py` `REWRITES`) — RULE: the user's answer "No IDs at all", 2026-11-20, keeping `tests/test_site_content.py:224` "page must not contain a task ID" (T083).
 4. Eight tasks the RUNBOOK says shipped but with no board row are listed, titled from their guide; T086 (no guide, superseded by T089) and T184 (board row not Done, "closed, will not do") are left out — RULE: the user's request "add all of them" and `RUNBOOK.md` § Release Log (`tasks/TASK_GUIDE_T344.md` AC 5).
 5. `site/index.html` untouched; `tests/test_site_story.py` leaves `#changelog` out of the redirect-list comparison instead — RULE: `tasks/TASK_GUIDE_T344.md:166` "`site/index.html` | out of scope" (the user rejected the tool call that edited it).
 6. A long path wraps at 375px through `<wbr>` hints in code spans, not CSS — RULE: `tasks/TASK_GUIDE_T344.md:108` "no new CSS rule and no inline `style=`".
 7. The Supervisor wrote the code; one fresh `Reviewer: T344` spawn reviews it — RULE: `AGENTS.md:171` "On the extended track the Supervisor writes the code itself" (T341, merged).
 8. The first reviewer spawn named a hand-extended commit hash; it was stopped and respawned with the real hash `82e736b9991205d8bdbc9446aebaccdfd1b1135b` — RULE: `docs/claude-md/pipeline-stages.md` § Stage 4 (the `Commit:` line is the full hash of the commit reviewed).
-Checks: Verification Command `231 passed, 18 skipped` at `82e736b9`; full suite: running; review: `Reviewer: T344` running; real run: Playwright screenshots at 1280px and 375px, no sideways scroll at 375px — auto-checked, not /verify.
+9. Six change-log titles that the live-docs tests reject (old repo name, old stage names, a removed flag and path, a doctrine section in `CLAUDE.md`) are reworded in `REWRITES`, and the v2.0.0 summary drops `setup.sh --harness`; the four tests stay unchanged — RULE: the Stage 4 review's P1 (`tasks/TASK_REVIEW_T344.md` § Stage 4 review (Reviewer: T344)): Fix: add rewrites for these titles. Do not allowlist the pins (the reviewer's words, abridged).
+10. The completeness test pins a floor of the 263 tasks known at T344's start; any board task may be listed; T344's own line joins Unreleased — RULE: `tasks/TASK_GUIDE_T344.md` § Approach cut list ("the change log is a snapshot. A later task adds its own line by hand"); fixes the review's P1 that the test turned red when T344 (or any task) closed.
+11. `tests/test_repo_name.py` `ALLOWED` gains `tests/test_site_changelog.py`, whose `BANNED` pattern names the old repo to keep it off the page — RULE: `tests/test_repo_name.py:3` "no live file names the old repo, outside history paths and the allow list below".
+Checks: site + live-docs tests `273 passed, 18 skipped` at `c0a879b7`; full suite: see Evidence; reviews: inline `code-review` (1 P1, 2 P3) and two fresh `Reviewer: T344` spawns (at `82e736b9`: 2 P1, 3 P2, 5 P3; at `c0a879b7`: 0 P0, 0 P1, 2 P2, 4 P3, AC 1-7 and UI rows pass); real run: Playwright at 1280px and 375px, no sideways scroll — auto-checked, not /verify.
 Memory: nothing new yet (pass runs after the merge)
-Not done: Stage 4 review result, Evidence rows, merge (admin: after the auto verify pass); auto verify: not started
-Paused: auto-mode check failed — no test run in memory/event-trace/T344.jsonl — write /home/thunderkds/workspace/pets/hungnguyen111/easy-kit/.claude/hooks/.state/active_task.d/$CLAUDE_CODE_SESSION_ID with the task ID (minimal-track step 1): `mkdir -p /home/thunderkds/workspace/pets/hungnguyen111/easy-kit/.claude/hooks/.state/active_task.d && printf '%s\n%s\n' "T344" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > /home/thunderkds/workspace/pets/hungnguyen111/easy-kit/.claude/hooks/.state/active_task.d/$CLAUDE_CODE_SESSION_ID`, then rerun the task's tests so the trace records them under the task, then stop [report 371f46c7515c]
+Not done: merge (admin: after the auto verify pass); auto verify: not started
 
 ## Evidence
 
 | Check | Result | Notes / output snippet |
 |-------|--------|------------------------|
-| **New test(s) cover Acceptance Criteria (file paths pasted)** | ☐ pass / ☐ fail | [test file path(s) — required before Done] |
-| Verification command run | ☐ pass / ☐ fail | [paste actual output] |
-| Negative cases hold | ☐ pass / ☐ fail | [paste the red run against the prior content, or the mutation diff (`git diff --stat`, non-empty) before each verdict] |
+| **New test(s) cover Acceptance Criteria (file paths pasted)** | ☑ pass | `tests/test_site_changelog.py` (13 tests: AC 1, 2, 4, 5, 6), written in this task |
+| Verification command run | ☑ pass | at `c0a879b7`: the guide's Verification Command plus the four live-docs tests (`test_repo_name`, `test_stage_names`, `test_docs_match_installer`, `test_agents_md_primary`) → `273 passed, 18 skipped` |
+| Negative cases hold | ☑ pass | Red run before the section existed: Demonstration BEFORE (`9 failed, 1 passed`). Reviewer mutation probes: one `<li>` removed → 2 tests fail; T344 and a new Done row T999 flipped to `[x]` → 13 passed (no false red) |
 | verify | ☐ pass / ☐ fail / ☐ N/A | [leave it: the auto verify hook writes this row, with its run record. If you ran /verify yourself, tick pass and make the whole Notes cell "/verify by the user, session <id>, commit <sha>" (the full 40-character commit). The merge gate counts no other row, even with the word "pass" in it] |
-| Review scope bounded to the change's blast radius (affected set, not whole repo) | ☐ pass / ☐ fail | [what was reviewed vs. skipped, and why] |
-| Full smoke suite still green (no regression) | ☐ pass / ☐ fail | |
-| **Companion score (easy-verifier)** | ☐ pass / ☐ fail / ☐ N/A | [`overall` and `change_risk` as the tool returned them, the scope, the ref, and the absolute path of the verifier report after a literal `report:` label — e.g. "overall 86 (>= 80), change_risk pass, scope changes, ref `main...HEAD`, report: `/home/me/.easy-verifier-reports/kit/score_changes_20261028T0530Z.html`". The gate reads the path that follows `report:` and nothing else, so with no label, or a path that is absent, the row is unscored — write ☑ N/A instead. ☑ N/A with a reason when neither companion tool was run: the merge gate blocks on ☑ fail only, never on an absent or N/A row] |
-| **UI: Visual regression (diff or verdict pasted)** | ☐ pass / ☐ fail / ☐ N/A | [screenshot path or LLM verdict — required for UI tasks, Hard-Stop Gate 6] |
-| **UI: Design-system compliance (tokens/colors/typography verified)** | ☐ pass / ☐ fail / ☐ N/A | [method used + output] |
-| **UI: Responsiveness at target viewports** | ☐ pass / ☐ fail / ☐ N/A | [viewports tested, any overflow findings] |
+| Review scope bounded to the change's blast radius (affected set, not whole repo) | ☑ pass | Two fresh `Reviewer: T344` spawns on `82e736b9` and `c0a879b7`: the `main...<commit>` diff, `site/docs.html`, the site and live-docs tests. Final: 0 P0, 0 P1, 2 P2, 4 P3; AC 1-7 and UI rows pass |
+| Full smoke suite still green (no regression) | ☑ pass | at `c0a879b7`: `54 failed, 7669 passed, 24 skipped`; `comm` against the unchanged-`main` list: NEW empty, GONE empty (the 54 fail for missing `busybox`/`zsh`) |
+| **Companion score (easy-verifier)** | ☑ N/A | neither companion tool was run |
+| **UI: Visual regression (diff or verdict pasted)** | ☑ pass | Playwright screenshots (Supervisor and both reviewers) at 1280px and 375px: the `<h2>` is 20px like `#options`, `<details>` styled like the page's others; the diff adds 300 lines to `site/docs.html` and deletes none |
+| **UI: Design-system compliance (tokens/colors/typography verified)** | ☑ pass | 0 `style=` and 0 `class=` in the section; `site/theme.css` untouched; no hex colour (`test_hex_colours_appear_only_in_theme_css` green) |
+| **UI: Responsiveness at target viewports** | ☑ pass | 375px and 1280px: `scrollWidth` equals the viewport width, also with all five entries open; 0 elements overflow (a long path wraps through `<wbr>`) |
 
 ---
 
@@ -107,12 +106,11 @@ FAILED tests/test_site_changelog.py::test_ac3_the_section_copies_no_email_addres
 
 The one pass is `test_ac4_render_title_escapes_and_keeps_code_spans`, a pure helper check. The page has no `#changelog` section and no sidebar link.
 
-**AFTER**: [same command, post-change] OR [verbatim excerpt of the new content]
+**AFTER**: at `c0a879b756c2c4e08ca371a788b48ccf70208f31`, the same new test plus the site and live-docs tests: `273 passed, 18 skipped`. `site/docs.html` now has `<section id="changelog">` after `#options`, a sidebar link, and five fold-outs: Unreleased (open, 106 changes), v2.2.0 (17), v2.1.0 (45), v2.0.0 (16), v1 (80).
 
-**DELTA**: [one sentence — what a user can now do that they could not before]
+**DELTA**: A reader of the docs page can now see what every release shipped, newest first, in plain titles.
 
-**WITNESS**: [who ran it and when — derived from `memory/event-trace/T344.jsonl`, never the
-implementing agent alone]
+**WITNESS**: the Supervisor (session 4e0cb7e2): `memory/event-trace/T344.jsonl` record at `2026-11-20T16:11:24Z`, a non-error `Bash` call running the site tests; two fresh `Reviewer: T344` spawns re-ran them independently (sections below).
 
 ## Stage 4 review (Reviewer: T344)
 
