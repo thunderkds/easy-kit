@@ -99,7 +99,6 @@
 
 
 ### In Progress
-- [ ] **T344** — `site/docs.html` gets a Change log section listing every release | frontend-developer | C2 | Risk: Low | P2 | Started 2026-11-20 (user: page "docs.html", scope "Every release"): branch `feat/t344-changelog`, worktree `../wt-t344` | Track: extended
 
 
 
@@ -113,6 +112,7 @@
 
 
 ### Ready for Review
+- [ ] **T344** — `site/docs.html` gets a Change log section listing every release | frontend-developer | C2 | Risk: Low | P2 | Started 2026-11-20 (user: page "docs.html", scope "Every release"): branch `feat/t344-changelog`, worktree `../wt-t344` | Track: extended | Stage 4 2026-11-20 [admin] session tag: two fresh `Reviewer: T344` spawns; final at `c0a879b7`: 0 P0, 0 P1, 2 P2, 4 P3, AC 1-7 and UI rows pass; `ReviewerDone` records written by the T341 hook; full suite = 54-test main baseline; report `tasks/TASK_REVIEW_T344.md` | Ready for Review 2026-11-20
 - [ ] **T326** — `[admin]` push of `main` works on git older than 2.38 | common-infrastructure | C2 | Risk: High | P1 | Guide: `tasks/TASK_GUIDE_T326.md` | Registered and started 2026-11-18 [admin], user: "yes, register both tasks, and execute 2 of them parallel [admin]": branch `fix/t326-old-git-main-push`, worktree `../wt-t326` | Track: extended | Stage 4 2026-11-18 [admin]: code-review 0 P0/0 P1/1 P2 fixed; security-review by hand (built-in needs `origin/HEAD`), no findings; Debate A (read-tree fallback); report `tasks/TASK_REVIEW_T326.md` `## Auto decisions` | Ready for Review 2026-11-18
 - [ ] **T327** — Clean up a task's resources after it is merged and Done | common-infrastructure | C2 | Risk: High | P1 | Guide: `tasks/TASK_GUIDE_T327.md` | Registered and started 2026-11-18 [admin], user: "yes, register both tasks, and execute 2 of them parallel [admin]": branch `feat/t327-cleanup-after-done`, worktree `../wt-t327` | Track: extended | Stage 4 2026-11-18 [admin]: code-review 0 P0/0 P1 code, 1 P3; security-review by hand, no findings; Debate B (list processes, refuse, no signal); report `tasks/TASK_REVIEW_T327.md` `## Auto decisions` | Ready for Review 2026-11-18
 - [ ] **T340** — Remove kit files nothing uses (lean-kit Part 1: two scripts, two spikes) | common-infrastructure | C1 | Risk: Low | P1 | Started 2026-11-20 [admin]: branch `chore/t340-remove-unused-files`, worktree `../wt-t340` | Track: minimal | Record: tasks/MINIMAL_LOG.md
