@@ -171,3 +171,70 @@ Method: headless Chromium shell 1248 via Playwright, `file://` `site/docs.html`,
 - Mutation with `git diff --stat`: scratch copy at `/tmp/claude-1000/-home-thunderkds-workspace-pets-hungnguyen111-easy-kit/4e0cb7e2-077e-4b1d-bf64-6baa9212ca72/scratchpad/sim` (one `<li>` removed from `site/docs.html`): 2 failed, 10 passed. T344 row set to `[x]` in the same copy: 1 failed (`test_ac5_every_done_task...`, `['T344']`).
 - Not run: `ux-evaluate` skill (not available here); `security-review` (Risk Low); the hook-written `verify` row stays the hook's.
 - The working-tree `tasks/TASK_REVIEW_T344.md` held uncommitted Supervisor edits (`## Auto decisions`) while this review ran. They are left as they were; only this section is committed.
+
+## Stage 4 review (Reviewer: T344, commit c0a879b7)
+
+Reviewer: T344 (second pass, fresh) · Commit reviewed: `c0a879b756c2c4e08ca371a788b48ccf70208f31` (`main...c0a879b`; this pass re-checks the fix commit against the first review at `82e736b`) · Worktree `wt-t344`, branch `feat/t344-changelog` · Risk Low, so `security-review` not required.
+The `code-review` skill could not be started from this sub-agent (no Skill tool), so the review was done by hand with the same P0-P3 scale. Read-only except this section.
+
+**Verdict: PASS for merge. 0 P0, 0 P1, 2 P2, 4 P3.** All 4 regressions and both P1 of the first review are fixed. The 2 P2 are record keeping in this file, not code.
+
+### Findings
+
+| # | Sev | Finding | Where | Fix |
+|---|-----|---------|-----|-----|
+| 1 | P2 | The new `## Auto decisions` lines 9-11 and the updated `Checks:` line were written INSIDE the HTML template comment (`<!--` line 13 to `-->` line 48), so they are hidden when rendered and the close-out hook (which anchors on the first uncommented `## Auto decisions` block, T244) cannot see them. The live block still has the old `Checks:` ("full suite: running; review: `Reviewer: T344` running"), decisions 1-8 only, and the stale `Paused:` line. | `tasks/TASK_REVIEW_T344.md:13-48` (the added lines sit before `-->`); live block under it | Move decisions 9-11 and the new `Checks:` into the live block; drop the `Paused:` line once the trace is fixed. Leave the template comment as the template. |
+| 2 | P2 | The `## Evidence` table and `## Demonstration` (AFTER, DELTA, WITNESS) are still template placeholders. Hard-Stop Gate 5 needs the "New test(s) cover acceptance criteria" row filled with pasted output before Done, and the three UI rows (Gate 6). | `tasks/TASK_REVIEW_T344.md` `## Evidence` | Fill from the Evidence block below (the Supervisor writes those rows; I added this section only). |
+| 3 | P3 | The count of reworded titles is stale. `len(REWRITES)` is 45 (run: `python3` import of the test module), the guide's cut list, Questions Log and Auto decision 3 say 40. | `tasks/TASK_GUIDE_T344.md` § Approach cut list and Questions Log; Auto decision 3 | Say 45. |
+| 4 | P3 | Auto decision 9 puts a quotation in quote marks that is not in the first review: "add rewrites for these titles. Do not allowlist the pins". The review says "Reword the 6 titles in `REWRITES` (add them there; ...) — never allowlist the pins". The meaning is the same; the quote is not verbatim. | Auto decision 9 | Quote the review's own words. |
+| 5 | P3 | `REWRITES["T097"]` drops the `(B2):` prefix, but the v2.0.0 list still shows `(B1): Relocate canonical ...` (`site/docs.html:4166`), so a reader sees an orphan "(B1)". Meaning of both titles is kept; only the pair is now uneven. | `tests/test_site_changelog.py:58`, `site/docs.html:4166` | Optional: add a T096 rewrite that drops `(B1):` too. |
+| 6 | P3 | Test file tidy-up from the first review (its finding 10) is only half done: the section comment `# ---- AC 5` (`tests/test_site_changelog.py:203`) still sits above `test_ac4_rewrites_...` and the other AC 4 tests; they run to the `# ---- AC 3` header at line 253. No effect on results. | `tests/test_site_changelog.py:203-253` | Optional. |
+
+First-review findings, state now: P1 #1 (4 new full-suite failures) fixed, those 4 tests pass in my run (below). P1 #2 (red when T344 closes) fixed; checked by simulation. P2 #3, #4 (AC 4 text and upkeep cost) fixed in the guide (AC 4, cut list, Questions Log). P2 #5 (full suite) open until the running full run ends; I did not wait for it. P3 #6, #7, #8 (AC 3, 6, 7 wording) fixed in the guide. P3 #9 (T157, T101 meaning) fixed (`tests/test_site_changelog.py:46,54`).
+
+### Acceptance Criteria
+
+| AC | Verdict | Evidence |
+|----|---------|----------|
+| 1 | PASS | `site/docs.html:3966` `<section id="changelog">`, `:3967` `<h2>Change log</h2>`; after `<section id="options">` `:3954`, before `<footer>` `:4265`; sidebar `:253` `<li><a href="#changelog">Change log</a></li>`, last link in `// reference`. Playwright at 1280px: clicking the link gives hash `#changelog`, last nav link text "Change log". Tests `test_ac1_*` pass. |
+| 2 | PASS | Five `<details>` in order: `:3969` `open` (Unreleased), `:4081` v2.2.0, `:4104` v2.1.0, `:4155` v2.0.0, `:4177` v1. Summaries: "Unreleased · 106 tasks", "v2.2.0 · 2026-10-28 · 17 tasks", "v2.1.0 · 2026-10-19 · 45 tasks", "v2.0.0 · 2026-09-05 · 16 tasks", "v1 · 2026-08-21 · 80 tasks". Dates equal `git log -1 --format=%cs <tag>` (2026-10-28, 2026-10-19, 2026-09-05, 2026-08-21). Playwright `opens: [true,false,false,false,false]`. |
+| 3 | PASS | Each released entry has one `<p>` summary; the guide now says "a short summary (one paragraph)". No Deployer or Approved text; `test_ac3_the_section_copies_no_email_address` passes. v2.0.0 summary no longer shows `setup.sh --harness` (`:4157`). |
+| 4 | PASS | No task ID on the page. Titles are the board titles, escaped, backticks as `<code>`, `<wbr>` after `/` and `_`; `test_ac4_*` pass. `REWRITES` is the rule for the rest (see next section). |
+| 5 | PASS | Only titles and one line changed since the first review, so the placement it recomputed holds (263 of 263 in the same release). The one new line is T344 under Unreleased (`:4078`, last, ID order), count 106 (`test_ac2_each_summary_gives_its_task_count`, `test_ac5_tasks_are_in_id_order_inside_each_entry` pass). T086 and T184 absent. |
+| 6 | PASS | `tests/test_site_changelog.py`: 13 tests; floor of 263 (`FLOOR`, `:30-48`), once-only, ID order, escaping, no email, rewrites. Simulation below. |
+| 7 | PASS | The nine files named in AC 7 (the four site tests plus `test_repo_name`, `test_stage_names`, `test_docs_match_installer`, `test_agents_md_primary`, and the new test): `273 passed, 18 skipped`. Repoints carry inline `# T344` comments (`tests/test_site_story.py`, `tests/test_site_content.py`); `tests/test_repo_name.py:45-46` `ALLOWED` gains the test file (its `BANNED` pattern names the old repo) with the reason given. |
+
+### `REWRITES` entries vs board titles
+
+I compared each of the 6 new entries and the 2 changed ones with the board row; the other 37 are unchanged since the first review (38 of 40 kept their meaning there, T157 and T101 were the 2 that shifted).
+
+| Task | Board title (short) | Page title | Meaning kept |
+|------|--------------------|------------|--------------|
+| T025 | craft-agent skill ... + Stage 1.5 wiring | ... wired into Stage 1 | Yes. `docs/claude-md/pipeline-stages.md:14`: "Stage 1.5 is Stage 1 step Agent team". |
+| T035 | README.md — install/update rewritten ... (2 stale-doc gaps: pack ~/.supervisor no-longer-auto-created, git-submodule note removed) | same, "the pack folder is no longer auto-created" | Yes. The path `~/.supervisor` becomes "the pack folder"; both gaps kept. |
+| T039 | Dedup the `## Skills vs Agents` section in CLAUDE.md (580→536 lines) | ... section of the doctrine file (580→536 lines) | Yes. |
+| T097 | (B2): Per-harness install projection, `setup.sh --harness`, and the AGENTS.md correction that unblocks Codex | Per-harness install projection, and the AGENTS.md correction that unblocks Codex | Yes. Flag name dropped; the B2 label dropped (P3 #5). |
+| T223 | ... auto mode never skips Stage 0.5/1 | ... never skips Stage 0 or Stage 1 | Yes. 0.5a and 0.5b are steps of Stage 0 (`pipeline-stages.md:14`). |
+| T240 | Rename the repo from personal-agentic-claude to easy-kit | Rename the repo to easy-kit | Yes. Old name dropped. |
+| T157 | ... only my In Progress tasks block my push | ... only my own tasks still being worked on block my push | Yes (fixed since the first review; "In Progress" is a banned board word). |
+| T101 | README and site still describe the pre-T096/T097 world in four places | ... the layout from before the canon move and the per-CLI install, in four places | Yes (fixed since the first review). |
+
+### UI / Design Acceptance Criteria
+
+Method: Playwright with the Chromium headless shell `chromium_headless_shell-1248`, `file://` `site/docs.html#changelog`, 375x800 and 1280x900; script and screenshots in the scratchpad (`r2_shot.py`, `r2_cl_375.png`, `r2_cl_1280.png`).
+
+| Row | Verdict | Evidence |
+|-----|---------|----------|
+| Visual regression | PASS | `<h2>` computed size 20px, same as `#options` h2. The section sits in the main column at 1280px (heading, intro, boxed `<details>`, bullet list, `<code>` chips as in the other fold-outs); the sidebar shows "Change log" last. `git diff --numstat main HEAD -- site/docs.html`: `300 0` (300 added, 0 deleted), so no other section changes. Plain `<details>` is the element already used 19 times on `main`. |
+| Design-system compliance | PASS | In the section: 0 elements with `style=`, 0 with `class=` (Playwright count). `site/theme.css` and `site/index.html` not in the diff. |
+| Responsiveness | PASS | 375px: `scrollWidth 375 = clientWidth 375`, 0 elements past the right edge, also after opening all five entries; summary lines and code spans wrap in the screenshot. 1280px: `scrollWidth 1280`, same checks. |
+| UX story 1 | PASS | 1280px click gives `#changelog`; Unreleased open with its tasks, four closed rows with date and count (summaries above). |
+| UX story 2 | PASS (first review) | The `v2.1.0` row opening was checked in the first review; this fix changed no markup of that entry. |
+
+### Evidence
+
+- Tests, run in `wt-t344` at `c0a879b`: `uv run --with pytest python -m pytest tests/test_site_changelog.py tests/test_site_content.py tests/test_site_story.py tests/test_site_visual_first.py tests/test_site_explorer.py tests/test_repo_name.py tests/test_stage_names.py tests/test_docs_match_installer.py tests/test_agents_md_primary.py -q -p no:cacheprovider` printed `273 passed, 18 skipped in 1.69s`. The 4 tests that failed in the first review are in this run and pass.
+- Simulation (scratch copy `scratchpad/sim2`, only the files the test reads): T344 row set to `[x]` plus a new `- [x] **T999**` row that is not listed: `13 passed`. One `<li>` deleted from the page (`diff` shows the removed line `3973d3972`): `2 failed, 11 passed` (`test_ac2_each_summary_gives_its_task_count`, `test_ac5_every_floor_task_appears_exactly_once_and_nothing_unknown`).
+- Full suite: a run was in progress when this review finished (3 pytest processes alive). I did not wait for it. Compare its failing set with the 54-test `main` baseline; the 4 tests of finding 1 must not be in it.
+- Not run: `ux-evaluate` skill (not available here); `security-review` (Risk Low). The `verify` row stays the hook's.
+- Upkeep (known, in the guide's cut list): a later Done row never breaks the suite; a later Done title that carries a task ID, a board word, a hex colour, `**` or a banned name fails `test_ac4_rewrites_cover_exactly_the_floor_titles_that_break_a_page_rule` only if its task is in `FLOOR`, so a new task needs a `REWRITES` entry only if the author lists it and its title breaks a page rule (`test_ac4_the_page_shows_no_task_id_and_no_board_word` guards that).
