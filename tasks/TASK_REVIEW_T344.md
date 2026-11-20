@@ -190,7 +190,7 @@ The `code-review` skill could not be started from this sub-agent (no Skill tool)
 | 5 | P3 | `REWRITES["T097"]` drops the `(B2):` prefix, but the v2.0.0 list still shows `(B1): Relocate canonical ...` (`site/docs.html:4166`), so a reader sees an orphan "(B1)". Meaning of both titles is kept; only the pair is now uneven. | `tests/test_site_changelog.py:58`, `site/docs.html:4166` | Optional: add a T096 rewrite that drops `(B1):` too. |
 | 6 | P3 | Test file tidy-up from the first review (its finding 10) is only half done: the section comment `# ---- AC 5` (`tests/test_site_changelog.py:203`) still sits above `test_ac4_rewrites_...` and the other AC 4 tests; they run to the `# ---- AC 3` header at line 253. No effect on results. | `tests/test_site_changelog.py:203-253` | Optional. |
 
-First-review findings, state now: P1 #1 (4 new full-suite failures) fixed, those 4 tests pass in my run (below). P1 #2 (red when T344 closes) fixed; checked by simulation. P2 #3, #4 (AC 4 text and upkeep cost) fixed in the guide (AC 4, cut list, Questions Log). P2 #5 (full suite) open until the running full run ends; I did not wait for it. P3 #6, #7, #8 (AC 3, 6, 7 wording) fixed in the guide. P3 #9 (T157, T101 meaning) fixed (`tests/test_site_changelog.py:46,54`).
+First-review findings, state now: P1 #1 (4 new full-suite failures) fixed, those 4 tests pass in my run (below). P1 #2 (red when T344 closes) fixed; checked by simulation. P2 #3, #4 (AC 4 text and upkeep cost) fixed in the guide (AC 4, cut list, Questions Log). P2 #5 (full suite) open until the running full run ends; I did not wait for it. P3 #6, #7, #8 (AC 3, 6, 7 wording) fixed in the guide. P3 #9 (T157, T101 meaning) fixed (`tests/test_site_changelog.py:70,78`).
 
 ### Acceptance Criteria
 
@@ -201,7 +201,7 @@ First-review findings, state now: P1 #1 (4 new full-suite failures) fixed, those
 | 3 | PASS | Each released entry has one `<p>` summary; the guide now says "a short summary (one paragraph)". No Deployer or Approved text; `test_ac3_the_section_copies_no_email_address` passes. v2.0.0 summary no longer shows `setup.sh --harness` (`:4157`). |
 | 4 | PASS | No task ID on the page. Titles are the board titles, escaped, backticks as `<code>`, `<wbr>` after `/` and `_`; `test_ac4_*` pass. `REWRITES` is the rule for the rest (see next section). |
 | 5 | PASS | Only titles and one line changed since the first review, so the placement it recomputed holds (263 of 263 in the same release). The one new line is T344 under Unreleased (`:4078`, last, ID order), count 106 (`test_ac2_each_summary_gives_its_task_count`, `test_ac5_tasks_are_in_id_order_inside_each_entry` pass). T086 and T184 absent. |
-| 6 | PASS | `tests/test_site_changelog.py`: 13 tests; floor of 263 (`FLOOR`, `:30-48`), once-only, ID order, escaping, no email, rewrites. Simulation below. |
+| 6 | PASS | `tests/test_site_changelog.py`: 13 tests; floor of 263 (`FLOOR`, `:29-47`), once-only, ID order, escaping, no email, rewrites. Simulation below. |
 | 7 | PASS | The nine files named in AC 7 (the four site tests plus `test_repo_name`, `test_stage_names`, `test_docs_match_installer`, `test_agents_md_primary`, and the new test): `273 passed, 18 skipped`. Repoints carry inline `# T344` comments (`tests/test_site_story.py`, `tests/test_site_content.py`); `tests/test_repo_name.py:45-46` `ALLOWED` gains the test file (its `BANNED` pattern names the old repo) with the reason given. |
 
 ### `REWRITES` entries vs board titles
