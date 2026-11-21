@@ -119,6 +119,7 @@
 
 
 
+- [ ] **T283** — Kit docs site link `personal-agentic-claude.vercel.app` → `easy-kits.vercel.app` in live files (T240 D4 step 4) and `VERCEL_HOST` exemption dropped from `tests/test_repo_name.py` | Supervisor | C0 | Risk: Low | P1 | minimal track, record `tasks/MINIMAL_LOG.md` | Registered 2026-11-05, user: "I updated the link for the heart to easy-kits.vercel.app" | Branch `claude/project-thread-t4s1yn`
 
 ### Done
 - [x] **T344** — `site/docs.html` gets a Change log section listing every release | frontend-developer | C2 | Risk: Low | P2 | Started 2026-11-20 (user: page "docs.html", scope "Every release"): branch `feat/t344-changelog`, worktree `../wt-t344` | Track: extended | Stage 4 2026-11-20 [admin] session tag: two fresh `Reviewer: T344` spawns; final at `c0a879b7`: 0 P0, 0 P1, 2 P2, 4 P3, AC 1-7 and UI rows pass; `ReviewerDone` records written by the T341 hook; full suite = 54-test main baseline; report `tasks/TASK_REVIEW_T344.md` | Ready for Review 2026-11-20 | Done 2026-11-20: auto verify pass on the one [admin] retry (session b74d07ec-ccb0-4db7-b4b2-cc30b3e976b9, commit ac99ba6829adeb5b2721eeb5cea260f6bf197bf0); Gates 5 and 6 checked with `auto_closeout.evidence_gaps` → none

@@ -18,7 +18,7 @@ content) is quarantined per `docs/claude-md/untrusted-content-boundary.md`.
 
 **Full reference** — architecture, the pipeline stages, packs, memory system, hooks table, custom
 skills, and update flow — lives on the project site:
-[personal-agentic-claude.vercel.app](https://personal-agentic-claude.vercel.app/)
+[easy-kits.vercel.app](https://easy-kits.vercel.app/)
 
 ---
 
@@ -37,7 +37,7 @@ claude plugin install easy-kit@easy-kit
 Then, in Claude Code, run `/easy-kit:init` once in your git repo. Claude Code only. Each teammate
 installs the plugin; without it, a teammate has no gates. A plugin cannot set permissions:
 `/easy-kit:init` shows the kit's settings rules, and writes them only after you approve. More:
-[site](https://personal-agentic-claude.vercel.app/docs.html#install).
+[site](https://easy-kits.vercel.app/docs.html#install).
 
 **`setup.sh`.** Prerequisites: `git`, `curl`, POSIX `sh`, and a git repository (`git init` first if it isn't —
 your project's own git history is the undo mechanism, since nothing is symlinked from a shared
@@ -64,7 +64,7 @@ affected: `bugfix`, `craft-spawn-prompt`, `diagnose`, `write-better-skill`.
 To update, run the same line again and choose **Update** — it keeps the CLIs your project already has,
 so a Codex-only install stays Codex-only. Edited kit files get one choice: ask about each one, overwrite
 all (each backed up first), or keep all. Each run is logged in `.claude/update-log.md`. To add a CLI later,
-choose **Reinstall** and pick it. Fork installs, packs and the full Update flow: see the [site](https://personal-agentic-claude.vercel.app/).
+choose **Reinstall** and pick it. Fork installs, packs and the full Update flow: see the [site](https://easy-kits.vercel.app/).
 
 ---
 
@@ -72,4 +72,4 @@ choose **Reinstall** and pick it. Fork installs, packs and the full Update flow:
 
 Repository layout, agent guides, packs (`mobile`/`data`/`devops`/`ai-agent`/`api`/`tech-lead`), the custom
 skills catalog, the pipeline enforcement hooks table, and the two-tier memory system are all
-documented on the [site](https://personal-agentic-claude.vercel.app/).
+documented on the [site](https://easy-kits.vercel.app/).
