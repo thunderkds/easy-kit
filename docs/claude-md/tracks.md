@@ -750,8 +750,8 @@ unlocks the merge, as item 4 says: the Supervisor never edits a `pass` row, neve
 anything but the unwritten state, and never runs the skill itself. With `[auto]` alone there is no retry:
 a `blocked` run leaves `/verify (yours)` in the `Not done:` line.
 
-The gate's other checks then still run, as for every merge. With `[auto]` alone, the same gate blocks every merge, push and pull while that request is the latest `gh pr merge` and a `gh api` call to a merge endpoint (`/merges`, `/pulls/N/merge`) count as merges for the gate too (T320); `[admin]` allows no `gh` command.
-one. A `git rebase` is not part of this rule. A session with no readable transcript has no known request,
+The gate's other checks then still run, as for every merge. With `[auto]` alone, the same gate blocks every merge, push and pull while that request is the latest
+one. A `git rebase` is not part of this rule. `gh pr merge` and a `gh api` call to a merge endpoint (`/merges`, `/pulls/N/merge`) count as merges for the gate too (T320); `[admin]` allows no `gh` command. A session with no readable transcript has no known request,
 so this rule does not apply and the gate works as before.
 
 Known limits:
