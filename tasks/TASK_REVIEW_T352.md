@@ -17,17 +17,18 @@ Mode: auto
 Checks: PENDING
 Memory: PENDING
 Not done: merge (admin: after the auto verify pass); auto verify: running (T182)
+Paused: auto-mode check failed — extended track, but the trace has no `code-review` Skill call (Stage 4 runs in auto mode); Risk Medium, but the trace has no `security-review` Skill call [report b0c82861f846]
 
 ## Evidence
 
 | Check | Result | Notes / output snippet |
 |-------|--------|------------------------|
 | **New test(s) cover Acceptance Criteria (file paths pasted)** | ☐ pass / ☐ fail | PENDING |
-| Verification command run | ☐ pass / ☐ fail | PENDING |
+| Verification command run | ☑ pass | `python3 -m pytest -q tests/test_t352_release_plan_rename.py` -> `4 passed in 0.11s`; `sh tests/test_update_removals.sh` -> `PASS: sc11: untouched skills/ship removed, skills/release-plan installed` ... `34 passed, 0 failed`; `python3 scripts/gen_kit_explorer.py --check` -> rc=0 (site data current). |
 | Negative cases hold | ☐ pass / ☐ fail | PENDING |
 | verify | ☐ pass / ☐ fail / ☐ N/A | [leave it: the auto verify hook writes this row, with its run record. If you ran /verify yourself, tick pass and make the whole Notes cell "/verify by the user, session <id>, commit <sha>" (the full 40-character commit). The merge gate counts no other row, even with the word "pass" in it] |
-| Review scope bounded to the change's blast radius (affected set, not whole repo) | ☐ pass / ☐ fail | PENDING |
-| Full smoke suite still green (no regression) | ☐ pass / ☐ fail | PENDING |
+| Review scope bounded to the change's blast radius (affected set, not whole repo) | ☑ pass | Reviewer: T352, fresh context, `code-review` + `security-review` on `main...11b4aad5`: 38 files; blast radius = every file naming the skill (`git grep` for `` `ship` ``, `skill: "ship"`, `skills/ship`, `"ship"`, `/ship` outside history), the 2 hook docstrings, the 15 repointed pin tests, `plugin/skills` symlink, MANIFEST `skills codex=.codex/skills`, `lib/harness-update.sh` removal path (SC11). Findings below. |
+| Full smoke suite still green (no regression) | ☑ pass | Reviewer run `python3 -m pytest -q -p no:cacheprovider tests .claude/hooks/tests` in the worktree: `6 failed, 7797 passed, 5 skipped, 126 subtests passed in 405.06s`. 5 are the known memory-budget failures (`test_memory_channel_and_budget.py` x4, `test_token_audit_format.py::test_memory_md_hot_tier_stays_within_char_budget`). The 6th, `test_merge_gate_companion_rows.py::test_a_tilde_report_path_is_expanded`, passes alone in the worktree and on `main` (`1 passed in 0.07s`): order-dependent flake, not the rename. `sh tests/test_update_removals.sh`: `34 passed, 0 failed`. |
 | **Companion score (easy-verifier)** | ☑ N/A | easy-verifier not run for this task |
 | **UI: Visual regression (diff or verdict pasted)** | ☑ N/A | no UI component: the site change is text only (skill name in 6 chips/lines) |
 | **UI: Design-system compliance (tokens/colors/typography verified)** | ☑ N/A | no markup or style change; same classes |
@@ -44,3 +45,30 @@ Not done: merge (admin: after the auto verify pass); auto verify: running (T182)
 **DELTA**: Stage 5's `Skill({ skill: "release-plan" })` reaches the kit's release planner in an interactive session, where Claude Code's `/ship` used to shadow it.
 
 **WITNESS**: PENDING
+
+
+---
+
+## Stage 4 review (Reviewer: T352, fresh context)
+
+Verdict: **pass with 1 P2 and 1 P2 (test), 2 P3**. No P0/P1. The rename itself is complete and correct; the two P2 items are places the AC 2 regex did not reach.
+
+### Findings
+
+- **P2 — `scripts/token_audit.py:53`** `"ship": "stage-5"` still names the old skill. A live file (`scripts` is in the test's `LIVE` list) that AC 2 / `SKILL_NAME` cannot catch, because the form `"ship":` is not in the regex. Failure: `Skill({ skill: "release-plan" })` trace records are no longer mapped to `stage-5` (`STAGE_MAP` lookup at line ~66 falls through), so the token audit books Stage 5 release-planning cost to no stage. `tests/test_stage_names.py::test_d6_token_audit_tags_use_stage_0_and_stage_1` checks only stage-0/1 keys, so nothing catches it. Fix: rename the key to `"release-plan"`; add `"ship"` quoted-key form (`"ship":`) to `SKILL_NAME` and one assertion `m["release-plan"] == "stage-5"` so the gap stays closed.
+- **P2 (vacuous pin) — `tests/test_auto_mode.py:435`** `USER_STOP` still ends `|skill: "ship"`. Before the rename that alternative selected exactly 1 chunk of `docs/claude-md/pipeline-stages.md` (the Stage 5 item 6 block, which says "Not in auto mode"); after the rename it selects 0 (measured: 1 chunk on `main`, 0 now). `test_ac3_every_pipeline_stop_names_its_auto_rule` therefore no longer checks that the release-plan stop names its auto rule: delete the "Not in auto mode" sentence and the test stays green (the `>= 14` count still holds). The repoint in this commit missed this one. Fix: `skill: "release-plan"`.
+- **P3 — `memory/codebase-map.md:182-183`** still lists `./skills/ship` and `./skills/ship/SKILL.md`. Outside the guide's scope list (memory is history except the diff-driven pass), so the Supervisor's post-merge memory pass should refresh it; `skills/ship` does not exist after this change.
+- **P3 — `skills/write-better-skill/SKILL.md:72` and `site/docs.html:2336`** keep `*ship*` as a leading-word example "(e.g. *wake*, *learn*, *ship*, ...)". Harmless (a concept word, not the skill name) but now points at no skill; swap for `*release-plan*` or another live skill if wanted. Not a gate.
+- **Note — SC11 (`tests/test_update_removals.sh`)** builds its own synthetic upstream (adds `skills/ship`, then `git mv` to `release-plan`), so it proves the existing `lib/harness-update.sh:500` removal and warning for this skill pair, and would also pass on `main`. That matches the guide ("pins, does not change") and AC 4 as written; it does not test the real kit tree. Acceptable. Both branches (untouched removed + log line `removed 'skills/ship'`; edited kept + `no longer ships 'skills/ship/SKILL.md'` warning) are asserted.
+
+### Checks asked for
+
+- AC 1-3, 5 each covered by `tests/test_t352_release_plan_rename.py` (4 tests, red on `main` per the Demonstration, `8083fb78`); AC 4 by SC11; AC 6 by the suite run above. AC 2 regex has the gap named in the first P2 (other forms, e.g. `"ship":` keys).
+- No live file keeps the skill name: `git grep` outside `tasks/ docs/archive docs/brainstorming docs/ddr docs/adr docs/prd CLAUDE_LEGACY.md PROJECT_KANBAN.md` leaves only the P2/P3 items above, the verb in prose (`README.md:5`, `skills/release-plan/SKILL.md:12,17,62`), the `/ship` mention in the new description, and pin-test text that cites the old name on purpose. No history file is in the diff (`git diff --stat`: only T352's own `tasks/` files).
+- Repointed pins still bite: `test_agents_md_primary.py` (explicit old->new pairs), `test_stage_names.py` row 19 (`replace(...).replace("`ship`", ...)` is applied to the expected text only, the live row must still equal it), `test_tracks.py` gates 2-6, `test_t307_admin_end_to_end.py` (`renamed` base keeps the frozen hash on the unrenamed text, then checks the renamed one), `test_site_story.py` (4 hashes added to a whitelist that must still be a subset of the baseline), `test_site_visual_first.py` (hash and prefix repoints), `test_agent_guide_dedup.py` baseline ref `7863a113` (a real merge commit history is used on this repo, so the ref survives the merge), `AGENTS_MD_BYTE_CAP` 22414 -> 22470 (+56 = 7 x 8 bytes, as recorded). The one that went vacuous is `test_auto_mode.py:435` (P2).
+- Plugin: `plugin/skills -> ../skills` symlink, `plugin/skills/release-plan/SKILL.md` resolves (AC 5 test). Codex projection: MANIFEST `skills codex=.codex/skills` copies the folder by name; `tests/test_harness_projection.sh` repointed to `release-plan`; the skill stays under the Codex cap (`test_t307` `test_ac8_skill_stays_under_codex_cap` only lists `SKILL_ROWS`; the T352 skill body is unchanged apart from 2 lines). Site data: `scripts/gen_kit_explorer.py --check` rc=0.
+- `lib/harness-update.sh`, `.claude/settings.json`, `plugin`, `MANIFEST`, `setup.sh`, `update.sh`: not in the diff, as the guide requires.
+
+### Security review (Risk Medium)
+
+No finding. The diff renames a skill folder and its name in docs, 2 hook docstrings, pin tests and generated site HTML. No hook code, permission, `settings.json` allow/deny entry, input-validation path, network call or secret handling changes; no `Skill(ship)` permission rule exists to go stale (`git grep` of `.claude/settings.json`, `.claude-plugin`, `plugin/hooks`, `commands`: no hit). The update path only removes `skills/ship` when its hash matches the shipped one (existing `lib/harness-update.sh:500` logic, SC11 asserts the edited copy is kept), so a user's own edits are not deleted. SC11 writes only under `$WORK` temp dirs. The removed old skill name leaves no alias, so no shadowed-skill ambiguity remains.
