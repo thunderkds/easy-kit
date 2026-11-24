@@ -107,3 +107,14 @@ def test_round1_an_error_in_the_gh_check_is_a_hit_not_a_pass(monkeypatch):
         raise RuntimeError("x")
     monkeypatch.setattr(merge_gate, "_gh_merge_hit", boom)
     assert merge_gate.gh_merge_hit("gh pr view 1") is True
+
+
+# Review round 2: a backslash-newline joins the words, so it must not hide the verb.
+CONTINUED = ["gh \\\npr merge 1", "gh pr \\\nmerge 1", "gh api repos/o/r/pulls/3/\\\nmerge -X PUT"]
+
+
+@pytest.mark.parametrize("command", CONTINUED, ids=["after-gh", "before-verb", "inside-endpoint"])
+def test_round2_a_line_continuation_does_not_hide_a_gh_merge(gate, command):
+    fx = gate(kanban(in_progress=("T900",)))
+    text = reason(command, fx.main)
+    assert text is not None and "cannot push/merge" in text, f"{command!r} must be gated"

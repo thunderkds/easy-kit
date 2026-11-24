@@ -165,6 +165,7 @@ def gh_merge_hit(command):
 
 
 def _gh_merge_hit(command):
+    command = command.replace("\\\n", "")  # the shell removes a backslash-newline: it joins the words
     scan = strip_quoted_spans(strip_heredoc_bodies(GH_QUOTED_WORD.sub(r"\2", command)))
     if any(re.search(p, scan) for p in GH_MERGE_PATTERNS) or GH_VERB_HIDDEN.search(scan):
         return True

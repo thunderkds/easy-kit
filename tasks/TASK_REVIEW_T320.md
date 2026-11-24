@@ -50,3 +50,50 @@ Not matched: `gh api graphql -f query='mutation{mergePullRequest(...)}'` (GraphQ
 **AFTER**: `test_t320_gh_merge_gate.py` 24 passed.
 **DELTA**: `gh pr merge` and the merge API are gated like `git merge`, in auto mode too.
 **WITNESS**: reviewer run, this file.
+
+## Round 2
+
+Reviewer: fresh-context, commit 06878ee7b65fe3e6c840710887eaa0cec5174814, diff main...06878ee. Skills: code-review, security-review (Risk High), applied to `GH_MERGE_PATTERNS`, `gh_merge_hit`.
+
+### Verdict: PASS WITH FINDINGS (no P0/P1; all five round 1 P2 findings fixed; 1 new P2 bypass, 3 P3)
+
+### Evidence
+
+| Check | Result | Notes |
+|-------|--------|-------|
+| Tests | pass | `uv run --with pytest python -m pytest .claude/hooks/tests/test_t320_gh_merge_gate.py .claude/hooks/tests/test_merge_gate_guard.py -q -p no:cacheprovider` -> `82 passed in 1.44s` |
+| Probe | done | 70 commands run through `gh_merge_hit` (hook source exec'd with the trailing `main()` removed; script in scratchpad `p2.py`). Key results below. |
+| Full smoke suite | not run | Scoped to gate tests. |
+
+### Round 1 P2 fixes: all verified
+- Quoted and `$` verbs: `gh pr "merge" 1`, `gh pr 'merge' 1`, `gh "pr" merge 1`, `gh pr $(echo merge) 1`, `cmd=merge; gh pr $cmd 1`, `pulls/3/'merge'` all return True.
+- GraphQL: `mergePullRequest` in single or double quotes returns True.
+- `/git/refs` writes: `-X PATCH`, `--method PATCH`, `-X=PATCH`, `-XPATCH`, `-X patch`, `-X DELETE`, `-X POST`, and a `-f` field all True; plain GET and `--jq` read False.
+- `tracks.md`: the T320 sentence now follows the complete rebase sentence; the original sentence is intact. Fixed.
+- `merge-base` pin: `gh pr merge-base` and `merge-base-notes` return False. Fixed for the CLI. (Endpoint form: P3-3.)
+
+### New findings
+
+#### P2-1 Bypass: backslash-newline continuation between `gh` words
+`gh \<newline>pr merge 1`, `gh pr \<newline>merge 1` and `.../pulls/3/\<newline>merge -X PUT` all return False. The git side blocks a backslash in the verb gap as a hidden form; no `gh` equivalent exists, and `GH_QUOTED_WORD` does not touch it. Same class as round 1 P2-2. Fix: join `\<newline>` before scanning, or treat a backslash between `gh` and the verb as a doubt.
+
+#### P3-1 Bypass: merge mutation or ref write the text cannot show
+All return False: `gh api graphql -f query=@merge.gql`, `gh api graphql --input q.json`, `-f query="$Q"`, `gh api graphql --input -` with a piped body, `gh api .../git/refs -X "PATCH"` (quoted method; the ref check reads the raw command), `gh api .../git/refs/heads/x $(echo -X) PATCH`, and `mergePullRequest` split by `${x}`. A body in a file or a variable cannot be read; the sound rule is a doubt on any `gh api graphql` with `@`, `--input` or `$` in a non-data segment. Other write routes also pass: `gh api repos/o/r/contents/f -X PUT -f branch=main` (commits to main), `gh api repos/o/r/merge-upstream -f branch=main`, `gh repo sync o/r`. Add these to the cut list or gate them.
+
+#### P3-2 False positives (cost: a block only when a task is In Progress or in auto mode)
+`gh api repos/o/r/pulls/3/merge` as a read (also `-X GET`), `gh pr merge --help`, `echo hi # gh pr merge later`, `gh api repos/o/r/issues -f body="mergePullRequest"` (text in a field), `gh pr $(echo view) 3`. Guide accepts the first as a cut; the rest are the same shape. Acceptable.
+
+#### P3-3 Endpoint `merge-base` still matches
+`gh api repos/o/r/pulls/3/merge-base` returns True: `/pulls/[^/\s]+/merge\b` accepts `-`. Not a real route, so impact is nil; add `(?![-\w])` for symmetry with the CLI pattern.
+
+### Security review
+- No injection or code execution: the code only runs `re` on the command text. `GH_QUOTED_WORD` is `(["'])([^\s"']*)\1`, linear. `GH_REF_WRITE` has one `.*` after a fixed prefix, no nested quantifiers; the `[^;&|\n]*?` segments in `GH_MERGE_PATTERNS` are bounded by separators. No ReDoS.
+- Fail-closed: `gh_merge_hit` returns True on any exception; the call is placed in the `auto_pattern` OR chain, so a hit blocks. Correct.
+- `[admin]` and `lib/auto_mode.py` untouched; both new patterns reach auto mode via `BLOCKED_PATTERNS`.
+- Residual risk: a determined agent can still merge by P2-1, P3-1 routes, `curl`, `hub` or an alias (last three declared cuts). The gate stops accidents and casual forms, not an adversary; say so in the guide's cut list.
+
+### Demonstration
+**BEFORE**: round 1 probe had 6 quoted/variable/GraphQL/ref forms returning False.
+**AFTER**: those forms return True; 82 tests pass.
+**DELTA**: one new bypass class found (line continuation).
+**WITNESS**: reviewer run, this file.
