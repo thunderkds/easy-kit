@@ -27,7 +27,11 @@ RAW = (ROOT / "AGENTS.md").read_bytes()
 # gate (TASK_GUIDE_T341 AC 1, DDR-0011; user request of 2026-11-20). T341's own text was cut first (-71 bytes:
 # Stage 3 points to Gate 1, Stage 4 leaves the spawn's full shape to pipeline-stages.md); every phrase
 # tests/test_t341_gate1_doctrine.py pins stays. Measured on branch feat/t341-reviewer-gate.
-AGENTS_MD_BYTE_CAP = 22414
+# T352: raised 22414 -> 22470 (+56 bytes): the Stage 5 skill `ship` is renamed `release-plan` (Claude Code's
+# built-in `/ship` shadows it) at seven AGENTS.md sites (Stage index, Tracks paragraph, Stage 5 line, Permanent
+# Rule, Gates 5 and 6, Non-Claude CLIs list): a token swap, 8 bytes x 7, no prose added. A cut of other text was
+# debated and rejected (Surgical Changes: the rename does not need it). Measured at commit 7863a113.
+AGENTS_MD_BYTE_CAP = 22470
 
 
 def _norm(t: str) -> str:
@@ -50,7 +54,7 @@ def _byte_cap_problem(data: bytes):
     )
 
 
-def test_agents_md_is_at_most_22414_bytes():
+def test_agents_md_is_at_most_22470_bytes():
     assert _byte_cap_problem(RAW) is None, _byte_cap_problem(RAW)
 
 
