@@ -124,6 +124,71 @@ The scratchpad that held the scripts was cleared; the scripts are rebuilt in `##
 | E6 | `uv sync` numpy+pandas in two worktrees, cache `~/.cache/uv` on same ext4 | 102 M each, 104 M together; `.so` shows 3 links |
 | E7 | `npm install` typescript+lodash in two worktrees | 27 M each, 54 M together |
 
+### Target machine run, 2026-11-24 (`hungnguyenhuu-NUC11PAHi7`: 8 cores, 30 GB, ext4 on LVM, git 2.53.0, no reflink; pnpm 10.12.4, sccache 0.19.0, uv 0.6.10, cargo 1.99.1, mvn 3.9.16; no ccache/go/gradle/turbo/nx)
+
+| ID | Result on target | Verdict vs dev machine |
+|----|------------------|------------------------|
+| E2a–E2g | identical: a `124`, b ok, c `124`, d `124`, e `0`, f `0` + orphan 1, g orphan 0 | G1a–G1c hold on this machine too |
+| E3 | 10 runs × 8 concurrent `git worktree add -b`: 0 failures (git 2.53.0) | The race did not reproduce on newer git. Keep the lock (cheap; git 2.34 fails), but it is not required on 2.53 |
+| E4 | dirty remove refused; `branch -D` deleted the unmerged branch | G2a holds |
+| S1 | `cp --reflink=always` fails on `/` (ext4) | Seeding by copy = full copy here: skip seeding (AC 11 applies) |
+| E6 | uv, cache on same ext4: 102 M + 1 M for the second (103 M total). Same run with worktrees on `/tmp` (tmpfs): 201 M — no sharing | C2 holds only when cache and worktrees share one filesystem. `agent-ws` must check that (`st_dev`) and warn |
+| E7 | npm: 27 M each (full copy). pnpm default store: 27 M for two (23 M apparent each), `lodash.js` has 8 hard links | pnpm already shares through hard links on the same filesystem. Phase 2 gain is the global virtual store only |
+| E8 | sccache, two target dirs, tiny crate: 2nd build 0.09 s vs 0.56 s, 1 hit / 1 miss | Works, but a toy crate; not a real-case measure |
+
+#### Real-repo run, 2026-11-24: `easy-note-mcp` (Rust, 17 worktrees), on a fresh local clone, `nice -n 19`, `ionice -c3`, `-j2`, sccache off
+
+Existing state (read-only): 7 worktrees hold `target/` of 5–23 GB, about 80 GB in total, with 81 GB free on `/`. One 17 GB `target/` is 14 GB `deps` (31 copies of `libsyn`; 18 of `zbus`, `toml_edit`), 2.8 GB `incremental`. `~/.cargo/config.toml` already sets `jobs = 4` and `rustc-wrapper = "sccache"`. `easy-personal-mcp` has 8 worktrees, its Rust `target/` is 6.8 GB. `orderly` is Maven plus npm, no build folders present.
+
+| ID | Test | Result |
+|----|------|--------|
+| R1 | AC 1 baseline, 1 agent, cold, `cargo test --no-run`, default features | 60 s, `target/` 1.4 GB, peak RAM about 1 GB, load 3.5 |
+| R2 | second worktree builds into the first one's `CARGO_TARGET_DIR` | 169 dependency units `Fresh`, `target/` +0 MB; only the project crate rebuilds (4 s) |
+| R3 | two worktrees build at once on the shared target | both exit 0 in 19 s; cargo prints `Blocking waiting for file lock on build directory` once, and 6 × `... on package cache` (the package cache lock is global in `~/.cargo`, shared target or not) |
+| R4 | `--features tray` into the shared target | +1.4 GB, 61 s: each feature combination adds a full set of dependency artifacts |
+| R5 | **hazard**: worktree `w3` has a marker string `w1` lacks; `w3` builds, then `w1` builds | `w1` reports `Fresh`, and the artifact still holds `w3`'s code. Cargo's freshness check uses file times, not content. `w1` gets the wrong build until it edits its own source |
+
+Reading: the 5–23 GB per worktree is accumulation (feature combinations × stale builds × test binaries), not one build (1.4 GB). sccache does not shrink `target/`. A shared `CARGO_TARGET_DIR` removes the duplicate dependencies but R5 makes it unsafe for worktrees with different code. Safe options to decide in this ticket: shared dependency cache with one `target/` per worktree (disk stays per worktree), pruning in `agent-ws gc` (delete `incremental/` and stale hashes), a fixed feature set per agent. 
+
+3-agent run (same clone, `jobs = 4` from `~/.cargo/config.toml`, `nice -n 19`, `ionice -c3`, own `target/` each, cold, default features, 8 cores):
+
+| ID | Test | Result |
+|----|------|--------|
+| R6 | 3 builds at once, no queue | wall 98 s; peak RAM 2.35 GB; peak load1 15.7 on 8 cores; peak 24 runnable processes; 4.2 GB for 3 `target/` |
+| R7 | 3 builds through a 1-slot `flock` queue | agents finish at 41 s, 88 s, 139 s; wall 139 s (+42 %); peak RAM 1.0 GB; peak 17 runnable processes; 4.2 GB. Peak load1 14.2 is not reliable: load1 is a 1-minute average and still held R6's load |
+
+Reading: on this machine RAM is not the limit (2.35 GB of 30 GB); CPU is. 3 builds × 4 jobs put 24 runnable processes on 8 cores. One slot at `jobs = 4` cuts the peak but leaves 4 cores idle and costs 42 % wall time. A default of slots = cores ÷ jobs (here 2) was not tested. These are default-feature builds (1.4 GB each); the real 5–23 GB worktrees build more, so the real lag is larger than measured. AC 1 baseline is now recorded for Rust on this machine (R1, R6, R7).
+
+| ID | Test | Result |
+|----|------|--------|
+| R8 | 3 builds through a 2-slot queue, same setup, one run | agents finish at 67 s, 68 s, 111 s; wall 112 s; peak RAM 1.8 GB; peak 22 runnable processes; average 8.9 runnable over 108 s (about 8 cores saturated); 4.2 GB |
+
+Reading R6–R8 (one run each, so run-to-run noise is unknown): wall time is 98 s with no queue, 112 s with 2 slots, 139 s with 1 slot. Peak runnable processes are 24, 22 and 17. On an idle 8-core machine with RAM to spare, a queue does not improve throughput and 2 slots barely lowers the peak; only 1 slot lowers it clearly, at the highest time cost. The queue's value here is a cap for builds where RAM or a shared resource is the limit, not CPU. Desktop lag was not measured directly (no latency probe); `nice -n 19` was on in every run. Open question for the design: does `nice`/`ionice` inside `agent-ws run` keep the desktop responsive with no slot cap at all (cheaper, no throughput loss)? Answered by R9 below.
+
+R9 lag probe (3 cold builds, own `target/` each, `jobs = 4`, probe at normal priority: 10 ms sleep overshoot, `git status` on a 200-file repo, 4 KB write + `fsync`; one run per mode, run order nice → nice+1 slot → no nice, 15 s cool-down between):
+
+| Mode | Builds | Wake-up delay p95 | `git status` p50 / p95 / max | write+fsync p50 / p95 / max |
+|------|--------|-------------------|------------------------------|-----------------------------|
+| idle | – | 0.1 ms | 1.7 / 2.4 / 5 ms | 5 / 11 / 26 ms |
+| `nice -n 19`, `ionice -c3` | 106 s | 0.8 ms | 4.5 / 11.6 / 2506 ms | 9 / 16 / **8493 ms** |
+| `nice`+`ionice` + 1 slot | 136 s | 0.1 ms | 3.2 / 4.4 / 737 ms | 6 / 11 / **4596 ms** |
+| no `nice` | 108 s | 2.0 ms | 8.9 / 17.9 / 3359 ms | 9 / 17 / **12899 ms** |
+
+Reading: CPU scheduling is not the lag: wake-up delay p95 stays at 2 ms or less even with no `nice`. The lag is **disk**: a write+`fsync` stalls for 5–13 s in every build mode, and 1 slot only halves it. `ionice -c3` does nothing here: the disk (`sda`) uses `mq-deadline`, and only BFQ honors I/O classes. `nice` helps `git status` p50 by half (8.9 → 4.5 ms) and costs no build time (108 s vs 106 s). Consequence for the design: `nice` is a free default; slots do not fix the stall; the stall comes from writing 1.4 GB per build at once, so less written data (no `incremental/`, one feature set, shared dependency artifacts) is the lever. Not tested at the time: `ionice`-capable scheduler (BFQ), `debug = 0`, `incremental = false`, `target/` on tmpfs. Tested next (R10).
+
+R10 less-data and tmpfs probe (same setup, `nice -n 19` in every mode, `sync` and 20 s rest before each mode; `~/.cargo/config.toml` `debug = "line-tables-only"` applied to all, so the control already writes less than a default cargo build):
+
+| Mode | Builds | 3 targets | `git status` p50 / max | write+fsync p50 / max |
+|------|--------|-----------|------------------------|-----------------------|
+| control (1st) | 99 s | 4.2 GB | 4.4 / 1902 ms | 9.5 / **5731 ms** |
+| `CARGO_INCREMENTAL=0` + `CARGO_PROFILE_DEV_DEBUG=0` | 100 s | 2.2 GB | 5.0 / 436 ms | 7.8 / **5053 ms** |
+| `target/` on tmpfs (`/tmp`) | 107 s | 4.2 GB in RAM | 5.1 / 44 ms | 7.4 / **238 ms** |
+| control (2nd) | 118 s | 4.2 GB | 4.7 / 718 ms | 9.0 / **5932 ms** |
+
+Reading: the stall repeats (5.7 s and 5.9 s in two controls; 8.5 s in R9, so run noise is about ±2 s). Halving the data written (4.2 → 2.2 GB) does not remove it (5.1 s). Moving `target/` off the disk does: fsync max 238 ms, `git status` max 44 ms, same build time. So the freeze is the writeback of build output to `sda`, and it needs a large cut, not a halving. Costs of tmpfs `target/`: RAM-backed (4.2 GB for 3 builds here, `/tmp` is 16 GB), lost on reboot, every build starts cold, and a 5–23 GB accumulated target (the real worktrees) does not fit; fits only a per-task `target/` that is removed with the worktree. Not tested: tmpfs plus sccache on disk (to win back the cold-build time), `vm.dirty_bytes` / `vm.dirty_background_bytes` tuning (system setting, needs root; current values: `vm.dirty_ratio` 20, `vm.dirty_background_ratio` 10, which on 30 GB RAM is a 3 GB background-flush threshold, about what 3 builds write), BFQ.
+
+Still not measured: Phase 0 baseline on a real repo (AC 1), pnpm global virtual store, sccache on a real crate, Gradle/ccache (not installed), and the `agent-ws` code itself (not written).
+
 ---
 
 ## Reproduce on the target machine
