@@ -576,6 +576,15 @@ CHANGED_BY_T303 = {
 
 
 # T341 (DDR-0011): on the extended track the Supervisor writes the code; one fresh reviewer sub-agent per task.
+# T352: the Stage 5 skill `ship` is renamed `release-plan` (Claude Code's built-in `/ship` shadows it).
+CHANGED_BY_T352 = {
+    "ec177b9906f4cc73": "the Stage 5 row of the skills flow names release-plan (T352)",
+    "08734f529158d8f7": "the non-Claude CLIs list names release-plan (T352)",
+    "e5d5b971139eefeb": "the user's lane chip names release-plan (T352)",
+    "900e14e0479b0e1a": "the Stage 5 chip row names release-plan (T352)",
+}
+
+
 CHANGED_BY_T341 = {
     "59626c61cba65820": "the lead's Pipeline item: code in isolated worktrees, one fresh reviewer sub-agent (T341)",
 }
@@ -583,12 +592,12 @@ CHANGED_BY_T341 = {
 
 def test_every_paragraph_item_cell_and_definition_of_the_old_page_is_on_docs():
     now = set(sentence_hashes(docs_html()))
-    missing = [(h, t) for h, t in _baseline()["sentences"] if h not in now and h not in CHANGED_BY_T239 and h not in CHANGED_BY_T240 and h not in CHANGED_BY_T245 and h not in CHANGED_BY_T251 and h not in CHANGED_BY_T256 and h not in CHANGED_BY_T261 and h not in CHANGED_BY_T284 and h not in CHANGED_BY_T290 and h not in CHANGED_BY_T303 and h not in CHANGED_BY_T341]
+    missing = [(h, t) for h, t in _baseline()["sentences"] if h not in now and h not in CHANGED_BY_T239 and h not in CHANGED_BY_T240 and h not in CHANGED_BY_T245 and h not in CHANGED_BY_T251 and h not in CHANGED_BY_T256 and h not in CHANGED_BY_T261 and h not in CHANGED_BY_T284 and h not in CHANGED_BY_T290 and h not in CHANGED_BY_T303 and h not in CHANGED_BY_T341 and h not in CHANGED_BY_T352]
     assert not missing, f"{len(missing)} text(s) lost from docs.html: {missing[:5]}"
 
 
 def test_every_listed_change_is_a_real_baseline_text():
-    assert set(CHANGED_BY_T239) | set(CHANGED_BY_T240) | set(CHANGED_BY_T245) | set(CHANGED_BY_T251) | set(CHANGED_BY_T256) | set(CHANGED_BY_T261) | set(CHANGED_BY_T284) | set(CHANGED_BY_T290) | set(CHANGED_BY_T341) <= {h for h, _ in _baseline()["sentences"]}
+    assert set(CHANGED_BY_T239) | set(CHANGED_BY_T240) | set(CHANGED_BY_T245) | set(CHANGED_BY_T251) | set(CHANGED_BY_T256) | set(CHANGED_BY_T261) | set(CHANGED_BY_T284) | set(CHANGED_BY_T290) | set(CHANGED_BY_T341) | set(CHANGED_BY_T352) <= {h for h, _ in _baseline()["sentences"]}
 
 
 def test_the_baseline_is_not_empty():

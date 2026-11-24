@@ -141,7 +141,7 @@ def test_tracks_auto_flow_ends_at_done_and_a_lane_marks_merge_push_ship_as_the_u
     lane = re.search(r'<div\b[^>]*class="flow-lane"[^>]*data-owner="you"[^>]*>(.*?)</div>', visual, re.DOTALL)
     assert lane, 'no <div class="flow-lane" data-owner="you"> in the tracks visual'
     lane_text = " ".join(_words_of(lane.group(1))).lower()
-    for word in ("yours", "merge", "push", "ship"):
+    for word in ("yours", "merge", "push", "release-plan"):  # T352: the skill was `ship`
         assert word in lane_text, f"the user's lane lacks {word!r}"
     assert visual.index("flow-lane") > visual.index(auto[0][:40]), "the lane sits after the auto flow"
 
@@ -332,8 +332,8 @@ BASELINE_SENTENCES = [
     ("17429ff8e0b6", 'Stage 3 — Parallel Execution via Isolation tddbu'),
     ("7d479d188af6", 'blast-radiuscode-reviewhtml-reportscore'),
     ("838e9632acef", 'Stage 4 — Review blast-radiuscode-reviewhtml-rep'),
-    ("1c7b48c41f2b", 'shipdelivery-report'),
-    ("9250c0a6cefa", 'Stage 5 — Integration & Verification shipdeliver'),
+    ("35455c02158d", 'release-plandelivery-report'),  # T352 (was 1c7b48c41f2b, 'shipdelivery-report')
+    ("7dd4b4eea9bf", 'Stage 5 — Integration & Verification release-pla'),  # T352 (was 9250c0a6cefa)
     ("9d5bff6dc560", 'compact-advisorcompact-memorycompoundcompound-re'),
     ("10af79f996d5", 'Deterministic shell/python guardrails the harnes'),
     ("7aa92feed719", 'The wiring lives in .claude/settings.json. Both '),
@@ -365,7 +365,7 @@ BASELINE_SENTENCES = [
     ("183089d98455", 'A skill over the cap is skipped with a named, lo'),
     ("c4c0e14260fd", "Four of this kit's skills currently exceed it an"),
     ("19affec83916", 'What a non-Claude provider still cannot enforce:'),
-    ("d51a57bb889f", 'code-review, security-review, verify, ship, migr'),
+    ("430eaddbdbc7", 'code-review, security-review, verify, release-pl'),  # T352 (was d51a57bb889f)
     ("96780aea2886", 'Those stay on the Claude supervisor: an adapter '),
     ("f2fc48ba4744", 'The mandatory folder structure created by instal'),
     ("4bbe506f5e25", 'A two-tier hot/cold memory design keeps agents a'),
