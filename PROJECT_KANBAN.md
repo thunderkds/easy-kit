@@ -100,7 +100,6 @@
 
 
 ### In Progress
-- [ ] **T350** — Keep `experiments/` on disk but out of the git repo (untrack + `.gitignore`) | Supervisor | C1 | Risk: Low | P1 | Registered and started 2026-11-24, user: "we should not remove it, just keep it out of the git repos only I think" / "yes, go ahead": branch `chore/t350-untrack-experiments`, worktree `../wt-t350` | Track: minimal | Record: tasks/MINIMAL_LOG.md
 
 
 
@@ -114,6 +113,7 @@
 
 
 ### Ready for Review
+- [ ] **T350** — Keep `experiments/` on disk but out of the git repo (untrack + `.gitignore`) | Supervisor | C1 | Risk: Low | P1 | Registered and started 2026-11-24, user: "we should not remove it, just keep it out of the git repos only I think" / "yes, go ahead": branch `chore/t350-untrack-experiments`, worktree `../wt-t350` | Track: minimal | Record: tasks/MINIMAL_LOG.md | Ready for Review 2026-11-24
 
 
 
