@@ -73,3 +73,43 @@ Verdict: **pass with 1 P2 and 1 P2 (test), 2 P3**. No P0/P1. The rename itself i
 ### Security review (Risk Medium)
 
 No finding. The diff renames a skill folder and its name in docs, 2 hook docstrings, pin tests and generated site HTML. No hook code, permission, `settings.json` allow/deny entry, input-validation path, network call or secret handling changes; no `Skill(ship)` permission rule exists to go stale (`git grep` of `.claude/settings.json`, `.claude-plugin`, `plugin/hooks`, `commands`: no hit). The update path only removes `skills/ship` when its hash matches the shipped one (existing `lib/harness-update.sh:500` logic, SC11 asserts the edited copy is kept), so a user's own edits are not deleted. SC11 writes only under `$WORK` temp dirs. The removed old skill name leaves no alias, so no shadowed-skill ambiguity remains.
+
+
+---
+
+## Stage 4 review — Round 2 (Reviewer: T352, fresh context, commit `abfec0ed`)
+
+Scope: fix-round diff `57ec372f...abfec0ed` (8 files: `scripts/token_audit.py`, `tests/test_auto_mode.py`, `tests/test_t352_release_plan_rename.py`, `skills/write-better-skill/SKILL.md`, `site/docs.html`, `memory/codebase-map.md`, `memory/decisions.md`, this record) and the whole task `main...abfec0ed`. Method: the `Skill` tool is not in this reviewer's tool list, so the `code-review` and `security-review` checklists were applied by hand; the review is of the diff, with the commands below run in the worktree.
+
+Verdict: **pass. 0 P0, 0 P1, 0 P2, 2 P3.** All four round 1 findings are fixed.
+
+### Round 1 findings, one by one
+
+| Round 1 finding | State | Evidence |
+|---|---|---|
+| P2 `scripts/token_audit.py` stage map | Fixed | Line 53 is now `"release-plan": "stage-5"`. `git grep` of `"ship"` in `scripts/` and `.claude/hooks/` code: no hit (only comments and prose verbs). |
+| P2 `tests/test_auto_mode.py` `USER_STOP` pin | Fixed | `USER_STOP` now ends `skill: "release-plan"`. Measured: that alternative selects 1 chunk of `pipeline-stages.md` (item 6, "Post-merge release planning"); `USER_STOP` finds 19 chunks in all. Mutation: delete "Not in auto mode: `release-plan` runs after the merge." and `test_ac3_every_pipeline_stop_names_its_auto_rule` fails (`1 failed, 118 passed`); file restored, worktree clean. |
+| P3 leading-word example | Fixed | `skills/write-better-skill/SKILL.md:72` and `site/docs.html:2336` now say `*release-plan*`. `python3 scripts/gen_kit_explorer.py --check` -> rc=0 (site data matches the skill text). |
+| P3 `memory/codebase-map.md` | Fixed | `./skills/release-plan` and `./skills/release-plan/SKILL.md` replace the two `skills/ship` lines, in sorted position. |
+
+### New oracle test fails without the fix
+
+`test_ac2_token_audit_books_release_plan_to_stage_5` and the `"ship":` alternative in `SKILL_NAME`. Mutation: `sed` the key back to `"ship": "stage-5"` in `scripts/token_audit.py`, run `python3 -m pytest -q tests/test_t352_release_plan_rename.py` -> `2 failed, 3 passed`: `test_ac2_no_live_file_names_the_skill_ship` (regex form) and `test_ac2_token_audit_books_release_plan_to_stage_5` (stage-map assertion) both fail. File restored. Unmutated: `5 passed`.
+
+### Regression runs (reviewer, worktree)
+
+- `tests/test_t352_release_plan_rename.py tests/test_auto_mode.py tests/test_stage_names.py` -> `140 passed in 1.01s`.
+- `tests/test_site_story.py tests/test_kit_explorer_data.py tests/test_site_content.py tests/test_claude_md_slim.py tests/test_site_visual_first.py` -> `239 passed in 1.63s`.
+- Full suite not re-run: the fix round changed one dict key, one regex, two prose words and generated site text. The round 1 full run (`6 failed, 7797 passed`; 5 known memory-budget failures on `main`, 1 order-dependent flake) stands for everything else.
+
+### Findings
+
+- **P3 — `tasks/TASK_REVIEW_T352.md` Evidence row "Verification command run"** still reads `4 passed in 0.11s`; the test file now has 5 tests (the "New test(s)" row and `Checks:` say `5 passed`). Stale count only; refresh to `5 passed` at close-out. Not a gate.
+- **P3 — `tasks/TASK_REVIEW_T352.md` `Checks:` line** says "2 P3 (1 fixed, 1 in the memory pass)". The `memory/codebase-map.md` P3 is fixed in this commit too (the `Memory:` line says so), so both P3s are fixed. Wording only.
+- **Note (not a finding)** — `test_ac2_token_audit_books_release_plan_to_stage_5` finds the map with `next(v for ... v.get("verify") == "stage-5")`. If a later edit drops `verify: stage-5` the test raises `StopIteration` instead of a clean assert; it still fails, so the guard holds.
+
+### Security review (Risk Medium), fix-round diff
+
+No finding. The diff changes one dict key in an audit script (`scripts/token_audit.py`, a read-only trace summariser: no input parsing, network, shell or secret change), a test regex and a test that loads that script by path with `importlib` (path built from the repo `ROOT`, no user input), two prose words, generated site text and memory/record files. No hook, permission, `settings.json`, update-path or file-deletion logic changed. `lib/harness-update.sh`, `MANIFEST`, `plugin` and `.claude/settings.json` are not in the diff. The task as a whole keeps the round 1 security result: no alias named `ship`, so no shadowed-skill ambiguity; an edited `skills/ship/` is kept on update.
+
+Untouched, as asked: `## Auto decisions` and the `verify` row. No code changed.
