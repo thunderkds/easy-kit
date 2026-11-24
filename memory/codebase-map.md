@@ -177,10 +177,10 @@ Generated: 2026-08-28 | Commit: 7060c13 | Branch: feat/t096-canon-plain-root
 ./skills/migration-safety/SKILL.md
 ./skills/optimize
 ./skills/optimize/SKILL.md
+./skills/release-plan
+./skills/release-plan/SKILL.md
 ./skills/resolve-pr-feedback
 ./skills/resolve-pr-feedback/SKILL.md
-./skills/ship
-./skills/ship/SKILL.md
 ./skills/slim-skills
 ./skills/slim-skills/SKILL.md
 ./skills/strategy

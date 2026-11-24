@@ -69,7 +69,7 @@ This framework's skills implement the open [Agent Skills specification](https://
 
 ## Leading Words
 
-A **leading word** is a compact concept from the model's pretraining that the agent thinks with while running the skill (e.g. *wake*, *learn*, *ship*, *tdd*, *diagnose*). Repeated in the body, it accumulates a distributed definition — anchoring a whole region of behaviour in fewer tokens by recruiting priors the model already holds.
+A **leading word** is a compact concept from the model's pretraining that the agent thinks with while running the skill (e.g. *wake*, *learn*, *release-plan*, *tdd*, *diagnose*). Repeated in the body, it accumulates a distributed definition — anchoring a whole region of behaviour in fewer tokens by recruiting priors the model already holds.
 
 It serves predictability twice: in the body it anchors *execution*; in the description it anchors *invocation* (shared language links to the skill and fires it more reliably).
 

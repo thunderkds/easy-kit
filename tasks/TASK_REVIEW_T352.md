@@ -14,8 +14,9 @@ Mode: auto
 5. The clash is real in interactive sessions, not in headless `claude -p` (probes 1 and 2, headless haiku, $0.008, listed the kit's `ship`) — FACT: tasks/TASK_GUIDE_T352.md:21 "In the interactive session of 2026-11-24 the skill list shows `ship-local (ship)`"
 6. `update.sh` is not changed: SC11 pins its existing removal of an untouched `skills/ship/` — FACT: lib/harness-update.sh:500 "removed '$_unit' — upstream no longer ships it and you never edited it."
 7. AGENTS.md grew 56 bytes past its byte cap: raise the cap 22414 -> 22470 with a recorded reason, cut no other doctrine — RULE: AGENTS.md § Karpathy Engineering Principles (Surgical Changes: "Touch only code required by the task"). The Advocates disagreed (Advocate 1: raise the cap, the size change is the rename itself; Advocate 2: cut the duplicate Non-Claude CLIs sentence, 78 bytes, and lower the cap to 22392); the written rule picks Advocate 1, so it is not an unsettled Debate
-Checks: PENDING
-Memory: PENDING
+8. Fix both Reviewer P2s (`scripts/token_audit.py` stage map key; `tests/test_auto_mode.py` `USER_STOP` pin) and the P3 leading-word example; the oracle gains the `"ship":` key form and a stage-map assertion — RULE: docs/claude-md/pipeline-stages.md § Stage 4: Review ("A later code fix needs a new reviewer spawn on the new commit")
+Checks: tests `python3 -m pytest -q tests/test_t352_release_plan_rename.py` — 5 passed; `sh tests/test_update_removals.sh` — 34 passed, 0 failed; full suite before the fix round — 6 failed, 7797 passed (5 known `MEMORY.md` budget failures on `main`, 1 order-dependent flake that passes alone); reviews `code-review` — 0 P0/P1, 2 P2 (fixed), 2 P3 (1 fixed, 1 in the memory pass); `security-review` — no finding; real run `claude -p` haiku probe in a temp project — printed `release-plan: Post-merge release planning (not Claude Code's \`/ship\`, which` (auto-checked, not /verify)
+Memory: `memory/decisions.md` — 2026-11-24 T352: the Stage 5 skill is `release-plan`, not `ship` (trap: a rename oracle must grep every form the old name takes); `memory/codebase-map.md` — `skills/ship` lines → `skills/release-plan`; `memory/MEMORY.md` not touched: already over its 42,000-char budget (43,135), a `/compact-memory` job
 Not done: merge (admin: after the auto verify pass); auto verify: running (T182)
 Paused: auto-mode check failed — extended track, but the trace has no `code-review` Skill call (Stage 4 runs in auto mode); Risk Medium, but the trace has no `security-review` Skill call [report b0c82861f846]
 
@@ -23,9 +24,9 @@ Paused: auto-mode check failed — extended track, but the trace has no `code-re
 
 | Check | Result | Notes / output snippet |
 |-------|--------|------------------------|
-| **New test(s) cover Acceptance Criteria (file paths pasted)** | ☐ pass / ☐ fail | PENDING |
+| **New test(s) cover Acceptance Criteria (file paths pasted)** | ☑ pass | `tests/test_t352_release_plan_rename.py` (5 tests: AC 1, 2, 2 stage map, 3, 5) — `5 passed`; `tests/test_update_removals.sh` SC11 (AC 4) — `34 passed, 0 failed` |
 | Verification command run | ☑ pass | `python3 -m pytest -q tests/test_t352_release_plan_rename.py` -> `4 passed in 0.11s`; `sh tests/test_update_removals.sh` -> `PASS: sc11: untouched skills/ship removed, skills/release-plan installed` ... `34 passed, 0 failed`; `python3 scripts/gen_kit_explorer.py --check` -> rc=0 (site data current). |
-| Negative cases hold | ☐ pass / ☐ fail | PENDING |
+| Negative cases hold | ☑ pass | red run 2026-11-24T16:24:41Z at `8083fb78`: 4 failed; the stage-map test and the `"ship":` form failed before the fix (`2 failed, 3 passed`); mutation: deleting "Not in auto mode: `release-plan` runs after the merge." from `docs/claude-md/pipeline-stages.md` makes `test_ac3_every_pipeline_stop_names_its_auto_rule` fail (`1 failed`), restored |
 | verify | ☐ pass / ☐ fail / ☐ N/A | [leave it: the auto verify hook writes this row, with its run record. If you ran /verify yourself, tick pass and make the whole Notes cell "/verify by the user, session <id>, commit <sha>" (the full 40-character commit). The merge gate counts no other row, even with the word "pass" in it] |
 | Review scope bounded to the change's blast radius (affected set, not whole repo) | ☑ pass | Reviewer: T352, fresh context, `code-review` + `security-review` on `main...11b4aad5`: 38 files; blast radius = every file naming the skill (`git grep` for `` `ship` ``, `skill: "ship"`, `skills/ship`, `"ship"`, `/ship` outside history), the 2 hook docstrings, the 15 repointed pin tests, `plugin/skills` symlink, MANIFEST `skills codex=.codex/skills`, `lib/harness-update.sh` removal path (SC11). Findings below. |
 | Full smoke suite still green (no regression) | ☑ pass | Reviewer run `python3 -m pytest -q -p no:cacheprovider tests .claude/hooks/tests` in the worktree: `6 failed, 7797 passed, 5 skipped, 126 subtests passed in 405.06s`. 5 are the known memory-budget failures (`test_memory_channel_and_budget.py` x4, `test_token_audit_format.py::test_memory_md_hot_tier_stays_within_char_budget`). The 6th, `test_merge_gate_companion_rows.py::test_a_tilde_report_path_is_expanded`, passes alone in the worktree and on `main` (`1 passed in 0.07s`): order-dependent flake, not the rename. `sh tests/test_update_removals.sh`: `34 passed, 0 failed`. |
@@ -44,7 +45,7 @@ Paused: auto-mode check failed — extended track, but the trace has no `code-re
 
 **DELTA**: Stage 5's `Skill({ skill: "release-plan" })` reaches the kit's release planner in an interactive session, where Claude Code's `/ship` used to shadow it.
 
-**WITNESS**: PENDING
+**WITNESS**: Supervisor session 832e4e7c, 2026-11-24 (red run, probes); `Reviewer: T352` (fresh context) confirmed the AFTER at `11b4aad5`
 
 
 ---

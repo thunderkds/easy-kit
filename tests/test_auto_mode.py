@@ -432,7 +432,7 @@ USER_STOP = re.compile(
     r"[Aa]sk the user|[Tt]he user must|user approv|explicit user approval|[Pp]lease (?:run|list)|"
     r"Approve or request|Are they correct|Guide the user|STOPs and asks|stops and asks|"
     r"Resolve all flagged items with the user|Address all findings|"
-    r'skill: "verify"|Merge the worktree|skill: "ship"', re.S)
+    r'skill: "verify"|Merge the worktree|skill: "release-plan"', re.S)  # T352: was `ship`
 
 
 def test_ac3_every_pipeline_stop_names_its_auto_rule():

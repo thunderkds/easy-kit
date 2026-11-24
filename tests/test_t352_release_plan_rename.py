@@ -20,7 +20,7 @@ LIVE = ("AGENTS.md", "CLAUDE.md", ".cursor/rules", "agents", "packs", "templates
 SKILL_NAME = re.compile(
     r'`ship`|skill: "ship"|skills/ship\b|\bship/SKILL\.md|`ship` skill|\bship skill\b'
     r'|<code>ship</code>|class="chip">ship<|\bship <span class="visually-hidden">'
-    r'|"name": "ship"')
+    r'|"name": "ship"|"ship":')
 
 
 def _read(rel):
@@ -74,3 +74,12 @@ def test_ac5_plugin_and_site_serve_release_plan():
     assert os.path.isfile(os.path.join(ROOT, "plugin/skills/release-plan/SKILL.md"))
     site = _read("site/docs.html")
     assert '"name": "release-plan"' in site and '"name": "ship"' not in site
+
+
+def test_ac2_token_audit_books_release_plan_to_stage_5():
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("token_audit", os.path.join(ROOT, "scripts/token_audit.py"))
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    stage_map = next(v for k, v in vars(mod).items() if isinstance(v, dict) and v.get("verify") == "stage-5")
+    assert stage_map.get("release-plan") == "stage-5" and "ship" not in stage_map
