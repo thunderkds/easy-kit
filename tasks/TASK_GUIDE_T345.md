@@ -36,7 +36,9 @@ User, 2026-11-24: "the real case is not this machine, so let summary and push, I
 User, 2026-11-24, on the Claude Docs plan "Shared Build Base for Multi-Agent Workspaces: Implementation Plan" (https://claude.ai/artifact/VjwpdBJSzeMLSdFYn3hyYc): "the direction is that, we save the resource to build by the multi agents, and multi session, let check if the plan is good to proceed without any gap, if any needed, let experiment for making sure." Supervisor review verdict the same day: not ready; 3 blocking gaps, 5 smaller gaps, experiments below. User: "create the ticket and note all to this".
 
 **Restated intent**:
-> Agents and independent Claude Code sessions working on one repo get their worktrees through one command (`agent-ws`), share dependency stores and build caches read-only, and run heavy commands through a cross-process queue of N slots — without the three queue defects, the unsafe cleanup and the layout clash the review found. This ticket delivers the plan's Phase 0 (baseline) and Phase 1 (core in the harness) plus `gc`; Phases 2–4 become follow-up tickets.
+> Agents and independent Claude Code sessions working on one repo get their worktrees through one command (`agent-ws`, Python). Each worktree builds into its own `target/` on tmpfs by default, and `agent-ws run` runs heavy commands under `nice`. A cross-process slot queue exists but is opt-in, without the three queue defects. `agent-ws rm` and `gc` remove worktrees, and their tmpfs build folders, without losing work. No two worktrees ever share one `CARGO_TARGET_DIR`. This ticket delivers a measured baseline (done, R1–R10) and the core in the harness plus `gc`; Phases 2–4 of the plan become follow-up tickets.
+>
+> *Revised 2026-11-24 after the target-machine and real-repo experiments (R1–R10): the plan's slot queue and shared build base did not fix the lag; the lag is disk writeback (R9, R10), and a shared target gives stale builds (R5).*
 
 **Out of scope** (this ticket):
 - Plan Phase 2 (pnpm global virtual store, uv store layout, CoW filesystem move) — follow-up ticket.
@@ -52,15 +54,17 @@ User, 2026-11-24, on the Claude Docs plan "Shared Build Base for Multi-Agent Wor
 - [ ] Domain terms align with `PROJECT_SPEC.md` glossary (`grill-with-docs` run if terminology was fuzzy)
 - [ ] Every Acceptance Criterion below traces to a line in the Requirement
 - [ ] All Requirement Refs exist in `PRD.md` and are fully covered by the Acceptance Criteria above
-- [ ] Decisions D1–D3 (below) answered by the user
+- [x] Decisions D1–D3 (below) answered by the user (2026-11-24)
+- [ ] **Revised restated intent and the revised Acceptance Criteria confirmed by the user** (they changed after R1–R10; the two earlier boxes stay open until then)
 
 > An agent must NOT start implementing until this gate is checked.
 
-### Open decisions (user)
+### Decisions (user, 2026-11-24 — all answered)
 
-- **D1 — language of `agent-ws`.** Plan prototype is bash. Kit hooks and `scripts/cleanup_task.py` are Python 3, which also answers the plan's Windows question. Supervisor recommendation: Python.
-- **D2 — board scope.** Registered on this board (Gate 4) because the integration point is the kit's own hooks (`WorktreeCreate`/`WorktreeRemove`) and `scripts/`. If `agent-ws` should ship as a separate tool, it gets its own board.
-- **D3 — slots default and target projects.** Plan open questions 2 and 5: which languages are in use, how many agents at once. Measure on the target machine (the dev machine's 16 cores, 31 GB RAM, ext4 are not the target).
+- **D1 — language of `agent-ws`: Python 3.** Kit hooks and `scripts/cleanup_task.py` are Python 3; it also answers the plan's Windows question.
+- **D2 — board scope: this board.** The integration point is the kit's own hooks (`WorktreeCreate`/`WorktreeRemove`) and `scripts/`.
+- **D3 — target projects and defaults.** Target repos: `easy-personal-mcp` (Python, Rust, web), `easy-note-mcp` (Rust), `orderly` (Maven, npm). Main case: Rust. Build folder: **tmpfs by default** (user: "tmpfs as default"). Slot queue: **off by default, opt-in** (R6–R8: no throughput gain on this machine). Number of agents at once: not stated; the tests used 3.
+- **D4 — where the tmpfs folder lives (Supervisor, from the check on the target machine).** `/run/user/<uid>` is private but only 3.2 GB (too small: 3 builds = 4.2 GB). `/dev/shm` is 16 GB. Rule: the first tmpfs among `/dev/shm`, then `/tmp` (only if tmpfs), with enough free space; folder `<mount>/agent-ws-<uid>/` created `0700`, refused if it exists and is a symlink or not owned by the user (a world-writable parent invites symlink attacks).
 
 ---
 
@@ -250,19 +254,25 @@ E5 (env reaches subagents) does not depend on the machine; re-run it only if the
 
 | # | Criterion (testable) | Traces to requirement |
 |---|----------------------|-----------------------|
-| 1 | Phase 0 baseline recorded for one real repo: disk per workspace (`du -sh`), peak RAM and build time for 1 and 3 agents, `df -T` of the worktree parent | Plan Phase 0 |
+| 1 | Phase 0 baseline recorded for a real repo: **done** — `easy-note-mcp`, R1 and R6–R10 in `## Experiments` (disk, peak RAM, build time for 1 and 3 agents, lag probe, `df -T`). `orderly` and `easy-personal-mcp` are not measured | Plan Phase 0 |
 | 2 | `agent-ws new <name>` creates `../wt-<name>` beside the repo (never under `agents/`), writes a lease file, and prints only the absolute path on stdout's last line | G3a, G3b, G2c |
 | 3 | 8 concurrent `agent-ws new` calls all succeed | G3c |
 | 4 | A `WorktreeCreate` hook calls `agent-ws new`; a `WorktreeRemove` hook calls `agent-ws rm`; `claude --worktree` and Agent `isolation: "worktree"` both get an `agent-ws` worktree | G3a |
 | 5 | With 1 slot, a nested `agent-ws run` inside `agent-ws run` completes (no deadlock) | G1a |
 | 6 | A build that leaves a background process does not keep the slot after the build exits | G1b |
 | 7 | `kill -9` of the `agent-ws run` wrapper frees the slot AND leaves no process of the build's group running | G1c |
-| 8 | Never more than `AGENT_BUILD_SLOTS` heavy commands overlap across 3 sessions | Plan Phase 1 |
+| 8 | **Queue is off by default**: with `AGENT_BUILD_SLOTS` unset, `agent-ws run` starts the command at once. With it set to N, never more than N heavy commands overlap across 3 sessions | R6–R8, D3 |
 | 9 | `agent-ws rm` and `gc` refuse (exit 1, nothing removed) on an unmerged branch, uncommitted or untracked files, or a live process inside; they never use `--force` or `branch -D` | G2a |
 | 10 | `gc` removes a workspace whose lease PID is dead and which passes AC 9's checks; it leaves a workspace whose lease PID is alive | G2b, G2c |
 | 11 | On a filesystem where a reflink probe fails, `new` seeds nothing and says so on stderr | S1 |
-| 12 | `agent-ws run` prints `waiting for build slot` on stderr while queued | S4 |
+| 12 | With the queue on, `agent-ws run` prints `waiting for build slot` on stderr while queued | S4 |
 | 13 | A SessionStart hook exports the profile environment through `$CLAUDE_ENV_FILE` | C1 |
+| 14 | **tmpfs build folder by default**: after `agent-ws new`, a `cargo build` in the worktree writes `target/` under the tmpfs folder `<mount>/agent-ws-<uid>/<name>/` (checked with `stat -f -c %T` = `tmpfs`), not into the worktree. The folder is `0700`, owned by the user, never a symlink (D4) | R9, R10, D3, D4 |
+| 15 | **tmpfs fallback**: when no tmpfs exists or free space is under 4 GB, `new` uses an on-disk `target/` and says so on stderr; it never fails creation for this reason | R10 cost list |
+| 16 | `rm` and `gc` remove the worktree's tmpfs folder only after AC 9's checks pass; after a reboot (tmpfs gone) a `cargo build` recreates it and `gc` raises no error | R10, G2b |
+| 17 | `agent-ws run` runs the command under `nice -n 19` and never under `ionice` (no effect on `mq-deadline`) | R9 |
+| 18 | `agent-ws` never gives two worktrees the same `CARGO_TARGET_DIR`; a test with two worktrees holding different code builds each from its own source (the R5 marker test passes) | R5 |
+| 19 | `new` warns on stderr when the uv cache or pnpm store sits on another filesystem than the worktree parent (no hard-link sharing) | E6, E7 (target-machine run) |
 
 ---
 
@@ -278,6 +288,11 @@ E5 (env reaches subagents) does not depend on the machine; re-run it only if the
 | 4 | 8 parallel `agent-ws new` | 8 worktrees, exit 0 each | automated test |
 | 5 | worktree with unmerged commit, dead lease PID; `agent-ws gc` | worktree and branch still there, exit 1, reason printed | automated test |
 | 6 | merged, clean worktree, dead lease PID; `agent-ws gc` | worktree and branch gone | automated test |
+| 7 | worktree from `agent-ws new` with a tmpfs available; `cargo build` of a 1-file crate with no dependencies | `target/` is under `<mount>/agent-ws-<uid>/<name>/`, `stat -f -c %T` prints `tmpfs`, worktree has no `target/` | automated test |
+| 8 | same, but the tmpfs candidates are forced absent (test seam) | stderr says on-disk `target/`; creation exit 0 | automated test |
+| 9 | merged, clean worktree with a tmpfs folder; `agent-ws rm` | worktree, branch and tmpfs folder gone; same call on an unmerged branch leaves all three | automated test |
+| 10 | two worktrees, one with a marker string in `src/lib.rs`; build both with `agent-ws` env | each artifact holds only its own source (the shared-target stale build of R5 cannot happen) | automated test |
+| 11 | `AGENT_BUILD_SLOTS` unset; 3 parallel `agent-ws run sleep 1` | all 3 finish in under 2 s | automated test |
 
 ### Verification Command (exact, runnable)
 
@@ -307,8 +322,14 @@ python3 -m pytest .claude/hooks/tests/test_agent_ws_t345.py -q
 - Seeding by copy on non-CoW filesystems (S1) — skipped by default.
 - `PATH` shims and PreToolUse `updatedInput` wrapping — Phase 4 ticket.
 - `agent-ws stats` — Phase 4 ticket.
+- tmpfs for non-Rust build folders (`node_modules`, `.venv`, Maven `target/`) — not measured; follow-up.
+- tmpfs plus an on-disk sccache to win back cold-build time; `vm.dirty_*` tuning; BFQ — not tested (R10).
+- A shared `CARGO_TARGET_DIR` for dependencies — unsafe across different code (R5); the safe form (shared dependency cache only) needs its own experiment.
+- Pruning old accumulated `target/` folders of existing worktrees (the 80 GB): `gc` covers worktrees `agent-ws` made; the existing `easy-note-mcp-*` folders are not touched by this ticket.
 
-Queue: one lock file per slot under the shared cache folder; acquire with non-blocking `flock` per slot; close the lock fd before exec of the command (G1b); run the command in its own process group and kill the group on wrapper exit or signal (G1c); pass `AGENT_WS_SLOT` to children and skip acquiring when set (G1a).
+Build folder (D3, D4): `new` picks the tmpfs folder by the D4 rule, creates `<mount>/agent-ws-<uid>/<name>/` and points the worktree's build tool at it. For Rust the pointer is the worktree's untracked `.cargo/config.toml` (`[build] target-dir`), so it works without a wrapper; `agent-ws run` also sets `CARGO_TARGET_DIR` for the command. The mechanism is decided at implementation; AC 14 and Success Criterion 7 fix the observable result. Node, Maven and Python build folders are not moved (cut list).
+
+Queue (opt-in): one lock file per slot under the shared cache folder; acquire with non-blocking `flock` per slot; close the lock fd before exec of the command (G1b); run the command in its own process group and kill the group on wrapper exit or signal (G1c); pass `AGENT_WS_SLOT` to children and skip acquiring when set (G1a).
 
 ---
 
@@ -321,6 +342,10 @@ Queue: one lock file per slot under the shared cache folder; acquire with non-bl
 - [ ] `WorktreeCreate` path through a symlink below repo root is rejected by Claude Code
 - [ ] Subagent worktree left after the subagent finishes (G2b) — `gc` picks it up
 - [ ] Existing `../wt-tNNN` worktrees made by `git worktree add` (no lease file) — `gc` must not treat a missing lease as dead
+- [ ] tmpfs fills mid-build (ENOSPC): cargo fails with its own error; `agent-ws` check at `new` time is the only guard — say so in `--help`
+- [ ] Two repos with the same worktree name on one machine: tmpfs folder path includes a repo id, so they do not collide
+- [ ] `/dev/shm` folder exists but belongs to another user, or is a symlink: refuse and fall back to on-disk (AC 15)
+- [ ] Memory pressure: tmpfs is RAM; free space check uses the tmpfs mount's `statvfs`, and a sum over the user's open worktrees is reported by `gc --dry-run`
 - [ ] Pin-test pre-flight: the `Pre-existing pin tests` row below is filled before work starts
 - [ ] Stale references: grep for the old worktree-creation wording in `docs/claude-md/pipeline-stages.md`, `agents/common-infrastructure.md`, `site/`
 
@@ -330,7 +355,7 @@ Queue: one lock file per slot under the shared cache folder; acquire with non-bl
 
 | File | Change |
 |------|--------|
-| `scripts/agent_ws.py` (new; language per D1) | `new`, `run`, `rm`, `gc` |
+| `scripts/agent_ws.py` (new; Python 3, D1) | `new`, `run`, `rm`, `gc`; tmpfs build folder (D4) |
 | `.claude/hooks/worktree_create.py` (new) | `WorktreeCreate` → `agent-ws new` |
 | `.claude/hooks/worktree_remove.py` (new) | `WorktreeRemove` → `agent-ws rm` |
 | `.claude/settings.json` | register the two hooks; SessionStart env export |
