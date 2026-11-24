@@ -1,8 +1,0 @@
-{
- "move": [
-  [
-   "data/expenses.csv",
-   "data/expenses.csv.bak"
-  ]
- ]
-}

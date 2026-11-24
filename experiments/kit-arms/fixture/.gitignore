@@ -1,6 +1,0 @@
-__pycache__/
-.pytest_cache/
-*.tmp
-
-# personal data, never committed
-data/

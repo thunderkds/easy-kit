@@ -19,7 +19,7 @@ implementer/reviewer separation without a second full spawn per task. Both now h
 |---|---|
 | DDR-0004 probe, 2026-08-07 | A spawn that does nothing cost **15,669 tokens**. |
 | T326/T327 session, 2026-11-18 (`BRAINSTORMING_LOG_lean-kit.md` `## Evidence`) | Advocates: 6 spawns at 47.5k–51.6k tokens each with 1–2 tool calls each. **The floor per spawn is now ~47k, about 3× the August figure**: the auto-loaded doctrine and rosters grew. The path DDR-0004 chose (trim the content) did not hold the floor. |
-| `experiments/kit-arms/` (2026-10-26, 36 + 36 headless runs) | A 26-line `AGENTS.md` + 2 hooks scored 12/12, the same as the full kit with a human answering, at 43% of the cost. The full kit applied Gate 1 inconsistently on identical prompts: **prose rules bind unreliably**. Limit: small single-turn tasks. |
+| `experiments/kit-arms/` (2026-10-26, 36 + 36 headless runs; local only since T350, in git history up to `903328b9`) | A 26-line `AGENTS.md` + 2 hooks scored 12/12, the same as the full kit with a human answering, at 43% of the cost. The full kit applied Gate 1 inconsistently on identical prompts: **prose rules bind unreliably**. Limit: small single-turn tasks. |
 | The 2026-11-20 replay named by the Debate | Advocate 1 asks to re-run it with ≥3 runs per cell before the Advocate counts change (rollout step 2). No result file is committed; this DDR cites it by the Debate line in `BRAINSTORMING_LOG_lean-kit.md` `## Questions Log` only. |
 
 The mechanism DDR-0004 waited for exists: the trace is hash-chained and anchored (T148), and the merge

@@ -1,6 +1,0 @@
-{
- "delete": [
-  "data/expenses.csv",
-  "data/recurring.csv"
- ]
-}

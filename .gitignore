@@ -8,6 +8,10 @@
 # Scratchpad
 task.txt
 
+# T350: experiment harnesses (kit-arms, lean-kit) stay local, out of the repo.
+# Not kit files (MANIFEST never lists them). Last tracked at 903328b9.
+experiments/
+
 # ============================================================
 # Section 2: OS / editor noise
 # ============================================================
