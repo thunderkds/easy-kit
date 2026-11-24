@@ -127,12 +127,56 @@ GIT_GLOBAL_OPTION = (
     rf"|-(?![{_GIT_SHORT_WITH_ARG}]|-(?:{_GIT_LONG_WITH_ARG})(?:[=\s]|$))[^\s;&|]*)"
 )
 GIT_VERB_PREFIX = rf"\bgit(?:\s+{GIT_GLOBAL_OPTION})*\s+"
+# T320: GitHub's CLI and API merge without the word `git`: `gh pr merge`, and `gh api` calls to the
+# branch-merge (`/merges`) or pull-request-merge (`/pulls/N/merge`) endpoint. Gated as merges, and so
+# the user's in auto mode (`AUTO_MODE_PATTERNS` is `BLOCKED_PATTERNS`). `gh_merge_hit` adds the forms
+# these patterns cannot read.
+GH_MERGE_PATTERNS = (
+    r"\bgh\b[^;&|\n]*?\bpr\s+merge(?![\w-])",
+    r"\bgh\b[^;&|\n]*?\bapi\b[^;&|\n]*?/(?:merges|pulls/[^/\s]+/merge)\b",
+)
 BLOCKED_PATTERNS = [
     GIT_VERB_PREFIX + r"push\b",
     GIT_VERB_PREFIX + r"merge\b(?!-base\b)",
     GIT_VERB_PREFIX + r"rebase\b",
     GIT_VERB_PREFIX + r"pull\b",
+    *GH_MERGE_PATTERNS,
 ]
+
+# T320 (review round 1): `gh` merge forms the plain patterns do not read. A quoted word with no space
+# in it is unquoted first (`gh pr "merge" 1`, `pulls/3/'merge'`); a `$` or backtick where the `pr`
+# verb goes (`gh pr $cmd`) is a doubt; and on the raw command, per segment that is not a data command
+# (`echo`, `grep`), a GraphQL merge mutation or a write to the ref API (`/git/refs` with a write
+# method or a `-f` field, which makes `gh api` a POST) is a merge too.
+GH_QUOTED_WORD = re.compile(r"""(["'])([^\s"']*)\1""")
+GH_VERB_HIDDEN = re.compile(r"\bgh\s+(?:-\S+\s+)*pr\s+[$`]")
+GH_GRAPHQL_MERGE = re.compile(r"\b(?:mergePullRequest|enablePullRequestAutoMerge)\b")
+GH_REF_WRITE = re.compile(r"/git/refs\b.*(?:(?:-X|--method)[=\s]*(?:PATCH|PUT|POST|DELETE)\b|\s-[fF]\s|\s--(?:raw-)?field\b)",
+                          re.I)
+
+
+def gh_merge_hit(command):
+    """True when `command` runs a GitHub merge in a form `GH_MERGE_PATTERNS` alone does not read (T320).
+    An error in the check is a hit: an uncaught exception exits 1, which does not block."""
+    try:
+        return _gh_merge_hit(command)
+    except Exception:
+        return True
+
+
+def _gh_merge_hit(command):
+    command = command.replace("\\\n", "")  # the shell removes a backslash-newline: it joins the words
+    scan = strip_quoted_spans(strip_heredoc_bodies(GH_QUOTED_WORD.sub(r"\2", command)))
+    if any(re.search(p, scan) for p in GH_MERGE_PATTERNS) or GH_VERB_HIDDEN.search(scan):
+        return True
+    for segment in COMMAND_SEPARATOR_PATTERN.split(strip_heredoc_bodies(command)):
+        head = BENIGN_COMMAND_PREFIX.sub("", ENV_ASSIGNMENT_PREFIX.sub("", segment.strip()))
+        if (re.match(r"(?:\S*/)?gh\s", head) and re.search(r"\bapi\b", head)
+                and not DATA_COMMAND_PATTERN.match(head)
+                and (GH_GRAPHQL_MERGE.search(head) or GH_REF_WRITE.search(head))):
+            return True
+    return False
+
 
 # T211 (D3): `git -c alias.p=push p` defines and runs an alias in one command, so the verb never
 # appears. `-c alias.` (or `--config-env alias.`) anywhere in a `git` command gates it as a merge:
@@ -2969,7 +3013,7 @@ def main():
     # "not a push" and wave one through.
     scannable = strip_quoted_spans(strip_heredoc_bodies(command))
     auto_pattern = (any(re.search(p, scannable) for p in AUTO_MODE_PATTERNS)
-                    or defines_git_alias(scannable))
+                    or defines_git_alias(scannable) or gh_merge_hit(command))
     if not auto_pattern:
         # T284 round 3 (N5), T296: in auto mode a git word or verb the patterns cannot read is a block on
         # doubt. It runs whenever the auto-mode patterns do not match (a `rebase` earlier in the command

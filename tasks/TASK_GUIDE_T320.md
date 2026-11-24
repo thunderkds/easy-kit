@@ -86,7 +86,7 @@ python3 -m pytest .claude/hooks/tests/test_t320_gh_merge_gate.py -q
 **Pattern reference**: `GIT_VERB_PREFIX` / `BLOCKED_PATTERNS` in `.claude/hooks/pre_bash_block_unsafe_merge.py` and `test_merge_gate_t210.py` (`test_ac1_pull_*`, the same shape for `git pull`).
 
 **Vital slice**: two regexes added to `BLOCKED_PATTERNS`. `AUTO_MODE_PATTERNS` is derived from that list, so auto mode is covered with no other change.
-**Cut list**: `gh` aliases and `gh` extensions; `curl` or `hub` calls to the GitHub API; `gh pr merge --auto` queueing is covered because it is still `gh pr merge`.
+**Cut list** (review rounds 1 and 2 added the accepted limits): the gate stops accidents and casual forms, not a determined agent. Not gated: merge bodies the text cannot show (`-f query=@file`, `--input`, `-f query="$Q"`, a quoted or computed `-X`), other write routes (contents API, `merge-upstream`, `gh repo sync`). Accepted false positives, blocked only while a task is In Progress or in auto mode: a read (GET) of the merge endpoint, `gh pr merge --help`, a trailing `# gh pr merge` comment. `gh` aliases and `gh` extensions; `curl` or `hub` calls to the GitHub API; `gh pr merge --auto` queueing is covered because it is still `gh pr merge`.
 
 Patterns (match on the quote-stripped command, so a quoted mention is data):
 - `\bgh\b[^;&|\n]*?\bpr\s+merge\b`
