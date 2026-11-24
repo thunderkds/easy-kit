@@ -18,8 +18,9 @@
 - Suite: `python3 -m pytest -q -p no:cacheprovider tests .claude/hooks/tests` — `6 failed, 7796 passed, 5 skipped, 126 subtests passed in 402.68s`; 5 fail on `main` too (`test_memory_channel_and_budget.py` ×4, `test_token_audit_format.py::test_memory_md_hot_tier_stays_within_char_budget`: `hot-tier report: 43,135 / 42,000 chars`); `test_merge_gate_companion_rows.py::test_a_tilde_report_path_is_expanded` failed under load only, `56 passed` alone on the branch
 - Real run: `git ls-files experiments | wc -l` — printed `0`; `ls experiments/kit-arms/run_arms.py` — the file is still on disk
 - Simplify: skipped: under 20 lines
+- verify: ☑ pass — auto-run by hook, session a8494959-895c-41f3-9e08-d638d980fdba, commit 811f60b5c82f82470c7b58070cedac0418444ae4, log .claude/verify-runs/T350-811f60b5c82f.log
 **Files:** `.gitignore`, `tests/test_t350_experiments_untracked.py` (new), `docs/ddr/0011-supervisor-implements-reviewer-spawn-gated.md`, `memory/learnings.md`, `memory/decisions.md`, `tasks/MINIMAL_LOG.md`, `PROJECT_KANBAN.md`, `experiments/` (103 files untracked)
-**Not done:** merge (yours: back up `experiments/` first, because the merge removes it from the main checkout's disk); auto verify: running
+**Not done:** merge (yours: back up `experiments/` first, because the merge removes it from the main checkout's disk); auto verify: ☑ pass (session a8494959-895c-41f3-9e08-d638d980fdba, commit 811f60b5c82f, log .claude/verify-runs/T350-811f60b5c82f.log)
 
 ## T340 — Remove kit files nothing uses (lean-kit Part 1) · minimal
 Mode: auto
