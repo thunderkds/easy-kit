@@ -132,6 +132,11 @@ BLOCKED_PATTERNS = [
     GIT_VERB_PREFIX + r"merge\b(?!-base\b)",
     GIT_VERB_PREFIX + r"rebase\b",
     GIT_VERB_PREFIX + r"pull\b",
+    # T320: GitHub's CLI and API merge without the word `git`: `gh pr merge`, and `gh api` calls to
+    # the branch-merge (`/merges`) or pull-request-merge (`/pulls/N/merge`) endpoint. Gated as merges,
+    # and so the user's in auto mode (`AUTO_MODE_PATTERNS` is this list).
+    r"\bgh\b[^;&|\n]*?\bpr\s+merge\b",
+    r"\bgh\b[^;&|\n]*?\bapi\b[^;&|\n]*?/(?:merges|pulls/[^/\s]+/merge)\b",
 ]
 
 # T211 (D3): `git -c alias.p=push p` defines and runs an alias in one command, so the verb never
