@@ -5,6 +5,22 @@
 > this template and deletes the example comment. The same block is the Supervisor's final chat message.
 
 
+## T350 — Keep `experiments/` on disk but out of the git repo · minimal
+**Asked:** "we should not remove it, just keep it out of the git repos only I think" — then: "yes, go ahead. But let think about the install the kit solution also"
+**Decisions:**
+- Untrack `experiments/` (`git rm -r --cached`, 103 files: kit-arms runner, fixture, oracles, results) and add `experiments/` to `.gitignore` Section 1 — the user wants the repo to hold the kit only; `MANIFEST` never lists `experiments/`, and no test or CI runs it. The files stay on the owner's disk.
+- Not deleted, not moved: the user chose untrack over the earlier proposal (keep 2 reports in `docs/experiments/`, delete the rest).
+- History is not rewritten: the files stay in git history up to `903328b9`. Purging them from GitHub needs a history rewrite, which nobody asked for.
+- Citations that name `experiments/kit-arms/` paths (`docs/ddr/0011-…md`, `memory/learnings.md`) now say "local only since T350"; `tasks/` guides and reviews stay as history.
+- Assumed: the owner's other machine copies `experiments/` before it pulls this merge — a pull of a commit that untracks files deletes them from that working tree (the user was told before the go).
+**Checked:**
+- New test `tests/test_t350_experiments_untracked.py` — 2 failed before the change (`test_experiments_is_not_tracked`, `test_experiments_is_ignored`), `3 passed` after
+- Suite: `python3 -m pytest -q -p no:cacheprovider tests .claude/hooks/tests` — `6 failed, 7796 passed, 5 skipped, 126 subtests passed in 402.68s`; 5 fail on `main` too (`test_memory_channel_and_budget.py` ×4, `test_token_audit_format.py::test_memory_md_hot_tier_stays_within_char_budget`: `hot-tier report: 43,135 / 42,000 chars`); `test_merge_gate_companion_rows.py::test_a_tilde_report_path_is_expanded` failed under load only, `56 passed` alone on the branch
+- Real run: `git ls-files experiments | wc -l` — printed `0`; `ls experiments/kit-arms/run_arms.py` — the file is still on disk
+- Simplify: skipped: under 20 lines
+**Files:** `.gitignore`, `tests/test_t350_experiments_untracked.py` (new), `docs/ddr/0011-supervisor-implements-reviewer-spawn-gated.md`, `memory/learnings.md`, `memory/decisions.md`, `tasks/MINIMAL_LOG.md`, `PROJECT_KANBAN.md`, `experiments/` (103 files untracked)
+**Not done:** merge (yours: back up `experiments/` first, because the merge removes it from the main checkout's disk); auto verify: running
+
 ## T340 — Remove kit files nothing uses (lean-kit Part 1) · minimal
 Mode: auto
 **Asked:** "should start the enhance now" — then "run by automate, [admin]" (lean-kit proposal, Part 1: f1–f4, f7)
