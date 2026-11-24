@@ -62,6 +62,7 @@
 - [T113: update removes unedited dropped files; MANIFEST `!` exclusions](decisions.md) — edited ones kept + named
 - [A batch guide ages against the tasks that merge after it, and the stalest part is its interactions](learnings.md) — re-read the call sites before the spawn
 - [A handoff warning is a measurement, and editing the block around it does not refresh it](learnings.md) — re-run the check before re-asserting, don't re-read the sentence
+- [Build queue: `flock` fd leaks to daemons; subagent worktrees outlive the subagent](learnings.md) — T345: `flock -o` + `setsid`; `WorktreeRemove` not run for subagents
 - [T112: install is backup-then-overwrite; `harness_backup_path` is public for T114](decisions.md) — differing dest → `<path>.bak[.N]`; identical content left alone
 - [An identical-content short-circuit is what separates backup-on-install from backup-breeding](learnings.md) — judge a backup feature on run two
 - [An error message's scope claim outlives the path it was written for](learnings.md) — check the caller's loop before trusting an abort's scope
