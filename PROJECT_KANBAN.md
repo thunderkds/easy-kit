@@ -1,5 +1,5 @@
 # PROJECT_KANBAN.md
-**Last updated**: 2026-11-20
+**Last updated**: 2026-11-24
 
 > Compact task board. Full context lives in `PROJECT_SPEC.md`. Update this file whenever a task status changes.
 
@@ -8,6 +8,8 @@
 ## Board
 
 ### Todo
+- [ ] **T345** — The T320 check (`gh_merge_hit`) unquotes `<<'EOF'` to `<<EOF` before stripping heredoc bodies, so a heredoc body that names a GitHub merge command is scanned and the command is blocked; strip heredoc bodies first, with a test | common-infrastructure | C0 | Risk: Medium | P2 | Depends on: T320 | Registered 2026-11-24 from the T320 close-out (over-block only, never lets a merge through); user: "just note the status and push now"
+- [ ] **T345** — Shared build base for multi-agent, multi-session work (`agent-ws`), Phase 0–1 with the 2026-11-24 review fixes | common-infrastructure | C3 | Risk: High | P1 | Guide: `tasks/TASK_GUIDE_T345.md` | Registered 2026-11-24, user: "create the ticket and note all to this" (review of the Claude Docs plan https://claude.ai/artifact/VjwpdBJSzeMLSdFYn3hyYc: 3 blocking + 5 smaller gaps, 13 experiments) | Track: extended | Not started: Fidelity Gate open on decisions D1 (bash or Python), D2 (this board), D3 (target repos, slots) | Phases 2–4 = follow-up tickets, not registered
 - [ ] **T343** — `[admin]` merges every task the session started (no `merge <ID> [admin]` question); `### Stops that stay` gains "business or direction change" and loses the routine hand-backs | common-infrastructure | C3 | Risk: High | P1 | Registered 2026-11-20 [admin], user: "yes, start [admin]" | Depends on: T341 (same files: `.claude/hooks/pre_bash_block_unsafe_merge.py`, `docs/claude-md/tracks.md`); guide written when T341 merges | Scope notes from T342 (2026-11-20): the stop check's `security-review` Skill-call rule cannot pass when the built-in skill fails on a missing `origin/HEAD` (needs a recorded by-hand path); `uv run -q --with pytest python3 -m pytest` is not counted as a test run (`BENIGN_COMMAND_PREFIX`); a heredoc with quotes/backslashes is refused as a hidden push; the `[admin]` push needs T321 (this repo's remote is `github`, not `origin`) | Track: extended
 - [ ] **T324** — a test run in a task's worktree is not work on the task (Stop check false positive) | common-infrastructure | C2 | Risk: High | P1 | Guide: `tasks/TASK_GUIDE_T324.md` | Registered and started 2026-11-16 [admin], user: "yes [admin]" (log the stop-hook false positive): branch `fix/t324-test-run-not-work`, worktree `../wt-t324` | Track: extended | Back to Todo 2026-11-18 (user: "Move both to Todo"): stale In Progress — no branch and no worktree existed
 - [ ] **T321** — the `[admin]`/`[ticket]` push remote is a setting (`EASY_KIT_ADMIN_REMOTE`), not the hard-coded `origin` | common-infrastructure | C2 | Risk: High | P1 | Started 2026-11-15 [admin]: branch `feat/t321-admin-remote`, worktree `../wt-t321` | Track: extended | Back to Todo 2026-11-18 (user: "Move both to Todo"): stale In Progress — no branch and no worktree existed
