@@ -27,7 +27,7 @@ The registry is the main checkout's `PROJECT_KANBAN.md` (`root`), re-read just b
 matched by task ID, never by line number. A row already gone from Ready for Review (the user moved it)
 is left alone, with no note. One lock file serialises close-outs, so two runs that end together cannot
 lose each other's board write. This module runs no git command that writes, writes no memory file,
-and never merges, pushes or runs `ship` (D5, D6).
+and never merges, pushes or runs `release-plan` (D5, D6).
 
 The Gate 5/6 and record readers are the merge gate's own (`pre_bash_block_unsafe_merge.py`), loaded
 without running its bottom-of-file `main()` — the technique its tests use. Any failure to load them

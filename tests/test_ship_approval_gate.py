@@ -2,7 +2,7 @@
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-SHIP = (ROOT / "skills/ship/SKILL.md").read_text()
+SHIP = (ROOT / "skills/release-plan/SKILL.md").read_text()
 RUNBOOK = (ROOT / "templates/RUNBOOK_template.md").read_text()
 GATE = SHIP[SHIP.index("#### 7."):]
 

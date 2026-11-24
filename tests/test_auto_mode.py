@@ -256,7 +256,7 @@ def test_ac1_d5_stops_that_stay():
 # T189 D7: `### Never in auto mode` names only what stays the user's in every mode — merge, push and
 # `ship`; the memory pass and Done moved to the automatic side. The Supervisor's own limits (D6 of
 # T180) are unchanged and now live in `### The Supervisor never`.
-D6_NEVER = (r"^- merge;$", r"^- push;$", r"^- `ship`\.$")
+D6_NEVER = (r"^- merge;$", r"^- push;$", r"^- `release-plan`\.$")  # T352: was `ship`
 D6_SUPERVISOR_NEVER = (r"runs `/verify` or writes its `verify` Evidence row", r"moves a task to Done",
                        r"moves a task down a track")
 
@@ -267,7 +267,7 @@ def test_ac1_d6_never_in_auto_mode():
         assert re.search(item, raw, re.M), item
     # T284: `pull` joins the list (the gate blocks it under `[auto]` too).
     assert [l for l in raw.splitlines() if l.startswith("- ")] == ["- merge;", "- pull;", "- push;",
-                                                                    "- `ship`."]
+                                                                    "- `release-plan`."]
     sub = _norm(_subsection(_auto(), "The Supervisor never"))
     for item in D6_SUPERVISOR_NEVER:
         assert re.search(item, sub), item
@@ -432,7 +432,7 @@ USER_STOP = re.compile(
     r"[Aa]sk the user|[Tt]he user must|user approv|explicit user approval|[Pp]lease (?:run|list)|"
     r"Approve or request|Are they correct|Guide the user|STOPs and asks|stops and asks|"
     r"Resolve all flagged items with the user|Address all findings|"
-    r'skill: "verify"|Merge the worktree|skill: "ship"', re.S)
+    r'skill: "verify"|Merge the worktree|skill: "release-plan"', re.S)  # T352: was `ship`
 
 
 def test_ac3_every_pipeline_stop_names_its_auto_rule():

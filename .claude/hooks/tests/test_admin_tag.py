@@ -417,15 +417,15 @@ def test_ac9_tracks_md_has_an_admin_tag_section_with_its_limits():
     assert m, "no `### Admin tag` in `## Auto mode`"
     body = _norm(m.group(1))
     for needle in ("`[admin]`", "auto verify", "`auto-run by hook`", "run record", "force",
-                   "`ship`", "task branch", "typed", "`.claude/hooks/pre_bash_block_unsafe_merge.py`"):
+                   "`release-plan`", "task branch", "typed", "`.claude/hooks/pre_bash_block_unsafe_merge.py`"):
         assert needle in body, needle
 
 
 def test_ac9_tracks_md_never_list_states_the_admin_limit():
     sub = _auto_mode_section().split("### Never in auto mode", 1)[1].split("\n### ", 1)[0]
     flat = _norm(sub)
-    assert "in every mode" not in flat.split("`ship`")[0], "merge and push no longer stay in every mode"
-    assert "`[admin]`" in flat and "`ship`" in flat
+    assert "in every mode" not in flat.split("`release-plan`")[0], "merge and push no longer stay in every mode"
+    assert "`[admin]`" in flat and "`release-plan`" in flat
 
 
 def test_ac9_agents_md_tracks_paragraph_names_admin():
@@ -455,7 +455,7 @@ def test_ac8_ship_is_a_plan_only_under_admin():
     m = re.search(r"^### Admin tag[^\n]*\n(.*?)(?=^##+ |\Z)", _auto_mode_section(), re.M | re.S)
     body = _norm(m.group(1)) if m else ""
     assert "`ship` stays the user's with `[admin]` too" not in body, "old ship limit still there"
-    assert re.search(r"`ship`[^.]*as a plan only", body) and "It never runs a deploy command" in body, \
+    assert re.search(r"`release-plan`[^.]*as a plan only", body) and "It never runs a deploy command" in body, \
         "ship-as-plan-only limit missing"
 
 

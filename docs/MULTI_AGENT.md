@@ -37,7 +37,7 @@ Claude (Supervisor)                         Codex / Cursor (Implementer)
 |---|---|---|
 | Pipeline, Karpathy principles, 3-pillar model, templates | ✅ | |
 | `TASK_GUIDE` / `PROJECT_SPEC` / `PROJECT_KANBAN` (plain markdown) | ✅ | |
-| Skill **content** (the migration checklist, ship workflow, etc.) | ✅ (it's just procedure) | |
+| Skill **content** (the migration checklist, release-plan workflow, etc.) | ✅ (it's just procedure) | |
 | `git worktree` isolation | ✅ (plain git) | |
 | `memory/MEMORY.md` **reading** (injected into non-Claude spawn prompts) | ✅ (plain markdown) | |
 | `CLAUDE.md` auto-load | | ❌ filename is Claude-specific |
@@ -121,7 +121,7 @@ is the conformance test that keeps the adapter in sync with `AGENTS.md`.
 - **Review** (`code-review`, `security-review`) and **end-to-end `verify`** — keep on the Claude
   supervisor. This also *preserves the independence rule*: the non-Claude tool implements; Claude
   evaluates. Don't have the implementing CLI grade its own work.
-- **`migration-safety` / `ship` gates** — run by the Claude supervisor (they're skills).
+- **`migration-safety` / `release-plan` gates** — run by the Claude supervisor (they're skills).
 - **`ux-evaluate`** — a Codex or Cursor frontend agent can read `skills/ux-evaluate/SKILL.md` and follow it (it is procedure: screenshots, then a verdict table). The second run on UI diffs is part of `code-review`, so it stays on the Claude supervisor.
 - **git-guardrails hook** — Claude-only; for other CLIs, rely on the worktree boundary + the
   "push only when asked" discipline, or each tool's own equivalent.

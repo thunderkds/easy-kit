@@ -68,7 +68,7 @@ Hard-Stop Gate.
   gate and be applied by Common-Infrastructure — never hand-run schema SQL.
 - **QA owns:** the smoke suite and overall coverage targets. Meet the TASK_GUIDE's criteria; don't
   invent a global coverage number.
-- **`ship` skill owns:** deployment plan, rollback, runbook. Don't bake deploy/Docker/runbook work
+- **`release-plan` skill owns:** deployment plan, rollback, runbook. Don't bake deploy/Docker/runbook work
   into a feature task unless the TASK_GUIDE asks.
 
 ## Implementation checklist (apply what the task needs)

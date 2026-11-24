@@ -1778,11 +1778,11 @@ def _tracks_subsection(heading):
 def test_t189_ac9_row_19_and_the_never_list_name_only_merge_push_and_ship():
     row = next(l for l in _auto_mode_section().splitlines() if l.startswith("| 19 |"))
     rule = row.split("|")[3]
-    assert re.search(r"Merge, push and `ship`: never in auto mode", rule), rule
+    assert re.search(r"Merge, push and `release-plan`: never in auto mode", rule), rule
     assert "`### Auto close-out`" in rule and "`Memory:`" in rule
     never = _tracks_subsection("Never in auto mode")
     assert [l for l in never.splitlines() if l.startswith("- ")] == ["- merge;", "- pull;", "- push;",
-                                                                      "- `ship`."]  # T284: pull
+                                                                      "- `release-plan`."]  # T284: pull; T352: was `ship`
     assert "Done" not in [w.strip(".;") for w in " ".join(
         l for l in never.splitlines() if l.startswith("- ")).split()]
 

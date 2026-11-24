@@ -40,7 +40,7 @@ CANNOT_ENFORCE_TERMS = [
     "skills",
     "review",
     "verify",
-    "ship",
+    "release-plan",
     "migration-safety",
     "git-guardrails",
 ]

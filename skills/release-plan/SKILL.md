@@ -1,6 +1,6 @@
 ---
-name: ship
-description: Post-merge release planning. Use after Stage 5 verification passes (or on "ship it" / "release" / "deploy plan") to turn merged tasks and commits into a detailed, runnable deployment plan, a rollback plan, and user-facing release notes — then append a runbook entry. It PLANS and de-risks the release; the operator executes. Self-contained — reads the repo with git + Read; no external CLI or auto-deploy.
+name: release-plan
+description: Post-merge release planning (not Claude Code's `/ship`, which pushes and opens a PR). Use after Stage 5 verification passes (or on "ship it" / "release" / "deploy plan") to turn merged tasks and commits into a detailed, runnable deployment plan, a rollback plan, and user-facing release notes — then append a runbook entry. It PLANS and de-risks the release; the operator executes. Self-contained — reads the repo with git + Read; no external CLI or auto-deploy.
 ---
 
 ## Role: Release Engineer (Planner, not Deployer)

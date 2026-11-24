@@ -260,7 +260,7 @@ is logged `RULE`, `FACT` or `SAFER OPTION`, not `DEBATED`. At Risk Medium or Hig
 | 16 | Stage 4 pull moment 3 (board mode `online`): "review against the new version?" | Review against the new version. | `RULE` |
 | 17 | Stage 4 item 7: a finding whose fix needs a choice | Debate. | `DEBATED` ⚠ |
 | 18 | Stage 5 item 1: `/verify` (never in the Supervisor's own session) | The Supervisor starts the headless auto verify run (T182; every task since T203) with `python3 .claude/hooks/stop_auto_verify.py --start <ID>`, and writes its own real-run check under `Checks:` as `auto-checked, not /verify`. The `verify` Evidence row stays unchecked until that run fills it from a real `/verify`, or the user does: a blocked run falls back to `/verify (yours)` (with `[admin]`, after its one retry: `### Admin tag`). | `Checks:` / `Not done:` |
-| 19 | Stage 5 items 3–6: memory update, merge, Done, `ship` | Memory update: the Supervisor runs the diff-driven pass before it stops, and writes the `Memory:` line. Done: after an auto verify pass, the hook moves the row (`### Auto close-out`). Merge, push and `ship`: never in auto mode, except the merge and push that `[admin]` allows (`### Admin tag`). With `[admin]`, the Supervisor also runs `ship` after the merge, as a plan only, never a deploy. The task waits in Ready for Review until the hook moves it. | `Memory:` / `Closed:` / `Not done:` |
+| 19 | Stage 5 items 3–6: memory update, merge, Done, `release-plan` | Memory update: the Supervisor runs the diff-driven pass before it stops, and writes the `Memory:` line. Done: after an auto verify pass, the hook moves the row (`### Auto close-out`). Merge, push and `release-plan`: never in auto mode, except the merge and push that `[admin]` allows (`### Admin tag`). With `[admin]`, the Supervisor also runs `release-plan` after the merge, as a plan only, never a deploy. The task waits in Ready for Review until the hook moves it. | `Memory:` / `Closed:` / `Not done:` |
 | 20 | `AGENTS.md` self-monitoring: "want me to compact before continuing?" | Do not ask. Near the session's context or usage limit, stop at a clean point (see Edge cases). | `Paused:` |
 | 21 | Minimal track: an unclear request (its one stop) | By `### Debate size by Risk`. At Risk Low (the minimal track's own level) the Supervisor decides the reading and logs why. | `RULE` / `SAFER OPTION` ⚠ |
 
@@ -508,7 +508,7 @@ ref cannot show a fake commit.
 
 After an auto verify **pass**, the same detached run closes the task out (T189,
 `.claude/hooks/lib/auto_closeout.py`). It moves the task's row from `### Ready for Review` to `### Done`.
-It is not a merge: the branch stays unmerged, and the merge, the push and `ship` stay yours (with `[admin]`, see
+It is not a merge: the branch stays unmerged, and the merge, the push and `release-plan` stay yours (with `[admin]`, see
 `### Admin tag` for the merge and the push). A `fail` or
 `blocked` result leaves the row where it is.
 
@@ -581,10 +581,10 @@ With `[auto]`, these stay the user's:
 - merge;
 - pull;
 - push;
-- `ship`.
+- `release-plan`.
 
 With `[admin]`, the Supervisor may also merge and push, only as `### Admin tag` says; a pull stays the
-user's. With `[admin]`, it also runs `ship`, as a plan only, never a deploy. The memory pass and the move
+user's. With `[admin]`, it also runs `release-plan`, as a plan only, never a deploy. The memory pass and the move
 to Done are automatic: see `### Final report` (`Memory:`) and `### Auto close-out`.
 
 ### Admin tag
@@ -627,11 +627,11 @@ unsettled Debate, and it says so in one line after the track line: `[admin]: I s
 The only hand-backs left under `[admin]` are the `### Stops that stay` list, `Approved by` on a new
 project, the settings changes of row 5, a `git pull`, and the second `blocked` verify (T306).
 
-`ship`: after the merge and the push of `main`, the Supervisor runs `Skill({ skill: "ship" })` and
+`release-plan`: after the merge and the push of `main`, the Supervisor runs `Skill({ skill: "release-plan" })` and
 writes its plan, as a plan only. It never runs a deploy command, and never tags or publishes a release:
-`ship` is a planner, not a deployer. It runs `ship` only for a task in Done (Hard-Stop Gate 5); when the
-hook left `Paused: done not moved`, it skips `ship` and says why. A missing `Deployment target` gives
-`TODO: confirm with operator` in the plan (`ship`'s own rule): that is not a stop.
+`release-plan` is a planner, not a deployer. It runs `release-plan` only for a task in Done (Hard-Stop Gate 5); when the
+hook left `Paused: done not moved`, it skips `release-plan` and says why. A missing `Deployment target` gives
+`TODO: confirm with operator` in the plan (`release-plan`'s own rule): that is not a stop.
 
 **Clean up (T327).** After the merge, when the task is in Done, the Supervisor runs
 `python3 scripts/cleanup_task.py <ID>` itself, from the main checkout: no question to you. It lists the

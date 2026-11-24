@@ -140,7 +140,7 @@ def test_ac2_resolve_question_names_domain_documents_first():
 # ── AC 3: `ship` runs under `[admin]` as a plan only; never a deploy ─────────────────────────
 PLAN_ONLY = r"plan only|only (as )?a plan|as a plan, never"
 AC3_ADMIN_ANCHORS = (
-    r'Skill\(\{ skill: "ship" \}\)',
+    r'Skill\(\{ skill: "release-plan" \}\)',
     PLAN_ONLY,
     r"never runs? (a |any )?deploy",
 )
@@ -160,13 +160,13 @@ def check_ac3_never(text):
     assert admin, "AC 3: no `[admin]` paragraph in `### Never in auto mode`"
     joined = " ".join(admin)
     assert re.search(PLAN_ONLY, joined), "AC 3: `### Never in auto mode` lacks ship-as-plan-only for `[admin]`"
-    assert "`ship`" in joined
+    assert "`release-plan`" in joined
     assert OLD_SHIP_BOTH not in _norm(raw), "AC 3: `### Never in auto mode` still says ship stays the user's with both tags"
 
 
 def check_ac3_row19(text):
     row = _norm(table_row(text, 19))
-    assert "`[admin]`" in row and "`ship`" in row and re.search(PLAN_ONLY, row), \
+    assert "`[admin]`" in row and "`release-plan`" in row and re.search(PLAN_ONLY, row), \
         "AC 3: row 19 lacks `ship` as a plan only with `[admin]`"
 
 
@@ -214,9 +214,9 @@ ROW_SHA = {
     3: "8287e283ace7d0f58130cae1c28d607d85dbcf889307ebe13a3e379f95cc689c",
     4: "913e95e2e68d637d5bce8d13daff8bd496f28e2c8b4d9d878d14bb7773b8d658",
 }
-AUTO_LIST = "With `[auto]`, these stay the user's:\n\n- merge;\n- pull;\n- push;\n- `ship`.\n"
+AUTO_LIST = "With `[auto]`, these stay the user's:\n\n- merge;\n- pull;\n- push;\n- `release-plan`.\n"
 ROW19_KEEP = (
-    "| 19 | Stage 5 items 3–6: memory update, merge, Done, `ship` |",
+    "| 19 | Stage 5 items 3–6: memory update, merge, Done, `release-plan` |",
     "Memory update: the Supervisor runs the diff-driven pass before it stops, and writes the `Memory:` line.",
     "Done: after an auto verify pass, the hook moves the row (`### Auto close-out`).",
     "The task waits in Ready for Review until the hook moves it.",
@@ -238,7 +238,7 @@ def check_row19_auto(text):
     for keep in ROW19_KEEP:
         assert keep in row, f"AC 5: row 19 lost {keep!r}"
     # With `[auto]` alone, `ship` is still never run: a clause pairs `ship` with "never".
-    assert re.search(r"`ship`[^.|]*never|never[^.|]*`ship`", row), "AC 5: row 19 no longer says `ship` is never run in auto mode"
+    assert re.search(r"`release-plan`[^.|]*never|never[^.|]*`release-plan`", row), "AC 5: row 19 no longer says `release-plan` is never run in auto mode"
 
 
 def test_ac5_rows_1_to_4_unchanged():
@@ -369,8 +369,9 @@ def test_frozen_hashes_match_base_commit():
         pytest.skip(f"git cannot read {BASE_COMMIT} here (shallow clone?)")
     check_stops_frozen(base, STOPS_SHA)  # T310: the base text keeps the base hash
     check_rows_frozen(base)
-    check_never_auto_list(base)
-    check_row19_auto(base)
+    renamed = base.replace("`ship`", "`release-plan`")  # T352: the skill's only allowed change
+    check_never_auto_list(renamed)
+    check_row19_auto(renamed)
 
 
 # ── Mutation controls ───────────────────────────────────────────────────────────────────────

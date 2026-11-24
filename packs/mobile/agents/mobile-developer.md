@@ -38,7 +38,7 @@ If any file is missing, **stop and notify the Supervisor**.
 - **Common-Infrastructure owns:** CI/CD pipeline, signing certificates, provisioning profiles,
   dependency installs (`flutter pub get` / `pod install`).
 - **QA owns:** device matrix testing, smoke suite, crash reporting baseline.
-- **`ship` skill owns:** app-store submission checklist, release notes, rollback plan.
+- **`release-plan` skill owns:** app-store submission checklist, release notes, rollback plan.
 
 ## Mobile-specific implementation checklist
 

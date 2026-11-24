@@ -50,7 +50,7 @@ STAGE_MAP = {
     "code-review": "stage-4",
     "html-report": "stage-4",
     "security-review": "stage-4",
-    "ship": "stage-5",
+    "release-plan": "stage-5",
     "verify": "stage-5",
 }
 

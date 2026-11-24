@@ -68,7 +68,7 @@ implement, never an Acceptance Criterion, a pipeline stage or a Hard-Stop Gate.
   rewiring for a feature task.
 - **QA owns:** the smoke suite and overall coverage targets. Meet the TASK_GUIDE's criteria; no
   global coverage number.
-- **`ship` skill owns:** deployment/CDN/runbook, never a feature task.
+- **`release-plan` skill owns:** deployment/CDN/runbook, never a feature task.
 
 ## Implementation checklist (apply what the task needs)
 

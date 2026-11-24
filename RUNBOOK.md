@@ -1,7 +1,7 @@
 # RUNBOOK — Personal Agentic Claude (Supervisor harness)
 **Last updated**: 2026-09-05
 
-> Operational runbook: how to deploy, verify, and recover this service. Written/appended by the `ship` skill after Stage 5 verification, and kept current by whoever last touched the deploy path. This is the document an operator opens at 3am — every command must be copy-pasteable and every check must have a pass condition.
+> Operational runbook: how to deploy, verify, and recover this service. Written/appended by the `release-plan` skill after Stage 5 verification, and kept current by whoever last touched the deploy path. This is the document an operator opens at 3am — every command must be copy-pasteable and every check must have a pass condition.
 
 ---
 

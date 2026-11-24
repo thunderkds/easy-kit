@@ -231,7 +231,9 @@ def test_ac4_each_auto_mode_row_keeps_its_rule_and_its_log_label():
             continue
         if a[0] == "19":  # T284 (AC 9) + T307 (AC 3): the `[admin]` exception and `ship` as a plan only
             assert b[2].count(T284_ROW19_OLD) == 1, "row 19: the base text no longer holds T284's anchor"
-            assert a[2] == b[2].replace(T284_ROW19_OLD, T284_ROW19_NEW + T307_ROW19_ADD), \
+            # T352: the Stage 5 skill `ship` is renamed `release-plan`, after T284/T307's clauses.
+            assert a[2] == b[2].replace(T284_ROW19_OLD, T284_ROW19_NEW + T307_ROW19_ADD).replace(
+                "`ship`", "`release-plan`"), \
                 f"row {a[0]}: the rule changed"
             continue
         if a[0] == "18":  # T306: one clause points at the `[admin]` retry; nothing else changes
