@@ -27,7 +27,46 @@ User, 2026-11-24: "the real case is not this machine, so let summary and push, I
 - Every experiment below ran on the **dev machine** (16 cores, 31 GB RAM, ext4, git 2.34.1, no pnpm/sccache/ccache/Go/Gradle). The target machine that runs the agents is a different one: its filesystem, RAM, git version and toolchains are unknown.
 - Findings that do NOT depend on the machine (hold everywhere): G1a, G1b, G1c (flock semantics), G2a (`git branch -D`), G2b and G3a (Claude Code docs), G3b, C1, C4.
 - Findings to re-measure on the target: G3c (concurrent `git worktree add` race; newer git may not fail), S1 (copy-on-write: run `df -T` and the reflink probe), C2 (uv cache on the same filesystem as the worktrees?), C3, and every "not tested" toolchain that is installed there.
-- Next steps on the target: (1) run `## Reproduce on the target machine` below and paste results into `## Experiments` as a new column or rows marked `target`; (2) answer D1–D3; (3) record the Phase 0 baseline (AC 1) on a real repo; (4) then sign the Fidelity Gate.
+- **Done 2026-11-24/25:** (1) reproduce script run on the target machine (rows `E*` and the target table in `## Experiments`); (2) D1–D4 answered; (3) Phase 0 baseline on `easy-note-mcp` (R1, R6–R10); (4) Fidelity Gate confirmed by the user 2026-11-25. Next: `## Run plan`.
+
+---
+
+## Run plan — start here (written 2026-11-25; the user runs it later)
+
+**State:** extended track, C3 / High / P1, Not started on the board. Intent and AC confirmed. No code written. Nothing is pushed: `main` is ahead of `github/main` by the guide commits and the earlier unpushed commits.
+
+**Who codes:** the Supervisor, in the task's worktree, test first (`Skill({ skill: "tdd" })`). No implementer spawn: the four slices below run one after another in one context. One fresh-context reviewer spawn at Stage 4 (`Agent({ description: "Reviewer: T345", … })`).
+
+**Order (do not skip a step):**
+
+1. **Close the gate** (no user decision): add the glossary rows and the `PRD.md` FR (two open boxes in the Fidelity Gate), fill `Requirement Refs`.
+2. **Pin-test pre-flight:** fill the `Pre-existing pin tests` row in `## Files to Change` (grep `.claude/hooks/tests/` and `tests/` for `settings.json` hook lists and `pipeline-stages.md` text; read `test_agent_guide_dedup.py`, `test_vital_slice.py`, the memory budget tests) before the first edit.
+3. **Worktree and board:** `git worktree add ../wt-t345 -b feat/t345-agent-ws` (hooks do not exist yet, so plain `git worktree add`, as for every task today); move the T345 row to In Progress.
+4. **Four vertical slices, each red → green → refactor** (`pytest` file `.claude/hooks/tests/test_agent_ws_t345.py`; commit after each slice):
+   - **Slice 1 — `new`:** `scripts/agent_ws.py new`; lease file; `../wt-<name>`; tmpfs build folder by the D4 rule and the fallback; flock around `git worktree add`; reflink probe; filesystem warning. AC 2, 3, 11, 14, 15, 19. SC 4, 7, 8.
+   - **Slice 2 — `rm` and `gc`:** reuse the rules of `scripts/cleanup_task.py` (import or copy its predicate, do not edit it); lease PID plus start time; remove the tmpfs folder last. AC 9, 10, 16. SC 5, 6, 9.
+   - **Slice 3 — `run`:** `nice -n 19`; opt-in queue with G1a (re-entry), G1b (`flock -o`), G1c (`setsid` plus group kill); `waiting for build slot` message. AC 5–8, 12, 17. SC 1–3, 11.
+   - **Slice 4 — harness:** `.claude/hooks/worktree_create.py`, `worktree_remove.py`, `.claude/settings.json` registration, SessionStart `$CLAUDE_ENV_FILE` export, `docs/claude-md/pipeline-stages.md` wording, stale-reference grep. AC 4, 13, 18. SC 10.
+5. **Live run** (Test Plan): `claude --worktree` and one Agent `isolation: "worktree"` spawn in a scratch repo with the hooks on (AC 4, 13). Then the 3-agent lag test on a `git clone --local` copy of `easy-note-mcp` using the recipe in `## Reproduce the real-repo tests`: expect the `fsync` max under 1 s with the tmpfs default (R10: 0.24 s; on-disk 5–6 s). Paste the output into `tasks/TASK_REVIEW_T345.md`.
+6. **Stage 4:** Ready for Review, auto verify (`python3 .claude/hooks/stop_auto_verify.py --start T345`), the reviewer spawn runs `code-review` and `security-review` (High risk: `/dev/shm` paths and symlinks, `kill` of process groups, PID reuse). `migration-safety`, `blast-radius`: not applicable. UI Evidence rows: ☐ N/A with the reason "no UI".
+7. **Stage 5:** `verify`, the user merges. Follow-up tickets (not registered): Phases 2–4, tmpfs for non-Rust build folders, tmpfs plus sccache, the 80 GB cleanup of existing `easy-note-mcp-*` folders.
+
+**Design points found while writing the plan (decide in slice 1/2, state the choice in the commit):**
+
+- **Untracked pointer file vs AC 9.** The worktree's `.cargo/config.toml` (the tmpfs pointer) is an untracked file, and AC 9 makes `rm` refuse on untracked files. Choice: the lease lists every file `agent-ws` wrote with its hash; AC 9's untracked check ignores exactly those files while they are byte-identical. Not `.git/info/exclude` (shared by all worktrees, hides the user's own file in the main checkout).
+- **Cargo config merging.** `~/.cargo/config.toml` already sets `jobs = 4`, `rustc-wrapper = "sccache"` and the line-tables-only profile. The worktree file may set only `[build] target-dir`; a test must show the other keys still apply (`cargo config get` or a build log), and `agent-ws` never writes the home file.
+- **Claude Code hook contract** (G3a): `WorktreeCreate` prints the absolute path as the last non-empty stdout line, everything else to stderr; non-zero exit fails creation; a path through a symlink under the repo root is rejected; `.worktreeinclude` is not processed. `WorktreeRemove` receives `worktree_path` and must delete the directory and any branch it made, using the same refusal rules (a refusal must leave the worktree and exit non-zero).
+- **Missing lease** (`git worktree add` worktrees such as the existing `../wt-t*` and the 17 `easy-note-mcp-*`): `gc` skips them and says so; it never treats "no lease" as "dead".
+
+**Traps from the experiment sessions (each cost a wasted run):**
+
+- The Bash tool's shell is **zsh**: `R="nice -n 19"; $R cargo …` does not split the variable (exit 127, no output). Put test logic in a `bash` script file. An unmatched glob also aborts a whole zsh command.
+- `pgrep -f <script>` matches the waiting shell itself: a wait loop never ends. Wait on a marker file or a final output line.
+- A `nohup … &` launcher reports "completed" at once; that is the launcher, not the test.
+- `sccache` keeps one server for all clients: a test that sets `SCCACHE_DIR` leaves a server pointing at the deleted test folder, and the user's real builds use it. Run `sccache --stop-server` after such a test.
+- Never build in the user's real worktrees (they hold 5–23 GB `target/` each). Use `git clone --local` into a new folder next to the repos, and delete it after.
+- The scratchpad under `/tmp` is tmpfs here: a filesystem-sensitive test (uv, pnpm, reflink) placed there gives a different answer than ext4. Put such tests under `~/workspace/pets/`.
+- Do not edit `scripts/cleanup_task.py` (Files Must NOT Touch).
 
 ---
 
@@ -50,12 +89,14 @@ User, 2026-11-24, on the Claude Docs plan "Shared Build Base for Multi-Agent Wor
 
 ### Requirement Fidelity Gate (sign off BEFORE implementation)
 
-- [ ] Restated intent confirmed to match the user's request (by Supervisor / user — not the implementing agent)
-- [ ] Domain terms align with `PROJECT_SPEC.md` glossary (`grill-with-docs` run if terminology was fuzzy)
-- [ ] Every Acceptance Criterion below traces to a line in the Requirement
-- [ ] All Requirement Refs exist in `PRD.md` and are fully covered by the Acceptance Criteria above
+- [x] Restated intent confirmed to match the user's request (user, 2026-11-25: "yes, confirmed")
+- [ ] Domain terms align with `PROJECT_SPEC.md` glossary — **open, do first on the run**: add rows for *lease*, *build slot*, *build folder (tmpfs)* and *base worktree*; `grill-with-docs` only if the wording is disputed
+- [x] Every Acceptance Criterion below traces to a line in the Requirement (Supervisor check 2026-11-25: each AC row names its source in the "Traces" column)
+- [ ] All Requirement Refs exist in `PRD.md` and are fully covered by the Acceptance Criteria above — **open, do first on the run**: the guide names none; add one FR to `PRD.md` (worktree + build-folder tooling) and put it in `Requirement Refs`
 - [x] Decisions D1–D3 (below) answered by the user (2026-11-24)
-- [ ] **Revised restated intent and the revised Acceptance Criteria confirmed by the user** (they changed after R1–R10; the two earlier boxes stay open until then)
+- [x] **Revised restated intent and the revised Acceptance Criteria confirmed by the user** (user, 2026-11-25: "yes, confirmed, let note all in the guide, I will run later")
+
+Gate status 2026-11-25: confirmed by the user. Two bookkeeping boxes remain (glossary rows, `PRD.md` FR); they are step 1 of `## Run plan` and need no user decision.
 
 > An agent must NOT start implementing until this gate is checked.
 
@@ -242,6 +283,58 @@ E5 (env reaches subagents) does not depend on the machine; re-run it only if the
 
 ---
 
+## Reproduce the real-repo tests
+
+Used for R1 and R6–R10 on `easy-note-mcp` (Rust). Needs `bash`, `cargo`, `nice`, `python3`. Run with **bash**, not zsh. It builds 3 worktrees of a **local clone**, about 4.2 GB on disk (or RAM for the tmpfs mode), and deletes them. Expect about 100 s per mode, with the machine busy.
+
+Probe (`probe.py`, runs at normal priority, prints p50, p95 and max of three latencies until a stop file appears):
+
+```python
+# ci: skip — manual experiment, not a test
+import os, sys, time, subprocess
+stop, repo, scratch = sys.argv[1], sys.argv[2], sys.argv[3]
+wake, git, io = [], [], []
+n = 0
+while not os.path.exists(stop):
+    t = time.perf_counter(); time.sleep(0.010); wake.append((time.perf_counter() - t - 0.010) * 1000)
+    n += 1
+    if n % 10 == 0:
+        t = time.perf_counter(); subprocess.run(["git", "-C", repo, "status", "--short"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL); git.append((time.perf_counter() - t) * 1000)
+        t = time.perf_counter()
+        with open(os.path.join(scratch, "probe.tmp"), "w") as f:
+            f.write("x" * 4096); f.flush(); os.fsync(f.fileno())
+        io.append((time.perf_counter() - t) * 1000)
+def q(v, p):
+    v = sorted(v); return v[min(len(v) - 1, int(len(v) * p))] if v else float("nan")
+for name, v in (("wake-up delay ms", wake), ("git status ms", git), ("write+fsync ms", io)):
+    print(f"{name:18s} p50 {q(v,.5):7.1f}  p95 {q(v,.95):7.1f}  max {max(v) if v else float('nan'):7.1f}  (n={len(v)})")
+```
+
+Runner (`run.sh`, `S` = folder holding `probe.py`):
+
+```bash
+# ci: skip — manual experiment, not a test
+W=$HOME/workspace/pets/t345-real; rm -rf $W; mkdir -p $W; cd $W      # same filesystem as the real worktrees
+git clone -q --local <path-to-easy-note-mcp> base; git -C base checkout -q --detach origin/HEAD
+git init -q small; (cd small && for i in $(seq 200); do echo $i > f$i; done && git add . && git -c user.email=x@y -c user.name=x commit -qm i)
+for i in 1 2 3; do git -C base worktree add -q --detach ../a$i; done
+export RUSTC_WRAPPER= CARGO_BUILD_JOBS=4                              # your ~/.cargo/config.toml value; sccache off = cold
+run_mode(){ label=$1; envs=$2; tgt=$3                                 # tgt = own | tmpfs
+  rm -rf a?/target /dev/shm/t345/*; sync; sleep 20; rm -f stop; mkdir -p /dev/shm/t345
+  python3 -I $S/probe.py $W/stop $W/small $W > probe.$label & PP=$!; sleep 3; s=$(date +%s)
+  for i in 1 2 3; do
+    [ $tgt = tmpfs ] && T="env CARGO_TARGET_DIR=/dev/shm/t345/a$i" || T=env
+    ( cd a$i && nice -n 19 env $envs $T cargo test --no-run -q >/dev/null 2>&1 ) &
+  done
+  wait $(jobs -p | grep -v $PP); echo "== $label: $(( $(date +%s)-s )) s"; touch stop; wait $PP; cat probe.$label; }
+run_mode control X=1 own;  run_mode tmpfs X=1 tmpfs;  run_mode control2 X=1 own
+rm -rf $W /dev/shm/t345
+```
+
+Queue modes (R7, R8) wrap the command: 1 slot `flock -o $W/locks/slot.0 cargo …`; 2 slots a `runq` loop that tries `flock -n -E 99 -o $W/locks/slot.$i` for `i` in 0 and 1 and sleeps 0.3 s on 99. The stale-build test (R5) appends `pub const T345_MARK: &str = "…";` to one worktree's `src/lib.rs`, builds there, builds the other worktree into the same `CARGO_TARGET_DIR`, and greps `libeasy_note_mcp.rlib` for the marker.
+
+---
+
 ## Dependencies & Reachability
 
 **Depends on**: T327 — `scripts/cleanup_task.py` safe-removal rules (Done)
@@ -342,6 +435,8 @@ Queue (opt-in): one lock file per slot under the shared cache folder; acquire wi
 - [ ] `WorktreeCreate` path through a symlink below repo root is rejected by Claude Code
 - [ ] Subagent worktree left after the subagent finishes (G2b) — `gc` picks it up
 - [ ] Existing `../wt-tNNN` worktrees made by `git worktree add` (no lease file) — `gc` must not treat a missing lease as dead
+- [ ] The untracked tmpfs pointer file (`.cargo/config.toml`) does not make `rm` refuse (lease lists it, hash-checked); a user edit to it does make `rm` refuse
+- [ ] The worktree `.cargo/config.toml` keeps `jobs`, `rustc-wrapper` and the profile from `~/.cargo/config.toml` (only `build.target-dir` changes)
 - [ ] tmpfs fills mid-build (ENOSPC): cargo fails with its own error; `agent-ws` check at `new` time is the only guard — say so in `--help`
 - [ ] Two repos with the same worktree name on one machine: tmpfs folder path includes a repo id, so they do not collide
 - [ ] `/dev/shm` folder exists but belongs to another user, or is a symlink: refuse and fall back to on-disk (AC 15)
