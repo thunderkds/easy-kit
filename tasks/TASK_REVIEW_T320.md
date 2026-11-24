@@ -13,7 +13,7 @@ Reviewer: fresh-context, commit 8e100d20007c3971d02f06a60416429546cc3695, diff m
 | Negative cases hold | ☑ pass | Probe of the two regexes on 50 commands (scratchpad `q.py`, patterns copied verbatim, input run through `strip_heredoc_bodies`/`strip_quoted_spans` as the gate does). Results below. |
 | verify | ☐ N/A | Left for the auto verify hook |
 | Review scope bounded to the change's blast radius (affected set, not whole repo) | ☑ pass | Reviewed: the 2 patterns, `AUTO_MODE_PATTERNS` derivation (line 1431, only drops the rebase pattern, so both new patterns reach auto mode), the new test, `AUTHORISED_TASKS` pin, tracks.md edit. Not reviewed: unrelated gate code. |
-| Full smoke suite still green (no regression) | ☑ pass (scoped) | Gate tests above only; full repo suite not run. |
+| Full smoke suite still green (no regression) | ☑ pass | `uv run --with pytest --with pytest-xdist python -m pytest .claude/hooks/tests tests -q -p no:cacheprovider -n 4` on `434a863`: `56 failed, 7724 passed, 24 skipped`. The same command on `main` (`a0aefe7`) in this environment: `64 failed`. Branch-only failures: `test_step_limit_agent_scope::test_ac1_two_agents_of_one_task_have_two_counters_and_no_shared_block` and `test_auto_verify::test_ac2_a_second_stop_on_the_same_commit_starts_nothing_on_the_minimal_track` — each `1 passed` run alone (load-flaky, same family as `main`'s failures). No failure comes from the gate change. |
 | Companion score (easy-verifier) | ☑ N/A | Not run. |
 | UI rows | ☑ N/A | No UI. |
 
@@ -96,4 +96,36 @@ All return False: `gh api graphql -f query=@merge.gql`, `gh api graphql --input 
 **BEFORE**: round 1 probe had 6 quoted/variable/GraphQL/ref forms returning False.
 **AFTER**: those forms return True; 82 tests pass.
 **DELTA**: one new bypass class found (line continuation).
+**WITNESS**: reviewer run, this file.
+
+## Round 3
+
+Reviewer: fresh-context, commit 434a863b2933fc87b463b310425e01a9245989b7, diff main...434a863 (delta since round 2: one line in `_gh_merge_hit` plus 3 tests, guide cut list). Skills: code-review, security-review (Risk High).
+
+### Verdict: PASS (no P0/P1/P2; round 2 P2-1 fixed; 1 P3 note)
+
+### Evidence
+
+| Check | Result | Notes |
+|-------|--------|-------|
+| Tests | pass | `uv run --with pytest python -m pytest .claude/hooks/tests/test_t320_gh_merge_gate.py .claude/hooks/tests/test_merge_gate_guard.py -q -p no:cacheprovider` -> `85 passed in 1.54s` (82 + 3 new) |
+| Probe | done | 10 commands through `gh_merge_hit` (hook source exec'd with `main()` removed). |
+
+### Round 2 P2-1: fixed
+`command.replace("\\\n", "")` runs first, and the result feeds both the pattern scan and the per-segment loop. Returns True for `gh \<nl>pr merge 1`, `gh pr \<nl>\<nl>merge 1`, `gh pr mer\<nl>ge 1` (split inside the word), `gh pr \<nl>"merge" 1` (continuation plus quote), and the endpoint form `pulls/3/\<nl>merge -X PUT` (new test).
+
+### No new bypass or false positive
+- A plain newline (no backslash) still separates commands: `gh pr view 1<nl>gh pr merge 2` True, as before.
+- Benign continuations stay False: `gh pr view 1 \<nl> --json x`, `gh pr view \<nl> 1; echo merge`, `gh api repos/o/r/pulls/3 \<nl> -q .merged`.
+- `\<CR><LF>` is not joined, and bash does not join it either, so no gap.
+- P3 note: `echo hi \<nl> gh pr merge` returns True (joined into one echo line, the pattern still matches). Over-blocks a contrived case only; same class as round 2 P3-2.
+- The old remaining round 2 P3-1/P3-2/P3-3 are unchanged by this delta; the guide cut list now records them as accepted limits.
+
+### Security review
+The delta is a plain `str.replace` with no regex, so no ReDoS or injection surface. Fail-closed wrapper is unchanged. No other file touched in the code delta.
+
+### Demonstration
+**BEFORE**: 3 line-continuation forms returned False (round 2).
+**AFTER**: all return True; 85 tests pass.
+**DELTA**: round 2 P2-1 closed, no new P2 or above.
 **WITNESS**: reviewer run, this file.
