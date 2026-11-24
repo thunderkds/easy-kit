@@ -223,5 +223,36 @@ for h in "$P6"/.claude/hooks/*.py; do
 done
 [ "$N" -gt 0 ] && [ "$BAD" -eq 0 ] && pass "sc6: $N hooks fed {} exit <= 1 without tests/" || fail "sc6: $BAD of $N hooks exited > 1"
 
+# ── SC11 (T352): a renamed skill — the old name goes, the new name lands ─────
+# rename_ship <upstream>: the kit renames skills/ship to skills/release-plan.
+rename_ship() {
+  git -C "$1" mv skills/ship skills/release-plan
+  printf 'release-plan\n' > "$1/skills/release-plan/SKILL.md"
+  git -C "$1" commit -qam rename-ship
+}
+U11="$WORK/up11"; build_upstream "$U11" new
+mkdir -p "$U11/skills/ship"; printf 'ship\n' > "$U11/skills/ship/SKILL.md"
+git -C "$U11" add -A; git -C "$U11" commit -q -m add-ship
+P11="$WORK/p11"; new_project "$P11"; run_setup "$P11" "$U11" || { fail "sc11: setup failed"; cat "$WORK/setup.log" >&2; }
+rename_ship "$U11"
+RC=0; run_update "$P11" "$U11" || RC=$?
+{ [ "$RC" -eq 0 ] && [ ! -e "$P11/skills/ship" ] && [ -f "$P11/skills/release-plan/SKILL.md" ]; } \
+  && pass "sc11: untouched skills/ship removed, skills/release-plan installed" \
+  || { fail "sc11: rename not applied (rc=$RC)"; cat "$WORK/update.log" >&2; }
+grep -q "removed 'skills/ship'" "$WORK/update.log" && pass "sc11: update names the removed skills/ship" \
+  || fail "sc11: no 'removed skills/ship' line"
+# An edited skills/ship is kept, with a warning, next to the new skill.
+U11b="$WORK/up11b"; build_upstream "$U11b" new
+mkdir -p "$U11b/skills/ship"; printf 'ship\n' > "$U11b/skills/ship/SKILL.md"
+git -C "$U11b" add -A; git -C "$U11b" commit -q -m add-ship
+P11b="$WORK/p11b"; new_project "$P11b"; run_setup "$P11b" "$U11b"
+printf 'my release notes rule\n' >> "$P11b/skills/ship/SKILL.md"
+rename_ship "$U11b"
+run_update "$P11b" "$U11b" || true
+{ grep -q 'my release notes rule' "$P11b/skills/ship/SKILL.md" 2>/dev/null && [ -f "$P11b/skills/release-plan/SKILL.md" ]; } \
+  && pass "sc11: edited skills/ship kept, release-plan installed" || fail "sc11: edited skills/ship lost or release-plan missing"
+grep -q "no longer ships 'skills/ship/SKILL.md'" "$WORK/update.log" && pass "sc11: update warns about the kept skills/ship" \
+  || { fail "sc11: no warning for the kept skills/ship"; cat "$WORK/update.log" >&2; }
+
 printf '\n%s passed, %s failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]
