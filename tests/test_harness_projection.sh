@@ -150,7 +150,7 @@ else
 fi
 # The TRUE half of the original sentence must survive verbatim.
 _missing_true=""
-for _term in "code-review" "security-review" "verify" "ship" "migration-safety" "git-guardrails"; do
+for _term in "code-review" "security-review" "verify" "release-plan" "migration-safety" "git-guardrails"; do
   grep -qF "$_term" "$AGENTS_MD" || _missing_true="$_missing_true $_term"
 done
 if [ -z "$_missing_true" ]; then

@@ -172,7 +172,7 @@ Check every claim in the draft against a source, not against plausibility:
 | 1 Setup | `git-guardrails-claude-code`, `update-config`, `fewer-permission-prompts` |
 | 3 Execution | `tdd`, `diagnose`, `run`, `migration-safety` |
 | 4 Review | `code-review`, `security-review`, `blast-radius`, `html-report` |
-| 5 Integration | `verify`, `ship` |
+| 5 Integration | `verify`, `release-plan` |
 | Cross-cutting | `learn`, `wake`, `compact-memory`, `thinking-report` |
 | Meta | `teach`, `write-better-skill` |
 

@@ -328,6 +328,7 @@ def test_ac2_gates_2_to_6_are_unchanged():
                           check=True, capture_output=True, text=True).stdout
     for n in range(2, 7):
         old = re.search(rf"^{n}\. \*\*.+$", base, re.M).group(0)
+        old = old.replace("`ship`", "`release-plan`")  # T352: the Stage 5 skill's rename
         assert _gate(n) == old, f"Hard-Stop Gate {n} changed"
 
 

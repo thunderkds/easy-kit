@@ -415,7 +415,7 @@
   </ol>
   <div class="flow-lane" data-owner="you" role="group" aria-label="Stays with you in auto mode; with [admin] the Supervisor may merge and push after a passed verify">
     <span class="flow-lane-label">Stays yours with [auto]</span>
-    <ul class="flow-chips"><li class="chip">merge</li><li class="chip">push</li><li class="chip">ship</li></ul>
+    <ul class="flow-chips"><li class="chip">merge</li><li class="chip">push</li><li class="chip">release-plan</li></ul>
   </div>
 </div>
 <details class="more">
@@ -462,10 +462,10 @@
   <strong>Close-out:</strong> after a pass, the hook moves the row to Done only if the run record proves the pass,
   the tests row and the UI rows hold, and the report is complete. With <code>CLAUDE_AUTO_VERIFY=off</code>,
   <code>/verify</code> is yours again for every task without <code>[auto]</code>.
-  <strong>With <code>[auto]</code>, merge, push and ship stay with you.</strong>
+  <strong>With <code>[auto]</code>, merge, push and <code>release-plan</code> stay with you.</strong>
   With <code>[admin]</code> instead, the run is the same, and the Supervisor may also merge and push the task's own branch, and then push <code>main</code>, only after its auto verify passed.
   A task that changes only docs, task files, memory or tests has no runtime surface: when the run answers <code>skip</code>, the hook checks the changed paths in git and records a pass, so you need not type <code>/verify</code>. One path outside that list keeps the result <code>blocked</code>.
-  A force push or a push of any other branch stays blocked. With <code>[admin]</code>, <code>ship</code> runs as a plan only, never a deploy.
+  A force push or a push of any other branch stays blocked. With <code>[admin]</code>, <code>release-plan</code> runs as a plan only, never a deploy.
   The <code>[admin]</code> merge and push also refuse when the repo config holds a key that can run code or reach another host, such as a merge driver, a filter or <code>core.hooksPath</code>; the refusal names the key.
 </p>
 <p>
@@ -942,7 +942,7 @@ Decided by: auto-approve (overwrite all)
     "You own: API endpoints, request/response validation, business logic, data-access code, service-level auth checks, unit/integration tests for your code.",
     "Common-Infrastructure owns: worktrees, env/services, dependency installs, and applying DB migrations. You *write* a migration as part of a slice, but it must clear the migration-safety gate and be applied by Common-Infrastructure — never hand-run schema SQL.",
     "QA owns: the smoke suite and overall coverage targets. Meet the TASK_GUIDE's criteria; don't invent a global coverage number.",
-    "ship skill owns: deployment plan, rollback, runbook. Don't bake deploy/Docker/runbook work into a feature task unless the TASK_GUIDE asks."
+    "release-plan skill owns: deployment plan, rollback, runbook. Don't bake deploy/Docker/runbook work into a feature task unless the TASK_GUIDE asks."
    ],
    "comms": "Use concise, structured messages and always include the Task ID. Notify the Supervisor the moment a task is ready for review. Flag new patterns or learnings to the Supervisor — never write to memory/MEMORY.md directly (Supervisor-only writes). Report format:"
   },
@@ -1104,7 +1104,7 @@ Decided by: auto-approve (overwrite all)
     "Backend owns: API contracts and server logic. Consume the contract in PROJECT_SPEC.md / the TASK_GUIDE; if missing or ambiguous, ask, never invent an endpoint shape.",
     "Common-Infrastructure owns: the build pipeline, dependency installs, env/config; no build rewiring for a feature task.",
     "QA owns: the smoke suite and overall coverage targets. Meet the TASK_GUIDE's criteria; no global coverage number.",
-    "ship skill owns: deployment/CDN/runbook, never a feature task."
+    "release-plan skill owns: deployment/CDN/runbook, never a feature task."
    ],
    "comms": "Use concise, structured messages and always include the Task ID. Notify the Supervisor the moment a task is ready for review. Flag new patterns or learnings to the Supervisor — never write to memory/MEMORY.md directly (Supervisor-only writes). Report format:"
   },
@@ -1868,6 +1868,43 @@ Decided by: auto-approve (overwrite all)
    "stage": "any"
   },
   {
+   "name": "release-plan",
+   "description": "Post-merge release planning (not Claude Code's /ship, which pushes and opens a PR). Use after Stage 5 verification passes (or on \"ship it\" / \"release\" / \"deploy plan\") to turn merged tasks and commits into a detailed, runnable deployment plan, a rollback plan, and user-facing release notes — then append a runbook entry. It PLANS and de-risks the release; the operator executes. Self-contained — reads the repo with git + Read; no external CLI or auto-deploy.",
+   "role": "Release Engineer (Planner, not Deployer)",
+   "kind": "steps",
+   "steps": [
+    {
+     "title": "Establish Release Scope",
+     "note": "Find the last release marker: git tag --sort=-creatordate | head -n 1 (fall back to the last release commit or the runbook's last entry if no tags)."
+    },
+    {
+     "title": "Read Deployment Context",
+     "note": "Read PROJECT_SPEC.md → Deployment target (the exact environment/URL) and Known Risk Areas (what to watch during this release)."
+    },
+    {
+     "title": "Build the Deployment Plan",
+     "note": "Produce a detailed, ordered plan:"
+    },
+    {
+     "title": "Build the Rollback Plan",
+     "note": "Trigger conditions: explicit signals that mandate rollback (health check fails, error rate spike, failed migration)."
+    },
+    {
+     "title": "Write Release Notes",
+     "note": "User-facing changelog grouped by Features / Fixes / Internal, derived from the in-scope tasks (not raw commit noise). Reference Task IDs."
+    },
+    {
+     "title": "Append the Runbook Entry",
+     "note": "Using templates/RUNBOOK_template.md, create the runbook on first release or append a row to its Release Log table (version, date, scope, deployer, outcome). Carry forward deploy/rollback/health-check procedures into the runbook sections."
+    },
+    {
+     "title": "Pre-Flight GO Gate",
+     "note": "Recommend GO only if ALL hold; otherwise NO-GO with the blocking item:"
+    }
+   ],
+   "stage": "5"
+  },
+  {
    "name": "resolve-pr-feedback",
    "description": "Systematically resolve PR review comments after Stage 4 code review. Fetches unresolved threads, triages validity, implements fixes in the current worktree, commits, and replies with context. Use when a PR has open reviewer comments that need addressing before merge.",
    "role": "PR Feedback Resolution Specialist",
@@ -2027,43 +2064,6 @@ Decided by: auto-approve (overwrite all)
     }
    ],
    "stage": "1"
-  },
-  {
-   "name": "ship",
-   "description": "Post-merge release planning. Use after Stage 5 verification passes (or on \"ship it\" / \"release\" / \"deploy plan\") to turn merged tasks and commits into a detailed, runnable deployment plan, a rollback plan, and user-facing release notes — then append a runbook entry. It PLANS and de-risks the release; the operator executes. Self-contained — reads the repo with git + Read; no external CLI or auto-deploy.",
-   "role": "Release Engineer (Planner, not Deployer)",
-   "kind": "steps",
-   "steps": [
-    {
-     "title": "Establish Release Scope",
-     "note": "Find the last release marker: git tag --sort=-creatordate | head -n 1 (fall back to the last release commit or the runbook's last entry if no tags)."
-    },
-    {
-     "title": "Read Deployment Context",
-     "note": "Read PROJECT_SPEC.md → Deployment target (the exact environment/URL) and Known Risk Areas (what to watch during this release)."
-    },
-    {
-     "title": "Build the Deployment Plan",
-     "note": "Produce a detailed, ordered plan:"
-    },
-    {
-     "title": "Build the Rollback Plan",
-     "note": "Trigger conditions: explicit signals that mandate rollback (health check fails, error rate spike, failed migration)."
-    },
-    {
-     "title": "Write Release Notes",
-     "note": "User-facing changelog grouped by Features / Fixes / Internal, derived from the in-scope tasks (not raw commit noise). Reference Task IDs."
-    },
-    {
-     "title": "Append the Runbook Entry",
-     "note": "Using templates/RUNBOOK_template.md, create the runbook on first release or append a row to its Release Log table (version, date, scope, deployer, outcome). Carry forward deploy/rollback/health-check procedures into the runbook sections."
-    },
-    {
-     "title": "Pre-Flight GO Gate",
-     "note": "Recommend GO only if ALL hold; otherwise NO-GO with the blocking item:"
-    }
-   ],
-   "stage": "5"
   },
   {
    "name": "slim-skills",
@@ -3460,7 +3460,7 @@ curl -fsSL https://raw.githubusercontent.com/$GITHUB_USERNAME/easy-kit/main/setu
   </li>
   <li class="flow-step" data-stage="5">
     <h3>Stage 5 — Integration &amp; Verification</h3>
-    <p class="chips"><span class="chip">ship</span><span class="chip">delivery-report</span></p>
+    <p class="chips"><span class="chip">release-plan</span><span class="chip">delivery-report</span></p>
   </li>
 </ol>
 
@@ -3801,7 +3801,7 @@ curl -fsSL https://raw.githubusercontent.com/$GITHUB_USERNAME/easy-kit/main/setu
   everything built on them:
 </p>
 <ul class="lead">
-  <li><code>code-review</code>, <code>security-review</code>, <code>verify</code>, <code>ship</code>,
+  <li><code>code-review</code>, <code>security-review</code>, <code>verify</code>, <code>release-plan</code>,
     <code>migration-safety</code>, and the git-guardrails hook.</li>
   <li>Those stay on the Claude supervisor: an adapter carries the doctrine, and Codex can now run the
     skills it has room for, but the deterministic enforcement layer does not follow.</li>

@@ -37,7 +37,7 @@ If any file is missing, **stop and notify the Supervisor**.
 - **You own:** Terraform modules, K8s manifests, Helm charts, Dockerfiles (platform-level),
   CI/CD pipeline definitions, secrets management wiring, monitoring/alerting rules.
 - **Common-Infrastructure owns:** local worktree setup, dev environment provisioning.
-- **`ship` skill owns:** production deployment plan, rollback runbook, release notes.
+- **`release-plan` skill owns:** production deployment plan, rollback runbook, release notes.
 - **Application developers own:** application code, app-level environment variables.
 
 ## Infrastructure implementation checklist
@@ -78,4 +78,4 @@ Include `terraform plan` summary (resources to add/change/destroy) in the Eviden
 - **GitOps (ArgoCD/Flux)**: requires agreement on sync policy (automated vs manual) — ADR required
 - **Service mesh (Istio/Linkerd)**: significant operational overhead; ADR required
 - **Custom K8s operators/controllers**: only if no off-the-shelf operator exists; C3 complexity
-- **Blue-green / canary deployments**: requires traffic-shifting infra; document in `ship` skill output
+- **Blue-green / canary deployments**: requires traffic-shifting infra; document in `release-plan` skill output

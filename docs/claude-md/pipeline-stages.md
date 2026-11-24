@@ -280,7 +280,7 @@ After all Stage 4 reviews pass:
 
 3. Update `PROJECT_SPEC.md` Memory/Insights section with key learnings.
 
-4. **Memory update** (diff-driven pass — run before `ship`):
+4. **Memory update** (diff-driven pass — run before `release-plan`):
    - `git diff HEAD~1 --name-only` — identify files changed in this merge
    - If `agents/tech-lead.md` and `docs/architecture/README.md` both exist (tech-lead pack, `packs/tech-lead/PACK.md`), match this list against the map's watched paths: on a match, spawn `tech-lead` in refresh mode for the matched documents only; no match (or no watched-paths column), nothing.
    - Grep `memory/decisions.md`, `memory/glossary.md`, `memory/learnings.md` for references to those files
@@ -295,9 +295,9 @@ After all Stage 4 reviews pass:
 
 6. **Post-merge release planning** (once all tasks for the milestone are integrated):
    ```
-   Skill({ skill: "ship" })
+   Skill({ skill: "release-plan" })
    ```
-   Turns the merged tasks/commits into a runnable deployment plan, a rollback plan, and user-facing release notes, then appends a runbook entry. Not in auto mode: `ship` runs after the merge. `ship` **plans and de-risks** the release — it never auto-deploys; the operator executes the plan. A GO also needs the human's approval of the exact `<version> @ <commit>`, recorded in the runbook's Release Log, and the smoke test with its pass condition is written before the deploy step (T149).
+   Turns the merged tasks/commits into a runnable deployment plan, a rollback plan, and user-facing release notes, then appends a runbook entry. Not in auto mode: `release-plan` runs after the merge. `release-plan` **plans and de-risks** the release — it never auto-deploys; the operator executes the plan. A GO also needs the human's approval of the exact `<version> @ <commit>`, recorded in the runbook's Release Log, and the smoke test with its pass condition is written before the deploy step (T149).
 
 Only after all tasks are integrated, announce:
 > "Stage 5: Integration complete. All tasks merged. Project milestone delivered."

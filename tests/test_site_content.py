@@ -1167,7 +1167,7 @@ SKILL_FLOW_GROUPING = {
     "2": {"grill-with-docs", "to-issues"},
     "3": {"tdd", "bugfix", "diagnose", "craft-spawn-prompt", "migration-safety", "ux-evaluate"},  # T245
     "4": {"blast-radius", "code-review", "html-report", "score"},
-    "5": {"ship", "delivery-report"},
+    "5": {"release-plan", "delivery-report"},
 }
 
 

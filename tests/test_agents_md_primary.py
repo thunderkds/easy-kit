@@ -116,6 +116,12 @@ REPLACED_SPANS = [
     ("- **Stage 1** (Environment & Provider Setup): checklist", "- **Stage 1, step Environment** (Set up): checklist"),
     ('- **Stage 1.5** (Sub-Agent Architecture): design the sub-agent team; base team is always Common-Infrastructure/Backend/Frontend/QA; `Skill({ skill: "craft-agent" })` only if an uncovered role is needed.',
      '- **Stage 1, step Agent team** (Sub-Agent Architecture): design the sub-agent team; base team is always Common-Infrastructure/Backend/Frontend/QA; `Skill({ skill: "craft-agent" })` only if an uncovered role is needed. The user is asked to approve the team only when `craft-agent` proposes a role beyond the base team; with the base team alone, state it in one line and go on.'),
+    # T352: the Stage 5 skill `ship` is renamed `release-plan` (Claude Code's built-in `/ship` shadows it).
+    ("5=`ship`,`delivery-report`", "5=`release-plan`,`delivery-report`"),
+    ('`Skill({ skill: "ship" })`', '`Skill({ skill: "release-plan" })`'),
+    ("Stage 5 `ship` produces", "Stage 5 `release-plan` produces"),
+    ("and `ship` may not be invoked", "and `release-plan` may not be invoked"),
+    ("filled before Done or `ship`.**", "filled before Done or `release-plan`.**"),
 ]
 AC6_HEADING = re.compile(r"^## .*cannot enforce", re.IGNORECASE)
 # T178: the one later section allowed outside the opening block and the AC 6 section. Its
@@ -216,7 +222,7 @@ def test_ac6_short_section_names_what_non_claude_clis_cannot_enforce():
     section = _ac6_section()
     assert len(section.splitlines()) <= 10, "the non-Claude CLI section must stay short"
     low = section.lower()
-    for term in ("hooks", "code-review", "security-review", "verify", "ship", "migration-safety",
+    for term in ("hooks", "code-review", "security-review", "verify", "release-plan", "migration-safety",
                  "git-guardrails", ".codex/skills", "8 kb", "codex", "cursor"):
         assert term in low, f"AC 6 section is missing {term!r}"
 

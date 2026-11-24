@@ -212,7 +212,7 @@ def test_field_shapes():
 def test_stage_follows_the_agents_md_index_and_unlisted_goes_to_any():
     by_name = {s["name"]: str(s["stage"]) for s in data_of(ROOT)["skills"]}
     assert by_name["brainstorming"] == "0" and by_name["tdd"] == "3"
-    assert by_name["code-review"] == "4" and by_name["ship"] == "5"
+    assert by_name["code-review"] == "4" and by_name["release-plan"] == "5"
     assert by_name["compact-memory"] == "any"
 
 
