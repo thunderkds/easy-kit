@@ -8,25 +8,27 @@
 
 Mode: auto
 1. Took T375 from the board ("continue your work by picking tasks [admin]") — RULE: `docs/claude-md/tracks.md` `### Admin tag`
-2. Track extended — RULE: `docs/claude-md/tracks.md` `## Track rule`
-3. The Supervisor wrote the code, one fresh `Reviewer: T375` spawn per round — RULE: `docs/claude-md/pipeline-stages.md:198` "the Supervisor writes the code itself, in the task's worktree, test first"
+2. Track extended — RULE: `docs/claude-md/tracks.md` § Track rule (Risk High row)
+3. The Supervisor wrote the code, one fresh `Reviewer: T375` spawn per round (eight rounds, on `c4329f12`, `df05f4ca`, `69bed0e6`, `e38eabcd`, `7f2b4fa4`, `fa996ec3`, `d9b4d205`, `6e04f86b`) — RULE: `docs/claude-md/pipeline-stages.md:198` "the Supervisor writes the code itself, in the task's worktree, test first"
 4. A word the shell still builds (`${x}`, `$x`) next to literal text is read as `*` and globbed; only a real sensitive file asks (the row's "ask on a word the shell still builds when it is next to a sensitive name") — DEBATED: option A, glob (Advocate 1: keep A, record the gaps; Advocate 2: keep A, record the `/` and not-yet-existing-file gaps; Advocate 3: keep A, the smallest safe thing) ⚠ decided for you — please review
-5. Fixed the security finding (an ANSI-C escape in a word hid `find -delete` from `only_reads`, so an `[admin]` call went unlogged) and named the two glob gaps in the header — RULE: `skills/code-review/SKILL.md:142` "#### Phase 4 — Apply Safe Fixes"
-6. Dropped `git commit -m "fix .env bug"` from AC 4: a commit message already asks on `main`, unchanged by this task — FACT: `.claude/hooks/lib/shell_data.py:371` "The default is **keep**."
-Checks: tests `python3 -m pytest -q -p no:cacheprovider .claude/hooks/tests/test_t375_dequote_tokens.py` — red first (`9 failed, 7 passed`), then green; the six sensitive-path suites `93 passed, 186 subtests passed`; reviews code-review (Supervisor, no P0/P1), security-review (1 Low, fixed in `efff9e8a`); fresh reviewer round 1 running on `c4329f12`
+5. Fixed every P0-P2 finding of rounds 1-7 and spawned the reviewer again after each; each fix had a test that was red first — RULE: `skills/code-review/SKILL.md:142` "#### Phase 4 — Apply Safe Fixes". The findings: security review (an ANSI-C escape hid `-delete` from `only_reads`); round 1 (P1 data commands blank quoted spans, P2 `$E.env`, brace next to a quote, a vacuous negative test); round 2 (P1 bare `*` token, P2 wholly quoted built word); round 3 (P2 `*-*` piece, backslash-newline); round 4 (P2 `$` in a spaced span, dot-led glob); round 5 (P2 escaped quote ends the pairing, `./.??`); round 6 (P2 quoted `$(…)` is code); round 7 (P2 a spaced span behind `bash -c`/`eval`/`ssh` is code). Round 8: PASS, no P0-P2
+6. Dropped `git commit -m "fix .env bug"` from AC 4: a commit message already asks on `main`, unchanged by this task — FACT: .claude/hooks/lib/shell_data.py:371 "The default is **keep**."
+7. Left the P3 findings as recorded limits in the hook header (`$(…)` and backtick built parts, short literal prefixes, the folder rule's built parts, `--exclude=".env"`, a comment apostrophe, `${F:-.env}`) — RULE: `skills/code-review/SKILL.md:28` "| **P3** | Style, minor improvement, documentation | Optional |"
+Checks: tests `python3 -m pytest -q -p no:cacheprovider .claude/hooks/tests/test_t375_dequote_tokens.py` — red first in every round, `25 passed, 95 subtests passed` at the end; the six sensitive-path suites and `test_t342_quoted_glob.py` `119 passed, 299 subtests passed`; full hook tests `python3 -m pytest -q -p no:cacheprovider .claude/hooks/tests` on `6e04f86b` — `5 failed, 5785 passed`, the same 5 MEMORY.md budget failures as `main` (`5 failed, 5760 passed`); reviews code-review (Supervisor), security-review (Supervisor, 1 Low fixed), fresh reviewer rounds 1-8 (round 8 PASS)
 Memory: nothing new
-Not done: merge (admin: after the auto verify pass and the reviewer's last round); auto verify: not run yet
+Not done: merge (admin: after the auto verify pass; the user typed `merge T375 [admin]`); auto verify: running (T182)
+Paused: auto-mode check failed — Risk High: decision 2 (`RULE`) is a choice — its RULE cites no written rule (`path:line`, `path § <heading>` or `docs/claude-md/tracks.md` `### <section>`) — so it must be `DEBATED` with exactly 3 Advocates named; Risk High: decision 6 (`FACT`) is a choice — its FACT has no Citation (`path:line "quoted text"`) — so it must be `DEBATED` with exactly 3 Advocates named [report 4da8d738fa87]
 
 ## Evidence
 
 | Check | Result | Notes / output snippet |
 |-------|--------|------------------------|
-| **New test(s) cover Acceptance Criteria (file paths pasted)** | ☑ pass | `.claude/hooks/tests/test_t375_dequote_tokens.py` (AC 1–6 and the security pin) |
-| Verification command run | ☑ pass | the guide's six suites: `93 passed, 186 subtests passed in 21.41s` (before the security fix); the new file after it: `9 passed, 21 subtests passed` |
-| Negative cases hold | ☑ pass | red run on `main` before the change: `9 failed, 7 passed, 12 subtests passed in 1.47s`; the security pin was red before its fix (`1 failed, 8 passed`) |
+| **New test(s) cover Acceptance Criteria (file paths pasted)** | ☑ pass | `.claude/hooks/tests/test_t375_dequote_tokens.py` (AC 1–6, the security pin and one test per review round) |
+| Verification command run | ☑ pass | the guide's command plus `test_t342_quoted_glob.py`: `119 passed, 299 subtests passed`; the new file alone at `6e04f86b`: `25 passed, 95 subtests passed` |
+| Negative cases hold | ☑ pass | red on `main` before the change: `9 failed, 7 passed, 12 subtests passed in 1.47s`; every later round's tests were red before their fix (security `1 failed`; round 1 `12 failed`; round 2 `17 failed`; round 3 `7 failed`; round 4 `11 failed`; round 5 `8 failed`; round 6 `6 failed`; round 7 `6 failed`); the only-a-variable guard fails 4 tests when removed |
 | verify | ☐ pass / ☐ fail / ☐ N/A | the auto verify hook writes this row |
-| Review scope bounded to the change's blast radius (affected set, not whole repo) | ☑ pass | the hook, its list header and its tests; the lane check printed `EXCEEDS (lines 304 > 250)`, the new test file is most of it |
-| Full smoke suite still green (no regression) | ☐ pass / ☐ fail | hook tests: `6 failed, 5768 passed`; the MEMORY.md budget failure fails on `main` too; the other five are not yet compared with `main`. The root `tests/` run: `89 failed` in one full run, all with `getcwd() failed`; the same six files run alone give `2 failed, 244 passed` on both `main` and the branch |
+| Review scope bounded to the change's blast radius (affected set, not whole repo) | ☑ pass | the hook, its list header and its tests; the lane check printed `EXCEEDS (lines 304 > 250)` at the first commit, the new test file is most of it |
+| Full smoke suite still green (no regression) | ☑ pass | hook tests: `5 failed, 5785 passed`, the same 5 failures as `main` (MEMORY.md budget); root `tests/`: the six files the first run failed give `2 failed, 244 passed` on both `main` and the branch (the 89 failures of one full run were `getcwd() failed` noise) |
 | **Companion score (easy-verifier)** | ☐ N/A | tool not used |
 
 ---
