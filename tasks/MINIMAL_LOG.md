@@ -409,7 +409,8 @@ Mode: auto
 - New test `tests/test_site_content.py::test_layout_table_base_template_lives_in_templates_row` — 1 failed before the fix (agents/ row still named general-agent-template), passed after the fix
 - BEFORE (2026-11-25T07:29:46Z, `python3 -m pytest -q -p no:cacheprovider tests/test_site_content.py`): `1 failed, 145 passed in 0.58s` — `AssertionError: agents/ row still names general-agent-template`
 - AFTER (2026-11-25T07:29:56Z, same command): `146 passed in 0.39s`
-- verify: running (T182)
+- verify: ☑ pass — auto-run by hook, session 68726f02-e802-49e5-b4df-0e96ee203bb0, commit 525a7894d24100a39318fdbd46a813a3eaf4b0f8, log .claude/verify-runs/T304-525a7894d241.log
 **Memory:** nothing new
 **Files:** `site/docs.html` (agents/ row drops the base-template mention; templates/ row names it with the folder-structure.md wording), `tests/test_site_content.py` (new layout-row test), `tasks/MINIMAL_LOG.md`
-**Not done:** merge (admin: after the auto verify pass); auto verify: running (T182)
+**Not done:** merge (admin: after the auto verify pass); auto verify: ☑ pass (session 68726f02-e802-49e5-b4df-0e96ee203bb0, commit 525a7894d24100a39318fdbd46a813a3eaf4b0f8, log .claude/verify-runs/T304-525a7894d241.log)
+Closed: row moved to Done 2026-11-25 — auto verify pass (session 68726f02-e802-49e5-b4df-0e96ee203bb0, commit 525a7894d24100a39318fdbd46a813a3eaf4b0f8); Gates 5 and 6 checked
