@@ -74,7 +74,9 @@ Words (T375): a word that holds a quote, a backslash or `$'…'` is also read as
 
 Recorded limitations (cut list, TASK_GUIDE_T146; T363; T375):
 * A word that is only a variable (`cat "$F"`), `eval`, `$'\x65'` escapes, and the code of
-  `python -c` / `node -e` spans are not resolved (T363 option C, T375).
+  `python -c` / `node -e` spans are not resolved (T363 option C, T375). A built part is a `*`:
+  it stays in one folder (a variable holding `/` is missed) and it finds only a file that exists
+  (`echo x > .env$x` with no `.env` is silent) (T375 Debate).
 * The folder rule knows only the verbs above: `git reset --hard`, `git clean`, `git stash`,
   `cp -r`, `rsync --delete`, `tar -x`, `ln -sf`, a script or an alias acting on a folder do not
   ask (T363 option C). Nor does a destructive command inside quoted code (`bash -c "rm -rf x"`,
@@ -737,6 +739,8 @@ def only_reads(tool_name, tool_input):
     seen = False
     for segment in SEGMENT_BOUNDARY_PATTERN.split(text):
         # the shell drops quotes and backslashes inside a word (`-de''lete` is `-delete`)
+        if re.search(r"\$['\"][^'\"]*\\", segment):
+            return False  # security review: `$'\x65lete'` decodes to `elete`; dequoting would hide it
         words = [shell_word(w) for w in segment.split()]
         words = [w for w in words if w]
         if not words:

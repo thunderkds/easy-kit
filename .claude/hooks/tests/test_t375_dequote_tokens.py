@@ -68,6 +68,14 @@ class AdminPins(t371.AdminApproval):
                 self.assert_approved(self.pre("Bash", cmd))
         self.assertEqual(len(self.log_lines()), 2)
 
+    def test_sec1_an_ansi_c_escape_in_a_word_is_not_a_read(self):
+        """Security review: `$'\\x65lete'` is `elete` to the shell, so `-d$'\\x65lete'` is `-delete`;
+        dropping its `$` and backslash made the call look read-only, so it was not logged."""
+        for cmd in ("cat config/.env && find build -d$'\\x65lete'", "cat config/.env && find build -d$\"\\x65lete\""):
+            with self.subTest(command=cmd):
+                self.assert_approved(self.pre("Bash", cmd))
+        self.assertEqual(len(self.log_lines()), 2)
+
     def test_ac5_an_empty_command_is_not_a_read(self):
         import importlib.util
         spec = importlib.util.spec_from_file_location(
