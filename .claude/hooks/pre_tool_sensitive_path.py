@@ -48,8 +48,19 @@ data (T099's three fail-opens came from fresh regexes). Quoted spans T099 classe
 as executable are kept, so `bash -c "cat > .env"` still asks. What is left is
 split into tokens and each token is checked as a path.
 
-Recorded limitations (cut list, TASK_GUIDE_T146):
-* Paths built from variables (`cat "$F"`) are not resolved.
+Folder-level calls (T363, option C): a Bash segment whose command is `rm -r`, `find` with
+`-delete`/`-exec`/`-execdir`/`-ok`/`-okdir`, `mv`, or `git checkout`/`git restore` asks when one of
+its arguments is a folder, under the project root or the cwd, that holds a sensitive path: a
+bounded walk (`FOLDER_WALK_MAX`, `.git` skipped) finds a listed or protected file in it, or the
+walk cannot finish. A `cd`/`pushd` segment moves the folder later segments resolve against. A
+`{a,b}` brace token is expanded and each expansion is checked as a path.
+
+Recorded limitations (cut list, TASK_GUIDE_T146; T363):
+* Paths built from variables (`cat "$F"`, `${f}itive-paths.txt`), `eval`, and the code of
+  `python -c` / `node -e` spans are not resolved (T363 option C).
+* The folder rule knows only the verbs above: `git reset --hard`, `git clean`, `git stash`,
+  `cp -r`, `rsync --delete`, `tar -x`, `ln -sf`, a script or an alias acting on a folder do not
+  ask (T363 option C). A folder outside both roots is never walked (a sibling worktree).
 * A Bash command that only *reads* a sensitive path (`grep KEY .env`) asks too —
   reads and writes are not cheaply distinguishable in a command string.
 * A glob inside a kept quoted span is expanded too, as code (T342), except when the
@@ -140,6 +151,20 @@ BACKTICK_SPAN_PATTERN = re.compile(r"`([^`]+)`")
 # strip_quoted_spans treats every quoted span behind `echo`/`printf` as data,
 # but a redirect target is where the output is written, not data.
 QUOTED_REDIRECT_TARGET_PATTERN = re.compile(r"""(?:&|\d*)>[>|]?\s*(?:"([^"]*)"|'([^']*)')""")
+# T363 (option C): a segment whose command deletes or moves a whole folder asks when one of its
+# arguments is a folder that holds a sensitive path. The verbs are C's list; any other verb is a
+# recorded limitation (header). `rm` and `find` count only with the flags that act on a tree.
+FOLDER_VERBS = {"rm", "find", "mv", "git"}
+RM_TREE_FLAGS = re.compile(r"-[A-Za-z]*[rR]|--recursive\Z")
+FIND_ACTION_FLAGS = {"-delete", "-exec", "-execdir", "-ok", "-okdir"}
+GIT_FOLDER_SUBCOMMANDS = {"checkout", "restore"}
+COMMAND_PREFIXES = {"sudo", "env", "command", "nice", "nohup", "time", "exec"}
+DIR_CHANGE_COMMANDS = {"cd", "pushd"}
+# The walk of a folder stops after this many entries; a folder it could not finish counts as
+# holding a sensitive path (toward the human). Overridable for tests.
+FOLDER_WALK_MAX = 20000
+FOLDER_WALK_ENV = "CLAUDE_SENSITIVE_FOLDER_WALK_MAX"
+BRACE_PATTERN = re.compile(r"\{[^{}]*,[^{}]*\}")
 
 
 # --- Pattern file ------------------------------------------------------------
@@ -299,6 +324,8 @@ def command_tokens(command, cwd):
     for match in TOKEN_PATTERN.finditer(text):
         start, end = match.span()
         tokens.append(match.group())
+        if BRACE_PATTERN.search(match.group()):  # T363: `.claude/{a,b}` names both paths
+            tokens.extend(expand_braces(match.group()))
         if GLOB_CHARS.search(masked[start:end]):
             matches = glob.iglob(os.path.join(cwd, match.group()), recursive=True)
             tokens.extend(itertools.islice(matches, MAX_GLOB_MATCHES))
@@ -459,6 +486,101 @@ def file_key(path, cwd, root):
     return None if is_state_key(key) else key
 
 
+def _walk_cap():
+    try:
+        return max(0, int(os.environ.get(FOLDER_WALK_ENV, FOLDER_WALK_MAX)))
+    except ValueError:
+        return FOLDER_WALK_MAX
+
+
+def held_sensitive_path(folder, cwd, roots, patterns):
+    """`(path, pattern)` of the first sensitive file under `folder`, or None. `.git` is skipped. A
+    walk that reaches the cap, or cannot list a folder, counts as a hit (T363 AC 4)."""
+    cap, seen = _walk_cap(), 0
+    errors = []
+    for top, dirs, files in os.walk(folder, onerror=errors.append):
+        dirs[:] = [d for d in dirs if d != ".git"]
+        for name in files:
+            seen += 1
+            if seen > cap:
+                return (folder, f"more than {cap} files, not all checked")
+            path = os.path.join(top, name)
+            pattern = matching_pattern(path_forms(path, cwd, roots), patterns)
+            if pattern:
+                return (path, pattern)
+        if errors:
+            return (folder, "a folder that could not be read")
+    return None
+
+
+def _segment_command(words):
+    """The command word of a segment and its arguments, past `VAR=value` words and the
+    `COMMAND_PREFIXES` wrappers (`sudo`, `env`, …) and their options; a path prefix is dropped."""
+    i = 0
+    while i < len(words):
+        word = words[i]
+        if re.match(r"[A-Za-z_]\w*=", word):
+            i += 1
+        elif os.path.basename(word) in COMMAND_PREFIXES:
+            i += 1
+            while i < len(words) and words[i].startswith("-"):
+                i += 1
+        else:
+            return os.path.basename(word), words[i + 1:]
+    return None, []
+
+
+def _folder_arguments(verb, args):
+    """The arguments a destructive `verb` acts on as a tree, or [] when this use is not one."""
+    paths = [a for a in args if not a.startswith("-") and a not in ("{}", ";", "+")]
+    if verb == "rm":
+        return paths if any(RM_TREE_FLAGS.match(a) for a in args) else []
+    if verb == "find":
+        if not FIND_ACTION_FLAGS.intersection(args):
+            return []
+        start = []
+        for a in args:  # find's start paths come before the first expression word
+            if a.startswith(("-", "(", "!")):
+                break
+            start.append(a)
+        return start or ["."]
+    if verb == "mv":
+        return paths
+    if verb == "git":
+        sub = next((a for a in args if not a.startswith("-")), None)
+        if sub not in GIT_FOLDER_SUBCOMMANDS:
+            return []
+        return paths[1:]
+    return []
+
+
+def folder_hits(command, cwd, roots, patterns):
+    """T363 (option C): `[(folder, forms, pattern)]` for each folder a destructive segment acts on
+    that holds a sensitive path. A folder under neither root is skipped (a sibling worktree). A
+    `cd`/`pushd` segment moves the folder later segments resolve against."""
+    text = strip_quoted_spans(strip_heredoc_bodies(command))
+    hits, where = [], cwd
+    for segment in SEGMENT_BOUNDARY_PATTERN.split(text):
+        words = [w.strip("\"'()") for w in segment.split()]
+        verb, args = _segment_command([w for w in words if w and not w.startswith(("<", ">", "2>", "&>"))])
+        if verb in DIR_CHANGE_COMMANDS:
+            target = next((a for a in args if not a.startswith("-")), None)
+            where = os.path.normpath(os.path.join(where, os.path.expanduser(target))) if target else where
+            continue
+        if verb not in FOLDER_VERBS:
+            continue
+        for arg in _folder_arguments(verb, args):
+            folder = os.path.normpath(os.path.join(where, os.path.expanduser(arg)))
+            if not os.path.isdir(folder) or not any(
+                    _within(folder, r) or os.path.realpath(folder) == os.path.realpath(r)
+                    for r in roots):
+                continue
+            found = held_sensitive_path(folder, cwd, roots, patterns)
+            if found:
+                hits.append((arg, path_forms(folder, cwd, roots), found[1]))
+    return hits
+
+
 def sensitive_hits(tool_name, tool_input, cwd, roots, patterns):
     """`[(path, forms, pattern), ...]` for every sensitive path of the call.
 
@@ -477,6 +599,8 @@ def sensitive_hits(tool_name, tool_input, cwd, roots, patterns):
             pattern = STATE_PATTERN
         if pattern:
             hits.append((path, forms, pattern))
+    if tool_name == "Bash":
+        hits.extend(folder_hits(tool_input["command"], cwd, roots, patterns))
     return hits
 
 
