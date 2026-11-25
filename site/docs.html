@@ -466,15 +466,18 @@
   <strong>With <code>[auto]</code>, merge, push and <code>release-plan</code> stay with you.</strong>
   With <code>[admin]</code> instead, the run is the same, and the Supervisor may also merge and push the task's own branch, and then push <code>main</code>, only after its auto verify passed.
   A task that changes only docs, task files, memory or tests has no runtime surface: when the run answers <code>skip</code>, the hook checks the changed paths in git and records a pass, so you need not type <code>/verify</code>. One path outside that list keeps the result <code>blocked</code>.
+  A changed shell test suite (<code>tests/**/test_*.sh</code>) is never in that list: the request names it, and the run must answer <code>PASS</code> or <code>FAIL</code> by its exit code.
+  With <code>[admin]</code>, a <code>fail</code> starts a fix round: the Supervisor fixes the cause, a fresh reviewer checks the new commit, and the run starts again, at most 2 times.
   A force push or a push of any other branch stays blocked. With <code>[admin]</code>, <code>release-plan</code> runs as a plan only, never a deploy.
   The <code>[admin]</code> merge and push also refuse when the repo config holds a key that can run code or reach another host, such as a merge driver, a filter or <code>core.hooksPath</code>; the refusal names the key.
+  <strong>Push remote:</strong> <code>[admin]</code> and <code>[ticket]</code> push to <code>origin</code>. If your remote has another name, add it to your own <code>.claude/settings.local.json</code> as <code>"env": { "EASY_KIT_ADMIN_REMOTE": "&lt;name&gt;" }</code> and restart Claude Code. It names one remote; a value that is not a plain remote name blocks every push.
 </p>
 <p>
   <strong>Session tags</strong>: <code>[ticket]</code> and <code>[admin]</code> hold for the whole session. <code>[auto]</code> holds for one request only.
   <code>[stop]</code>, or a request with another tag, ends a session tag. A resume, continue or fork ends it too. <code>/compact</code> does not.
   While a session tag holds, the Supervisor works the board one ready ticket at a time, highest Priority first. It runs each ticket in auto mode, starts its auto verify and waits.
-  After a pass, <code>[ticket]</code> pushes only the task branch to <code>origin</code>. <code>[admin]</code> merges the task branch into <code>main</code> and pushes <code>main</code>.
-  After <code>blocked</code> or <code>fail</code>, it pushes and merges nothing. It opens no pull request.
+  After a pass, <code>[ticket]</code> pushes only the task branch to its push remote (<code>origin</code> unless <code>EASY_KIT_ADMIN_REMOTE</code> names another). <code>[admin]</code> merges the task branch into <code>main</code> and pushes <code>main</code>.
+  After <code>blocked</code> (once more after one retry), or a <code>fail</code> its 2 fix rounds did not clear, it pushes and merges nothing. It opens no pull request.
   No tag approves a tool call. To run Bash without prompts, apply the <code>settings-setup</code> profile <code>autonomous</code> (<code>permissions.defaultMode: "auto"</code>). The kit never sets <code>bypassPermissions</code>.
 </p></details>
 </section>

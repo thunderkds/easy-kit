@@ -520,3 +520,22 @@ Mode: auto
 **Not done:** merge (admin: after the auto verify pass); push (yours until `EASY_KIT_ADMIN_REMOTE=github` is set); auto verify: ☑ pass (session 894ef12b-805b-466d-8046-56ccf869a3bd, commit 8d99a3524c0fb3d7b56025e8a7791ebfc7f38eea, log .claude/verify-runs/T367-8d99a3524c0f.log); T368 (merged) fixes that cause, so this run is the fix round for it, against the written stop after a second blocked run (`docs/claude-md/tracks.md` `### Admin tag`, T306) ⚠ decided for you — please review
 Paused: done not moved — Gate 5: no `New test` line with its result under `Checked:`
 Closed: row moved to Done 2026-11-25 — auto verify pass (session 894ef12b-805b-466d-8046-56ccf869a3bd, commit 8d99a3524c0fb3d7b56025e8a7791ebfc7f38eea); Gates 5 and 6 checked
+
+## T373 — the docs page tells users how to set the `[admin]` push remote, and says what T368 changed · minimal
+Mode: auto
+**Asked:** "with this, do we need to add the guide for that"
+**Decisions:**
+1. Track minimal — RULE: docs/claude-md/tracks.md § Track rule (C1, Risk Low: text in one existing docs section)
+2. Name the personal `.claude/settings.local.json`, not the kit's `.claude/settings.json`: the kit's file is copied into every project — FACT: MANIFEST:42 "# NOTE: .claude/settings.json is deployed by setup.sh as a per-project COPY"
+3. Also correct the same section's T368-stale sentences (a tests-only skip; "after blocked or fail") — RULE: .claude/skills/code-review/SKILL.md § Phase 0.5 "Stale-reference sweep (T259)"
+**Checked:**
+- New test: none added — text only; the site suites are the check: `python3 -m pytest tests/test_site_story.py tests/test_site_visual_first.py tests/test_site_content.py -q` → `2 failed, 212 passed`; the 2 are on `main` before this change (T304's `#repository-layout`: 157 visible words, 2 lost baseline sentences), none from T373; the edited paragraphs are in no pinned baseline
+- BEFORE: the `#tracks` `details.more` text said "A task that changes only docs, task files, memory or tests has no runtime surface…", "After `blocked` or `fail`, it pushes and merges nothing.", "`[ticket]` pushes only the task branch to `origin`", and named no push-remote setting
+- AFTER: it names `EASY_KIT_ADMIN_REMOTE` in `.claude/settings.local.json` `"env"` (restart Claude Code), the shell-suite run, the 2 fix rounds, and the push remote for `[ticket]`
+- Reviewer: T373 (fresh qa-expert, commit `0ddcdac1`) PASS, 0 P0–P2: every new sentence checked against `_admin_remote`, `verify_request`/`shell_suites_changed` and `tracks.md` `### Admin tag`; HTML well formed, inside `details.more`; 2 P3 left (the page names `.claude/settings.local.json`, `tracks.md` names `.claude/settings.json`: both work, the hook reads the environment; the page does not say the refusal names the bad value)
+- verify: ☑ pass — auto-run by hook, session a6b7b9ec-ed03-4627-9ca9-8239f8627059, commit 2a08fa7520d17a55dba839a06dcec1e35a2cc795, log .claude/verify-runs/T373-2a08fa7520d1.log
+**Memory:** nothing new
+**Files:** `site/docs.html` (`#tracks` details text), `tasks/MINIMAL_LOG.md`
+**Not done:** merge (admin: after the auto verify pass); push (yours until `EASY_KIT_ADMIN_REMOTE=github` is set); auto verify: ☑ pass (session a6b7b9ec-ed03-4627-9ca9-8239f8627059, commit 2a08fa7520d17a55dba839a06dcec1e35a2cc795, log .claude/verify-runs/T373-2a08fa7520d1.log); the 2 pre-existing `#repository-layout` failures from T304 (not this task)
+Paused: auto-mode check failed — no test run in memory/event-trace/T373.jsonl — write /home/thunderkds/workspace/pets/hungnguyen111/easy-kit/.claude/hooks/.state/active_task.d/$CLAUDE_CODE_SESSION_ID with the task ID (minimal-track step 1): `mkdir -p /home/thunderkds/workspace/pets/hungnguyen111/easy-kit/.claude/hooks/.state/active_task.d && printf '%s\n%s\n' "T373" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > /home/thunderkds/workspace/pets/hungnguyen111/easy-kit/.claude/hooks/.state/active_task.d/$CLAUDE_CODE_SESSION_ID`, then rerun the task's tests so the trace records them under the task, then stop [report c67dfed0e362]
+Closed: row moved to Done 2026-11-25 — auto verify pass (session a6b7b9ec-ed03-4627-9ca9-8239f8627059, commit 2a08fa7520d17a55dba839a06dcec1e35a2cc795); Gates 5 and 6 checked
