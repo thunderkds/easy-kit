@@ -291,3 +291,187 @@ def test_cargo_target_dir_in_environment_warns(tmp_path, env):  # AC 18
     repo = make_repo(tmp_path, rust=True)
     r = ws(repo, {**env, "CARGO_TARGET_DIR": str(tmp_path / "shared")}, "new", "w1")
     assert r.returncode == 0 and "CARGO_TARGET_DIR" in r.stderr
+
+
+# ── Slice 2: rm and gc ───────────────────────────────────────────────────────────────────────
+
+
+def commit_in(path, fname="w.txt"):
+    (path / fname).write_text("work\n")
+    git(path, "add", fname)
+    git(path, "commit", "-qm", "work")
+
+
+def branches(repo):
+    return git(repo, "for-each-ref", "--format=%(refname:short)", "refs/heads").stdout.split()
+
+
+def test_rm_removes_clean_merged_worktree_branch_and_lease(tmp_path, env):
+    repo = make_repo(tmp_path)
+    ws(repo, env, "new", "m1")
+    r = ws(repo, env, "rm", "m1")
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert not (tmp_path / "wt-m1").exists() and "agent-ws/m1" not in branches(repo)
+    assert not os.path.exists(os.path.join(repo, ".git", "agent-ws", "leases", "m1.json"))
+
+
+def test_rm_accepts_the_worktree_path(tmp_path, env):
+    repo = make_repo(tmp_path)
+    path = ws(repo, env, "new", "m2").stdout.strip()
+    assert ws(repo, env, "rm", path).returncode == 0
+    assert not os.path.exists(path)
+
+
+@pytest.mark.parametrize("dirt", ["unmerged", "modified", "untracked", "process"])
+def test_rm_refuses_and_removes_nothing(tmp_path, env, dirt):  # AC 9
+    repo = make_repo(tmp_path)
+    ws(repo, env, "new", "d1")
+    wt = tmp_path / "wt-d1"
+    proc = None
+    if dirt == "unmerged":
+        commit_in(wt)
+    elif dirt == "modified":
+        (wt / "README").write_text("changed\n")
+    elif dirt == "untracked":
+        (wt / "new.txt").write_text("x\n")
+    else:
+        proc = subprocess.Popen(["sleep", "30"], cwd=wt)
+    try:
+        r = ws(repo, env, "rm", "d1")
+        assert r.returncode == 1, r.stdout + r.stderr
+        assert "refused" in r.stderr
+        assert wt.is_dir() and "agent-ws/d1" in branches(repo)
+        assert os.path.exists(os.path.join(repo, ".git", "agent-ws", "leases", "d1.json"))
+    finally:
+        if proc:
+            proc.kill()
+            proc.wait()
+
+
+def test_rm_never_forces(tmp_path):
+    text = open(SCRIPT).read()
+    assert "--force" not in text and '"-D"' not in text and "'-D'" not in text
+
+
+def test_rm_ignores_its_own_pointer_file_but_not_a_user_edit(tmp_path, env, shm):
+    repo = make_repo(tmp_path, rust=True)
+    e = {**env, "AGENT_WS_TMPFS_CANDIDATES": shm}
+    ws(repo, e, "new", "p1")
+    build = lease_of(repo, "p1")["build_dir"]
+    assert ws(repo, e, "rm", "p1").returncode == 0  # SC 9: untouched pointer: rm goes ahead
+    assert not (tmp_path / "wt-p1").exists() and not os.path.exists(build)
+    ws(repo, e, "new", "p2")
+    cfg = tmp_path / "wt-p2" / ".cargo" / "config.toml"
+    cfg.write_text(cfg.read_text() + "[alias]\nx = \"build\"\n")
+    r = ws(repo, e, "rm", "p2")
+    assert r.returncode == 1 and cfg.exists() and os.path.isdir(lease_of(repo, "p2")["build_dir"])
+
+
+def test_rm_keeps_tmpfs_folder_when_refused(tmp_path, env, shm):  # SC 9 second half
+    repo = make_repo(tmp_path, rust=True)
+    e = {**env, "AGENT_WS_TMPFS_CANDIDATES": shm}
+    ws(repo, e, "new", "p3")
+    commit_in(tmp_path / "wt-p3")
+    build = lease_of(repo, "p3")["build_dir"]
+    assert ws(repo, e, "rm", "p3").returncode == 1
+    assert os.path.isdir(build) and (tmp_path / "wt-p3").is_dir() and "agent-ws/p3" in branches(repo)
+
+
+def test_rm_after_reboot_tmpfs_gone_is_no_error(tmp_path, env, shm):  # AC 16
+    repo = make_repo(tmp_path, rust=True)
+    e = {**env, "AGENT_WS_TMPFS_CANDIDATES": shm}
+    ws(repo, e, "new", "b1")
+    ws(repo, e, "new", "b2", "--owner-pid", str(dead_pid()))
+    shutil.rmtree(os.path.join(shm, f"agent-ws-{os.getuid()}"))  # what a reboot does
+    assert ws(repo, e, "rm", "b1").returncode == 0
+    r = ws(repo, e, "gc")
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert not (tmp_path / "wt-b2").exists()
+
+
+@pytest.mark.skipif(not HAS_CARGO, reason="cargo not installed")
+def test_cargo_recreates_build_folder_after_reboot(tmp_path, env, shm):  # AC 16
+    repo = make_repo(tmp_path, rust=True)
+    ws(repo, {**env, "AGENT_WS_TMPFS_CANDIDATES": shm}, "new", "b3")
+    build = lease_of(repo, "b3")["build_dir"]
+    shutil.rmtree(os.path.join(shm, f"agent-ws-{os.getuid()}"))
+    cenv, _ = cargo_env(env, tmp_path)
+    r = ws(tmp_path / "wt-b3", cenv, "run", "--", "cargo", "build", "-q", timeout=300)
+    assert r.returncode == 0, r.stderr
+    assert os.path.isdir(os.path.join(build, "debug"))
+    assert stat.S_IMODE(os.lstat(os.path.join(shm, f"agent-ws-{os.getuid()}")).st_mode) == 0o700
+
+
+def test_gc_keeps_unmerged_work_of_a_dead_owner(tmp_path, env):  # SC 5
+    repo = make_repo(tmp_path)
+    ws(repo, env, "new", "g1", "--owner-pid", str(dead_pid()))
+    commit_in(tmp_path / "wt-g1")
+    r = ws(repo, env, "gc")
+    assert r.returncode == 1 and "not merged" in r.stdout + r.stderr
+    assert (tmp_path / "wt-g1").is_dir() and "agent-ws/g1" in branches(repo)
+
+
+def test_gc_removes_merged_clean_worktree_of_a_dead_owner(tmp_path, env):  # SC 6, AC 10
+    repo = make_repo(tmp_path)
+    ws(repo, env, "new", "g2", "--owner-pid", str(dead_pid()))
+    commit_in(tmp_path / "wt-g2")
+    git(repo, "merge", "-q", "--ff-only", "agent-ws/g2")
+    r = ws(repo, env, "gc")
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert not (tmp_path / "wt-g2").exists() and "agent-ws/g2" not in branches(repo)
+
+
+def test_gc_leaves_a_live_owner_alone(tmp_path, env):  # AC 10
+    repo = make_repo(tmp_path)
+    live = subprocess.Popen(["sleep", "30"])
+    try:
+        ws(repo, env, "new", "g3", "--owner-pid", str(live.pid))
+        r = ws(repo, env, "gc")
+        assert r.returncode == 0 and (tmp_path / "wt-g3").is_dir()
+        assert "alive" in r.stdout
+    finally:
+        live.kill()
+        live.wait()
+
+
+def test_gc_treats_a_reused_pid_as_dead(tmp_path, env):
+    repo = make_repo(tmp_path)
+    live = subprocess.Popen(["sleep", "30"])
+    try:
+        ws(repo, env, "new", "g4", "--owner-pid", str(live.pid))
+        lp = os.path.join(repo, ".git", "agent-ws", "leases", "g4.json")
+        lease = json.load(open(lp))
+        lease["owner_start"] = "1"  # same PID, other start time: a reused PID
+        open(lp, "w").write(json.dumps(lease))
+        assert ws(repo, env, "gc").returncode == 0
+        assert not (tmp_path / "wt-g4").exists()
+    finally:
+        live.kill()
+        live.wait()
+
+
+def test_gc_skips_worktrees_with_no_lease(tmp_path, env):
+    repo = make_repo(tmp_path)
+    git(repo, "worktree", "add", "-q", "-b", "plain", str(tmp_path / "wt-plain"))
+    r = ws(repo, env, "gc")
+    assert r.returncode == 0 and "no lease" in r.stdout
+    assert (tmp_path / "wt-plain").is_dir() and "plain" in branches(repo)
+
+
+def test_gc_dry_run_removes_nothing(tmp_path, env):
+    repo = make_repo(tmp_path)
+    ws(repo, env, "new", "g5", "--owner-pid", str(dead_pid()))
+    r = ws(repo, env, "gc", "--dry-run")
+    assert r.returncode == 0 and "would remove" in r.stdout
+    assert (tmp_path / "wt-g5").is_dir()
+
+
+def test_gc_cleans_lease_of_a_worktree_folder_deleted_by_hand(tmp_path, env):
+    repo = make_repo(tmp_path)
+    ws(repo, env, "new", "g6", "--owner-pid", str(dead_pid()))
+    shutil.rmtree(tmp_path / "wt-g6")
+    git(repo, "worktree", "prune")
+    r = ws(repo, env, "gc")
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert not os.path.exists(os.path.join(repo, ".git", "agent-ws", "leases", "g6.json"))
+    assert "agent-ws/g6" not in branches(repo)  # merged (no commits): branch -d

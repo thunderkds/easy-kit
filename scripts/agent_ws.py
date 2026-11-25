@@ -325,7 +325,145 @@ def cmd_new(args):
     return 0
 
 
-COMMANDS = {"new": cmd_new}
+# ── rm and gc ────────────────────────────────────────────────────────────────────────────────
+
+
+def branch_exists(repo, branch):
+    return git(repo.main, "rev-parse", "-q", "--verify", f"refs/heads/{branch}").returncode == 0
+
+
+def blockers(repo, lease):
+    """Every reason not to remove this worktree (AC 9). Empty list: safe to remove."""
+    out, path = [], lease["path"]
+    branch, base = lease["branch"], lease["base"]
+    if branch_exists(repo, branch) and \
+            git(repo.main, "merge-base", "--is-ancestor", branch, base).returncode != 0:
+        out.append(f"branch {branch} is not merged into {base}")
+    if not os.path.isdir(path):
+        return out
+    done = git(path, "status", "--porcelain", "-z", "--untracked-files=all")
+    if done.returncode != 0:
+        return out + [f"git status failed in {path}: {done.stderr.strip()}"]
+    toks, i = done.stdout.split("\0"), 0
+    while i < len(toks):
+        tok = toks[i]
+        i += 1
+        if not tok:
+            continue
+        xy, rel = tok[:2], tok[3:]
+        if xy[0] in "RC":
+            i += 1  # -z puts a rename's old path in the next field
+        own = lease.get("files", {}).get(rel)
+        if xy == "??" and own and sha256(os.path.join(path, rel)) == own:
+            continue  # agent-ws's own untouched pointer file
+        out.append(f"uncommitted or untracked: {xy} {rel}")
+    found = ct.processes_in(path)
+    for pid, cmd in (found[0] if found else []):
+        out.append(f"process {pid} runs inside: {cmd}")
+    return out
+
+
+def remove_build_dir(build):
+    if not build:
+        return
+    if not os.path.lexists(build):
+        print(f"build folder {build}: already gone (reboot?)", flush=True)
+        return
+    st = os.lstat(build)
+    base = os.path.dirname(os.path.dirname(build))
+    if os.path.realpath(build) != build or stat.S_ISLNK(st.st_mode) or st.st_uid != os.getuid() \
+            or os.path.basename(base) != f"agent-ws-{os.getuid()}":
+        raise Refused(f"build folder {build} is not agent-ws's own private folder: left in place")
+    shutil.rmtree(build)
+    print(f"removed build folder {build}", flush=True)
+
+
+def remove(repo, lease):
+    path = lease["path"]
+    listed = {os.path.realpath(p) for p, _ in ct.worktrees(repo.main)}
+    if os.path.isdir(path):
+        saved = {}
+        for rel in lease.get("files", {}):
+            full = os.path.join(path, rel)
+            with open(full, "rb") as f:
+                saved[rel] = f.read()
+            os.unlink(full)
+            try:
+                os.rmdir(os.path.dirname(full))  # only when agent-ws left it empty
+            except OSError:
+                pass
+        done = git(repo.main, "worktree", "remove", path)
+        if done.returncode != 0:
+            for rel, data in saved.items():
+                os.makedirs(os.path.dirname(os.path.join(path, rel)), exist_ok=True)
+                with open(os.path.join(path, rel), "wb") as f:
+                    f.write(data)
+            raise Refused(f"git worktree remove failed: {done.stderr.strip()}")
+        print(f"removed worktree {path}", flush=True)
+    elif os.path.realpath(path) in listed:
+        raise Refused(f"worktree folder {path} is missing; run `git worktree prune`, then run again")
+    branch = lease["branch"]
+    if branch_exists(repo, branch):
+        done = git(repo.main, "branch", "-d", branch)
+        if done.returncode != 0:
+            raise Refused(f"git branch -d failed: {done.stderr.strip()}")
+        print(f"deleted branch {branch}", flush=True)
+    remove_build_dir(lease.get("build_dir"))
+    os.unlink(repo.lease_path(lease["name"]))
+
+
+def cmd_rm(args):
+    if len(args) != 1:
+        raise Refused("usage: rm <name|path>")
+    repo = Repo(os.getcwd())
+    lease = repo.find(args[0])
+    if lease is None:
+        raise Refused(f"no agent-ws lease for {args[0]} (agent-ws removes only worktrees it made)")
+    why = blockers(repo, lease)
+    if why:
+        raise Refused(f"{lease['name']}: nothing removed:\n  " + "\n  ".join(why))
+    remove(repo, lease)
+    return 0
+
+
+def cmd_gc(args):
+    if args not in ([], ["--dry-run"]):
+        raise Refused("usage: gc [--dry-run]")
+    dry, rc = bool(args), 0
+    repo = Repo(os.getcwd())
+    leased, used = set(), 0
+    for lease in repo.all_leases():
+        name = lease.get("name", "?")
+        leased.add(os.path.realpath(lease.get("path", "")))
+        build = lease.get("build_dir")
+        if build and os.path.isdir(build):
+            used += sum(os.path.getsize(os.path.join(d, f)) for d, _, fs in os.walk(build) for f in fs
+                        if not os.path.islink(os.path.join(d, f)))
+        if owner_alive(lease):
+            print(f"kept {name}: owner {lease['owner_pid']} alive", flush=True)
+            continue
+        why = blockers(repo, lease)
+        if why:
+            print(f"refused {name}: owner gone, but nothing removed:\n  " + "\n  ".join(why), flush=True)
+            rc = 1
+            continue
+        if dry:
+            print(f"would remove {name}: owner gone, merged and clean", flush=True)
+            continue
+        try:
+            remove(repo, lease)
+        except Refused as exc:
+            print(f"refused {name}: {exc}", flush=True)
+            rc = 1
+    for path, branch in ct.worktrees(repo.main):
+        if os.path.realpath(path) not in leased:
+            print(f"skipped {path}: no lease (not made by agent-ws)", flush=True)
+    if dry:
+        print(f"tmpfs build folders of this repo hold {used / 1024 ** 2:.0f} MB", flush=True)
+    return rc
+
+
+COMMANDS = {"new": cmd_new, "rm": cmd_rm, "gc": cmd_gc}
 
 
 def main(argv):
