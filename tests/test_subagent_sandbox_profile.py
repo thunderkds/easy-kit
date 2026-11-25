@@ -272,4 +272,23 @@ def test_t364_generator_reads_protected_patterns_from_the_hook():
     deny = gen.build_profile(text, expand, grown)["permissions"]["deny"]
     assert "Edit(**/vault.lock)" in deny
     assert "Read(**/vault.lock)" not in deny  # Edit only: a sandboxed test run still reads the list
-    assert tuple(gen._hook().PROTECTED_PATTERNS) == tuple(_load(HOOK, "t364_hook3").PROTECTED_PATTERNS)
+    # without the hook's patterns the denies are gone: the profile's come from the hook, not the list
+    bare = gen.build_profile(text, expand, ())["permissions"]["deny"]
+    assert "Edit(.claude/state/**)" not in bare and "Edit(**/sensitive-paths.txt)" not in bare
+
+
+def test_t364_protected_pattern_edge_shapes():
+    gen = _load(GENERATOR, "t364_gen_edges")
+    expand = gen._hook().expand_braces
+    deny = gen.build_profile("", expand, ("/abs/x/", "!neg", "", "dir/sub/"))["permissions"]["deny"]
+    assert "Edit(abs/x)" in deny and "Edit(dir/sub)" in deny
+    assert not [r for r in deny if "!" in r or r in ("Edit()", "Edit(**/)") or r.startswith("Edit(/")]
+
+
+def test_t364_a_protected_glob_the_list_already_has_is_denied_once():
+    gen = _load(GENERATOR, "t364_gen_dedup")
+    expand = gen._hook().expand_braces
+    deny = gen.build_profile("**/sensitive-paths.txt\n", expand,
+                             ("sensitive-paths.txt",))["permissions"]["deny"]
+    assert deny.count("Edit(**/sensitive-paths.txt)") == 1
+    assert "Read(**/sensitive-paths.txt)" in deny  # the list's own line keeps its Read deny

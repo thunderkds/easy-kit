@@ -83,7 +83,10 @@ def build_profile(text, expand_braces, protected=()):
         deny.append(f"Read({glob})")
         deny.append(f"Edit({glob})")
     for pattern in protected:
-        glob = pattern if "/" in pattern else "**/" + pattern
+        body = pattern.strip().replace("\\", "/").strip("/")
+        if not body or body.startswith(("#", "!")):
+            continue  # as `sensitive_globs` skips them; a negation has no deny form
+        glob = body if "/" in body else "**/" + body
         if glob not in globs and f"Edit({glob})" not in deny:
             deny.append(f"Edit({glob})")
     deny += ["Edit(memory/**)", "WebFetch", "WebSearch"]
