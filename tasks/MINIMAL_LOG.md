@@ -5,6 +5,23 @@
 > this template and deletes the example comment. The same block is the Supervisor's final chat message.
 
 
+## T254 — hook tests drop `CLAUDE_AUTO_VERIFY_RUN` from the env they pass to `stop_auto_mode_check.py` · minimal
+Mode: auto
+**Asked:** "start the task as parallel [admin]"
+**Decisions:**
+1. Ran T206, T253 and T254 in parallel, one implementer each in its own worktree, while T321 waited on its verify — RULE: the user's request "start the task as parallel [admin]" (it sets aside `docs/claude-md/tracks.md` `### Session tags` "runs no two tickets at once" for the build); Ready for Review, verify and merge still go one ticket at a time, because the gate's loop binding (`_session_holds`) refuses while this session has another task open.
+2. Track minimal — RULE: docs/claude-md/tracks.md § Track rule (C0, Risk Low, test files only, one agent).
+3. One `common-infrastructure` implementer, `haiku`, effort `low` — RULE: AGENTS.md § Hard-Stop Gates (Gate 1: an implementer only for 2+ independent tasks at once); `PROJECT_SPEC.md` CLI Model Table (claude, C0: haiku) and CLI Effort Table (C0: low).
+4. `test_t252_marked_ownership.py` unchanged: it builds no env of its own and runs the hook through `test_t250_session_ownership.py`'s `gate_env` — FACT: the implementer's sweep; `test_stop_attribution_t287.py` `hook_env` already drops the variable.
+**Checked:**
+- BEFORE (implementer, 2026-11-25T05:28:47Z): the Verification Command with `CLAUDE_AUTO_VERIFY_RUN=1` — `66 failed, 132 passed`; without it — `198 passed`
+- AFTER (Supervisor, at 9ba44cfa): the three files plus `test_t310*.py` (same helper) with `CLAUDE_AUTO_VERIFY_RUN=1` — `216 passed`; without it — `216 passed`
+- No hook source changed: `git diff --stat main...9ba44cfa` lists only `.claude/hooks/tests/test_stop_auto_mode_check.py` and `.claude/hooks/tests/test_t250_session_ownership.py`
+- Simplify: skipped: under 20 lines
+**Memory:** nothing new
+**Files:** `.claude/hooks/tests/test_stop_auto_mode_check.py`, `.claude/hooks/tests/test_t250_session_ownership.py`, `tasks/MINIMAL_LOG.md`, `PROJECT_KANBAN.md`
+**Not done:** merge (admin: after the auto verify pass); push (no push remote set: T321 waits on `/verify T321`); auto verify: running (T182)
+
 ## T347 — CI fails on `main`: `tests/test_readme_current.sh` cannot parse the README's Codex-skip list · minimal
 Mode: auto
 **Asked:** "so let pick the tasks and execute, parallel if possible [admin]"
