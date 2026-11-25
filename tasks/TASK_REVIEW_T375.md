@@ -16,8 +16,9 @@ Mode: auto
 7. Left the P3 findings as recorded limits in the hook header (`$(…)` and backtick built parts, short literal prefixes, the folder rule's built parts, `--exclude=".env"`, a comment apostrophe, `${F:-.env}`) — RULE: `skills/code-review/SKILL.md:28` "| **P3** | Style, minor improvement, documentation | Optional |"
 Checks: tests `python3 -m pytest -q -p no:cacheprovider .claude/hooks/tests/test_t375_dequote_tokens.py` — red first in every round, `25 passed, 95 subtests passed` at the end; the six sensitive-path suites and `test_t342_quoted_glob.py` `119 passed, 299 subtests passed`; full hook tests `python3 -m pytest -q -p no:cacheprovider .claude/hooks/tests` on `6e04f86b` — `5 failed, 5785 passed`, the same 5 MEMORY.md budget failures as `main` (`5 failed, 5760 passed`); reviews code-review (Supervisor), security-review (Supervisor, 1 Low fixed), fresh reviewer rounds 1-8 (round 8 PASS)
 Memory: nothing new
-Not done: merge (admin: after the auto verify pass; the user typed `merge T375 [admin]`); auto verify: running (T182)
+Not done: merge (admin: after the auto verify pass; the user typed `merge T375 [admin]`); auto verify: ☑ pass (session 8d4a5b89-c3c9-4ed2-b189-45c15ae26adc, commit 4b940a34baa88bb2c4296fbf45bd942e07d0b207, log .claude/verify-runs/T375-4b940a34baa8.log)
 Paused: auto-mode check failed — Risk High: decision 2 (`RULE`) is a choice — its RULE cites no written rule (`path:line`, `path § <heading>` or `docs/claude-md/tracks.md` `### <section>`) — so it must be `DEBATED` with exactly 3 Advocates named; Risk High: decision 6 (`FACT`) is a choice — its FACT has no Citation (`path:line "quoted text"`) — so it must be `DEBATED` with exactly 3 Advocates named [report 4da8d738fa87]
+Paused: done not moved — Gate 6: the `UI: Visual regression` row is blank; Gate 6: the `UI: Design-system compliance` row is blank; Gate 6: the `UI: Responsiveness` row is blank
 
 ## Evidence
 
@@ -26,10 +27,13 @@ Paused: auto-mode check failed — Risk High: decision 2 (`RULE`) is a choice �
 | **New test(s) cover Acceptance Criteria (file paths pasted)** | ☑ pass | `.claude/hooks/tests/test_t375_dequote_tokens.py` (AC 1–6, the security pin and one test per review round) |
 | Verification command run | ☑ pass | the guide's command plus `test_t342_quoted_glob.py`: `119 passed, 299 subtests passed`; the new file alone at `6e04f86b`: `25 passed, 95 subtests passed` |
 | Negative cases hold | ☑ pass | red on `main` before the change: `9 failed, 7 passed, 12 subtests passed in 1.47s`; every later round's tests were red before their fix (security `1 failed`; round 1 `12 failed`; round 2 `17 failed`; round 3 `7 failed`; round 4 `11 failed`; round 5 `8 failed`; round 6 `6 failed`; round 7 `6 failed`); the only-a-variable guard fails 4 tests when removed |
-| verify | ☐ pass / ☐ fail / ☐ N/A | the auto verify hook writes this row |
+| verify | ☑ pass | auto-run by hook, session 8d4a5b89-c3c9-4ed2-b189-45c15ae26adc, commit 4b940a34baa88bb2c4296fbf45bd942e07d0b207, log .claude/verify-runs/T375-4b940a34baa8.log — pass; done not moved: Gate 6: the `UI: Visual regression` row is blank; Gate 6: the `UI: Design-system compliance` row is blank; Gate 6: the `UI: Responsiveness` row is blank |
 | Review scope bounded to the change's blast radius (affected set, not whole repo) | ☑ pass | the hook, its list header and its tests; the lane check printed `EXCEEDS (lines 304 > 250)` at the first commit, the new test file is most of it |
 | Full smoke suite still green (no regression) | ☑ pass | hook tests: `5 failed, 5785 passed`, the same 5 failures as `main` (MEMORY.md budget); root `tests/`: the six files the first run failed give `2 failed, 244 passed` on both `main` and the branch (the 89 failures of one full run were `getcwd() failed` noise) |
 | **Companion score (easy-verifier)** | ☐ N/A | tool not used |
+| **UI: Visual regression (diff or verdict pasted)** | ☑ N/A | no UI: a PreToolUse hook |
+| **UI: Design-system compliance (tokens/colors/typography verified)** | ☑ N/A | no UI: a PreToolUse hook |
+| **UI: Responsiveness at target viewports** | ☑ N/A | no UI: a PreToolUse hook |
 
 ---
 
