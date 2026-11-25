@@ -190,8 +190,9 @@ DIR_CHANGE_COMMANDS = {"cd", "pushd"}
 # T374 round 3: the folders a call may have moved to. A `cd` segment adds its target to the set and
 # keeps the old folders, so a later segment is judged against every folder it may run in: a `cd`
 # that moves the shell (`cd`, `FOO=1 cd`, `command cd`, `\cd`) and one that does not (`sudo cd`)
-# are both covered without telling them apart. Capped; past the cap no folder is added.
-MAX_CD_FOLDERS = 16
+# are both covered without telling them apart. The set can double with each `cd`: past the cap the
+# check asks (a `ValueError` main() turns into an ask), never drops a folder (T374 round 4).
+MAX_CD_FOLDERS = 64
 # The walk of a folder stops after this many entries; a folder it could not finish counts as
 # holding a sensitive path (toward the human). Overridable for tests.
 FOLDER_WALK_MAX = 20000
@@ -629,7 +630,10 @@ def folder_hits(command, cwd, roots, patterns):
                 target = next((a for a in args if not a.startswith("-")), None)
                 if target:
                     moved = [os.path.normpath(os.path.join(w, os.path.expanduser(target))) for w in wheres]
-                    wheres = list(dict.fromkeys(wheres + moved))[:MAX_CD_FOLDERS]
+                    wheres = list(dict.fromkeys(wheres + moved))
+                    if len(wheres) > MAX_CD_FOLDERS:
+                        raise ValueError(f"the command changes folder into more than {MAX_CD_FOLDERS} "
+                                         "possible folders")
         targets = [a for v, rest in readings if v in FOLDER_VERBS for a in _folder_arguments(v, rest)]
         for arg, where in dict.fromkeys((a, w) for a in targets for w in wheres):
             # each (argument, folder) once: both readings and every `cd` folder share the budget

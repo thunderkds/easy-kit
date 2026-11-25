@@ -158,3 +158,45 @@ Verification Command in the worktree (five guide files, no full suite; `git stat
 $ python3 -m pytest -q -p no:cacheprovider .claude/hooks/tests/test_t374_folder_rule_followups.py .claude/hooks/tests/test_t363_folder_level.py .claude/hooks/tests/test_pre_tool_sensitive_path.py .claude/hooks/tests/test_t316_list_self_protect.py .claude/hooks/tests/test_t314_fix_round.py
 81 passed, 119 subtests passed in 8.47s
 ```
+
+---
+
+## Round 4 (Reviewer: T374, commit 25ab79dd)
+
+Verdict: **H1 and H2 fixed; one NEW P2 (J1) to fix before merge.** The folder set doubles on every `cd`, so the cap of 16 is reached after 4 `cd` segments, and the 5th drops the real folder. Confidence >= 75 (reproduced with the real hook).
+
+### Round-3 findings
+
+| Round-3 | Result |
+|---|---|
+| H1 `command cd`, `FOO=1 cd`, `\cd`, `time cd` | fixed: ask (old ask, new ask) |
+| H2 pin | fixed: `test_r2_...` has the six forms (also `builtin cd`) |
+
+### Comparison (T363-branch hook vs 25ab79dd hook, real hook as a subprocess; harnesses `cmp3.py`, `cd3.py`)
+
+| Count | Result |
+|---|---|
+| cmp3.py, 733 commands: old ask, new silent | **0** |
+| old silent, new ask | 80, all `WRAPPER OPT VAL rm -rf config|cd` (the asks the task wants) |
+| New ask on an ordinary command (`ls config`, `rm -rf build`, `cat config/.env`) | **0** |
+| cd3.py, 12 `cd` forms: old ask, new silent | **0** (`builtin cd build && rm -rf ../config`: old silent, new ask) |
+
+### Findings
+
+| ID | Sev | Where | Finding | One-line fix |
+|----|-----|-------|---------|--------------|
+| J1 | P2 | `.claude/hooks/pre_tool_sensitive_path.py` `folder_hits`: `wheres = list(dict.fromkeys(wheres + moved))[:MAX_CD_FOLDERS]` | The set holds every old folder plus every old folder moved, so it doubles per `cd` (1, 2, 4, 8, 16) and is truncated at the 5th `cd`; the truncation keeps the oldest entries and drops the newest, which is the folder a real shell is in. Repro (project with `a/b/c/d/e/f/.env`): `cd a && cd b && cd c && cd d && cd e && rm -rf f`: old **ask**, new **silent** (4 `cd` still ask). `cd a && cd b && cd . && cd . && cd . && cd c && cd d && cd e && rm -rf f` and `cd . && cd . && cd . && cd a && ... && cd e && rm -rf f`: old ask, new silent (a `cd .` doubles the set to no purpose; dedup only removes exact repeats). `cd a/b && cd ../.. && ...` x4 then the chain: old ask, new silent. Fail-open past the cap in a High-risk hook, and a regression vs T363 for a plain 5-step `cd` chain. Not pinned: no test has more than one `cd`. | Do not double: keep one chain (`chain = join(chain, target)`) and put `cd` of a wrapped form into the set only as a fork; or, when the cap is reached, ask (fail toward the human) instead of dropping. Add `cd a && cd b && cd c && cd d && cd e && rm -rf f` and the `cd .` x3 form to the tests |
+| J2 | P3 | `test_t374_folder_rule_followups.py` | No test for the cap or for a chain of `cd`; J1 passes the whole suite. | The rows from J1 |
+
+Checked, no finding: a `cd` with no target leaves the set alone; `walked` skips a folder seen before (its hit was already recorded, and the budget is not spent twice); both readings and all folders share one budget; the hook only reads the string and runs nothing from it; `builtin` in `COMMAND_PREFIXES` is a prefix only (asks more, never less).
+
+### Evidence
+
+Verification Command in the worktree (five guide files, no full suite):
+
+```
+$ python3 -m pytest -q -p no:cacheprovider .claude/hooks/tests/test_t374_folder_rule_followups.py .claude/hooks/tests/test_t363_folder_level.py .claude/hooks/tests/test_pre_tool_sensitive_path.py .claude/hooks/tests/test_t316_list_self_protect.py .claude/hooks/tests/test_t314_fix_round.py
+81 passed, 125 subtests passed in 8.60s
+```
+
+Cap probe harness: `<scratchpad>/cap5.py` (`python3 -I cap5.py <scratchpad>`): the first row `cd a && cd b && cd c && cd d && cd e && rm -rf f` prints `ask silent`.

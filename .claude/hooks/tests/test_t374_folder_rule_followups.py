@@ -78,6 +78,19 @@ class FollowUps(FixRoundTest):
             with self.subTest(command=cmd):
                 self.assert_ask(self.pre("Bash", cmd))
 
+    def test_r4_a_long_cd_chain_never_drops_the_shell_folder(self):
+        """Round 4 (J1, J2): the folder set doubles with every `cd`; past its cap the hook asks
+        instead of dropping folders (the newest is where the shell really is)."""
+        self.write("a/b/c/d/e/f/.env", "KEY=1\n")
+        for cmd in ("cd a && cd b && cd c && cd d && cd e && rm -rf f",
+                    "cd . && cd . && cd . && cd a && cd b && cd c && cd d && cd e && rm -rf f",
+                    "cd a/b && cd ../.. && cd a && cd b && cd c && cd d && cd e && rm -rf f",
+                    "cd a && cd b && cd c && cd d && cd e && cd f && cd .. && rm -rf f"):
+            with self.subTest(command=cmd):
+                self.assert_ask(self.pre("Bash", cmd))
+        many = " && ".join(["cd x%d" % k for k in range(8)] + ["ls"])
+        self.assert_ask(self.pre("Bash", many))  # over the cap: ask, never guess
+
     def test_n1_timeout_on_a_reading_command_stays_silent(self):
         self.assert_silent(self.pre("Bash", "timeout -s KILL 5 ls config"))
 
