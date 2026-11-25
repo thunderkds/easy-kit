@@ -520,3 +520,18 @@ Mode: auto
 **Not done:** merge (admin: after the auto verify pass); push (yours until `EASY_KIT_ADMIN_REMOTE=github` is set); auto verify: ☑ pass (session 894ef12b-805b-466d-8046-56ccf869a3bd, commit 8d99a3524c0fb3d7b56025e8a7791ebfc7f38eea, log .claude/verify-runs/T367-8d99a3524c0f.log); T368 (merged) fixes that cause, so this run is the fix round for it, against the written stop after a second blocked run (`docs/claude-md/tracks.md` `### Admin tag`, T306) ⚠ decided for you — please review
 Paused: done not moved — Gate 5: no `New test` line with its result under `Checked:`
 Closed: row moved to Done 2026-11-25 — auto verify pass (session 894ef12b-805b-466d-8046-56ccf869a3bd, commit 8d99a3524c0fb3d7b56025e8a7791ebfc7f38eea); Gates 5 and 6 checked
+
+## T373 — the docs page tells users how to set the `[admin]` push remote, and says what T368 changed · minimal
+Mode: auto
+**Asked:** "with this, do we need to add the guide for that"
+**Decisions:**
+1. Track minimal — RULE: docs/claude-md/tracks.md § Track rule (C1, Risk Low: text in one existing docs section)
+2. Name the personal `.claude/settings.local.json`, not the kit's `.claude/settings.json`: the kit's file is copied into every project — FACT: MANIFEST:42 "# NOTE: .claude/settings.json is deployed by setup.sh as a per-project COPY"
+3. Also correct the same section's T368-stale sentences (a tests-only skip; "after blocked or fail") — RULE: .claude/skills/code-review/SKILL.md § Phase 0.5 "Stale-reference sweep (T259)"
+**Checked:**
+- New test: none added — text only; the site suites are the check: `python3 -m pytest tests/test_site_story.py tests/test_site_visual_first.py tests/test_site_content.py -q` → `2 failed, 212 passed`; the 2 are on `main` before this change (T304's `#repository-layout`: 157 visible words, 2 lost baseline sentences), none from T373; the edited paragraphs are in no pinned baseline
+- BEFORE: the `#tracks` `details.more` text said "A task that changes only docs, task files, memory or tests has no runtime surface…", "After `blocked` or `fail`, it pushes and merges nothing.", "`[ticket]` pushes only the task branch to `origin`", and named no push-remote setting
+- AFTER: it names `EASY_KIT_ADMIN_REMOTE` in `.claude/settings.local.json` `"env"` (restart Claude Code), the shell-suite run, the 2 fix rounds, and the push remote for `[ticket]`
+**Memory:** nothing new
+**Files:** `site/docs.html` (`#tracks` details text), `tasks/MINIMAL_LOG.md`
+**Not done:** merge (admin: after the auto verify pass); push (yours until `EASY_KIT_ADMIN_REMOTE=github` is set); auto verify: running (T182); the 2 pre-existing `#repository-layout` failures from T304 (not this task)
