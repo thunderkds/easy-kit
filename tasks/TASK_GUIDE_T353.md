@@ -73,6 +73,17 @@ User, 2026-11-25, after T345: "so for the update in another repos, we should add
 
 ---
 
+## Draft text (user-reviewed 2026-11-25)
+
+`docs.html#parallel-builds` — **Parallel builds**. Lead: "Run several agents on one Rust repo without freezing your computer. Each agent gets its own copy of the repo and its own build folder in memory."
+1. **Turn it on.** Run the install command, choose **Reinstall**, and answer `y` to *Turn on parallel builds?* Linux only.
+2. **Work as usual.** `claude --worktree <name>`, or an agent started in its own copy, lands in `../wt-<name>` beside your repo.
+3. **Run heavy commands through it.** `python3 scripts/agent_ws.py run -- cargo test` runs at low priority, in that copy's own build folder.
+4. **Clean up.** `python3 scripts/agent_ws.py gc` removes copies whose session has ended. It never removes unmerged or unsaved work.
+More (`<details class="more">`): `rm <name>` removes one copy now; `gc --dry-run` shows what it would remove and how much memory the build folders use; a restart empties the build folders, so the next build starts from scratch; each new copy needs 4 GB free in memory, else it builds on disk; `AGENT_BUILD_SLOTS=N` lets at most N heavy commands run at once (off by default); to turn it off, Reinstall and answer `n` (if D1 makes "off" possible; else say how to remove the three entries).
+
+The installer question text follows the draft: `Turn on parallel builds (agent-ws)? [y/N]`.
+
 ## Dependencies & Reachability
 
 **Depends on**: T345 — `scripts/agent_ws.py` (merged into local `main` `f90c93f7`)
@@ -92,8 +103,8 @@ User, 2026-11-25, after T345: "so for the update in another repos, we should add
 | 5 | After Install-with-Yes then Update, the three hook entries are still present exactly once (no duplicate, not dropped by `merge-settings.py`) | merge survival |
 | 6 | The plan screen names the choice (one line beside "Hooks:") before `Proceed?` | plan before write |
 | 7 | `hooks/hooks.json` and the kit's `.claude/settings.json` are unchanged; `tests/test_plugin_package.py` still passes at 15 | out of scope: plugin |
-| 8 | `site/index.html` mentions the choice; `tests/test_site_story.py` passes (300-word cap, no banned term) | "update the index page also" |
-| 9 | `site/docs.html` `#install` describes the question (detail inside `<details class="more">`); `tests/test_site_content.py`, `tests/test_site_visual_first.py`, `tests/test_docs_match_installer.py` pass | docs ride with code |
+| 8 | `site/index.html` `#deeper` note reads "Pick parallel agent builds at install, or try the Settings tool." ("parallel agent builds" links to `docs.html#parallel-builds`), and the Add-ons card drops "Optional" to stay at 300 words; `tests/test_site_story.py` passes (300-word cap, no banned term) | "update the index page also" |
+| 9 | `site/docs.html` gains a how-to section `#parallel-builds` (user, 2026-11-25: "don't see the detail to guide the users using this build"): a lead of 35 words or fewer, 4 numbered steps (turn it on at Reinstall; work as usual with `claude --worktree`; `agent_ws.py run -- cargo test`; `agent_ws.py gc`), and a `<details class="more">` block (`rm`, `gc --dry-run`, reboot empties the build folders, the 4 GB check, `AGENT_BUILD_SLOTS`, turning it off). Draft text: `## Draft text (user-reviewed 2026-11-25)` below. `#install` names the new question in one line. The pinned section-id list (`tests/test_site_story.py:483-487`) and the sidebar groups (`tests/test_site_content.py:1947-1961`) gain `parallel-builds`; `tests/test_site_content.py`, `tests/test_site_visual_first.py`, `tests/test_docs_match_installer.py` pass | docs ride with code; user follow-up |
 | 10 | `docs/agent-ws.md` says how the installer turns it on, and keeps the by-hand snippet for projects installed before | docs ride with code |
 
 ---
