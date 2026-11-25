@@ -231,3 +231,45 @@ def test_manifest_ships_profile_and_generator():
     assert "templates" in entries  # carries subagent-sandbox.settings.json
     assert "scripts/gen_sandbox_profile.py" in entries
     assert ".claude/sensitive-paths.txt" in entries
+
+
+# T364: the hook always treats its PROTECTED_PATTERNS as sensitive (T314, T316), whatever the list
+# says; the profile denies a write to them too. Re-derived here from the hook, not the generator.
+HOOK = os.path.join(ROOT, ".claude", "hooks", "pre_tool_sensitive_path.py")
+
+
+def _load(path, name):
+    import importlib.util
+    spec = importlib.util.spec_from_file_location(name, path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def _protected_globs(patterns):
+    # A name with no `/` matches in any directory (gitignore rules), so it needs `**/` here.
+    return [p if "/" in p else "**/" + p for p in patterns]
+
+
+def test_t364_hook_protected_patterns_are_denied_for_edit():
+    deny = _profile()["permissions"]["deny"]
+    for rule in ("Edit(.claude/state/**)", "Edit(**/sensitive-approvals.json)",
+                 "Edit(**/sensitive-approvals.json.*)", "Edit(**/sensitive-paths.txt)"):
+        assert rule in deny, rule
+    hook = _load(HOOK, "t364_hook")
+    for glob in _protected_globs(hook.PROTECTED_PATTERNS):
+        assert f"Edit({glob})" in deny, glob
+    # the new denies sit after the list's own and before the memory deny (AC3)
+    assert deny.index("Edit(**/sensitive-paths.txt)") < deny.index("Edit(memory/**)")
+    assert deny.index("Edit(terraform/**)") < deny.index("Edit(.claude/state/**)")
+
+
+def test_t364_generator_reads_protected_patterns_from_the_hook():
+    gen = _load(GENERATOR, "t364_gen")
+    text = _read(PATTERNS)
+    expand = gen._hook().expand_braces
+    grown = tuple(_load(HOOK, "t364_hook2").PROTECTED_PATTERNS) + ("vault.lock",)
+    deny = gen.build_profile(text, expand, grown)["permissions"]["deny"]
+    assert "Edit(**/vault.lock)" in deny
+    assert "Read(**/vault.lock)" not in deny  # Edit only: a sandboxed test run still reads the list
+    assert tuple(gen._hook().PROTECTED_PATTERNS) == tuple(_load(HOOK, "t364_hook3").PROTECTED_PATTERNS)

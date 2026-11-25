@@ -35,6 +35,10 @@
       "Edit(infra/**)",
       "Read(terraform/**)",
       "Edit(terraform/**)",
+      "Edit(.claude/state/**)",
+      "Edit(**/sensitive-approvals.json)",
+      "Edit(**/sensitive-approvals.json.*)",
+      "Edit(**/sensitive-paths.txt)",
       "Edit(memory/**)",
       "WebFetch",
       "WebSearch"
