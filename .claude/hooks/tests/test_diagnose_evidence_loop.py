@@ -53,6 +53,15 @@ def extract_section(text, heading_prefix):
     match = pattern.search(text)
     assert match is not None, f"section '### {heading_prefix}' not found in {SKILL_PATH}"
     body = match.group(1)
+    # T355: a section may keep its detail in `references/*.md` (Codex's 8 KB skill cap). The text
+    # these tests pin is the section with each file it links to read in at the linking line.
+    out = []
+    for line in body.split("\n"):
+        out.append(line)
+        for ref in re.findall(r"\]\((references/[\w.-]+\.md)\)", line):
+            with open(os.path.join(os.path.dirname(SKILL_PATH), ref)) as f:
+                out.append(f.read())
+    body = "\n".join(out)
     # Guard against the vacuous-extraction failure mode (T039): an empty block compares
     # equal to an empty expectation and asserts nothing.
     assert body.strip(), f"section '### {heading_prefix}' extracted empty"
@@ -736,9 +745,10 @@ def test_t067_red_flags_are_the_checkpoints_sibling_not_its_replacement():
     assert re.search(r"offer no choice at all", body), (
         "red flags must not duplicate the Checkpoint's three named options"
     )
-    # Ordering: the red flags sit before the Checkpoint section in the file.
+    # Ordering: the red flags sit before the Checkpoint section — in Phase 4, which SC7 pins as the
+    # section before it (T355: Phase 4's detail, red flags included, reads in from its reference).
     text = read_skill()
-    assert text.index("**Red flags") < text.index("### Stuck-Loop Checkpoint"), (
+    assert "**Red flags" in body and text.index("### Phase 4") < text.index("### Stuck-Loop Checkpoint"), (
         "the red-flag block must be placed before the Stuck-Loop Checkpoint heading"
     )
 

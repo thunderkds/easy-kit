@@ -81,7 +81,8 @@ done
 OVERSIZE="$(printf '%s' "$OVERSIZE" | sed -e 's/^ *//')"
 
 if [ -z "$OVERSIZE" ]; then
-  fail "AC2: no skill currently exceeds the derived cap ($CAP bytes) — test cannot verify README's list is non-empty and accurate"
+  # T355: no kit skill is over the cap. Still checked: the README must then say "none" (below).
+  pass "AC2 setup: no skill exceeds the derived cap ($CAP bytes)"
 else
   pass "AC2 setup: derived oversize skill set = [$OVERSIZE]"
 fi
@@ -119,8 +120,14 @@ README_LISTED="$(awk '
   /Skills currently/ { seeking=1; line=$0; sub(/.*Skills currently/, "", line); names(line) }
 ' "$README")"
 
-if [ -z "$README_LISTED" ]; then
+if [ -z "$README_LISTED" ] && [ -n "$OVERSIZE" ]; then
   fail "AC2: could not parse any skill names from README's Codex-skip list"
+elif [ -z "$OVERSIZE" ]; then
+  if grep -q 'Skills currently' "$README" && tr '\n' ' ' < "$README" | grep -q 'Skills currently[[:space:]]*affected: none'; then
+    pass "AC2: README says no skill is skipped today"
+  else
+    fail "AC2: no skill is over the cap, so README must say 'Skills currently affected: none'"
+  fi
 fi
 
 for name in $README_LISTED; do

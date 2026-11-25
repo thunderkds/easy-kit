@@ -29,6 +29,8 @@ def test_sc4_skill_asks_for_the_report_line():
 def test_sc4_preflight_flags_a_prompt_without_the_block():
     skill = _read("skills", "craft-spawn-prompt", "SKILL.md")
     step4 = skill.split("#### 4. Pre-flight", 1)[1].split("#### 5.", 1)[0]
+    assert "references/preflight.md" in step4  # T355: step 4 runs the check in its reference
+    step4 += _read("skills", "craft-spawn-prompt", "references", "preflight.md")
     assert "**Startup reads**" in step4 and "flag" in step4.lower()
 
 

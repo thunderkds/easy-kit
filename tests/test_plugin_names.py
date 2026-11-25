@@ -82,7 +82,8 @@ def test_the_check_catches_a_repo_relative_call():
 
 
 # Files that show the rule with a made-up script name; they call nothing.
-RULE_EXAMPLES = ("skills/write-better-skill/SKILL.md",)
+RULE_EXAMPLES = ("skills/write-better-skill/SKILL.md",
+                 "skills/write-better-skill/references/spec-conformance.md")  # T355
 
 
 def skill_dir_paths():
@@ -614,7 +615,8 @@ def codex_commands(project):
     """(file, script path as the Codex copy writes it) for each quoted python3 command in `.codex/skills`."""
     found = []
     for path in sorted((project / ".codex" / "skills").rglob("*")):
-        if path.is_file() and path.suffix == ".md":
+        if path.is_file() and path.suffix == ".md" and \
+                f"skills/{path.relative_to(project / '.codex' / 'skills').as_posix()}" not in RULE_EXAMPLES:
             for m in re.finditer(r'python3 "([^"\s$]+)"', path.read_text(encoding="utf-8")):
                 found.append((path, m.group(1)))
     return found
@@ -645,9 +647,10 @@ def test_codex_only_install_rewrites_the_variable_and_every_command_runs(tmp_pat
     assert b"${CLAUDE_SKILL_DIR}" in (project / "skills" / "wake" / "SKILL.md").read_bytes()
     # references too, not only SKILL.md
     assert 'python3 "scripts/pull_moment.py" wake' in (codex / "wake" / "references" / "triage.md").read_text()
-    # no skill is newly skipped by the cap: only the four that are over it in the source
+    # no skill is skipped by the cap: T355 split the four that were over it
     assert sorted(p.name for p in (SKILLS).iterdir() if (p / "SKILL.md").exists()
-                  and not (codex / p.name).exists()) == ["bugfix", "craft-spawn-prompt", "diagnose", "write-better-skill"]
+                  and not (codex / p.name).exists()) == []
+    assert (codex / "diagnose" / "references" / "instrument.md").is_file()
     cmds = codex_commands(project)
     assert {os.path.basename(c) for _, c in cmds} >= {"pull_moment.py", "board_sync.py", "lane_check.py",
                                                        "memory_sections.py", "render.py"}
