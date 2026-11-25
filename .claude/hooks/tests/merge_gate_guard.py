@@ -126,9 +126,15 @@ GATE_REL = ".claude/hooks/pre_bash_block_unsafe_merge.py"
 #          (`auto_mode.session_onset`: a repeated same tag keeps it) (`tasks/TASK_GUIDE_T372.md`,
 #          AC 1-3). Authorised by the user, 2026-11-25 (gate sign-off question under session
 #          `[admin]`).
+#   T370 — the default branch is the setting `EASY_KIT_DEFAULT_BRANCH` (`.claude/settings.json`
+#          `"env"`, default `main`; `_main_branch`, `_default_branch_refusal`): the branch pushed
+#          after the merge, the remote ref `_remote_main` reads, and the review span base; a bad
+#          value refuses every `[admin]`/`[ticket]` merge and push (`tasks/TASK_GUIDE_T370.md`,
+#          AC 1-4). Authorised by the user, 2026-11-25 (gate sign-off question under session
+#          `[admin]`).
 AUTHORISED_TASKS = ("T182", "T188", "T190", "T197", "T196", "T210", "T211", "T232", "T250", "T284",
                     "T289", "T291", "T296", "T295", "T308", "T309", "T317", "T323", "T326", "T341",
-                    "T320", "T354", "T321", "T372")
+                    "T320", "T354", "T321", "T372", "T370")
 
 
 def _git(root, *args):

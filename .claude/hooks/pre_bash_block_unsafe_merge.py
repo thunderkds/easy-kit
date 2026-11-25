@@ -1469,7 +1469,6 @@ def session_owned_in_progress(rows, command, cwd, transcript_path):
 # The gate's other checks then still run. No transcript, or one that cannot be read, means no
 # request is known: the rule does not apply and the gate is exactly as before T284.
 AUTO_MODE_PATTERNS = [p for p in BLOCKED_PATTERNS if not p.endswith(r"rebase\b")]
-ADMIN_MAIN_BRANCH = "main"  # AC 8: the one branch `[admin]` may push besides the task branch
 ADMIN_REMOTE_DEFAULT = "origin"  # P2: the one remote `[admin]` may push to, unless set (T321)
 ADMIN_REMOTE_ENV = "EASY_KIT_ADMIN_REMOTE"  # T321: `.claude/settings.json` `"env"`; the user's choice
 ADMIN_REMOTE_HINT = (f"the one remote is `{ADMIN_REMOTE_ENV}` in `.claude/settings.json` `\"env\"`, "
@@ -1599,6 +1598,23 @@ def _admin_remote():
     return value if REMOTE_NAME_PATTERN.fullmatch(value) and value[0] not in "-." else None
 
 
+def _main_branch():
+    """T370: the one branch `[admin]` may push besides the task branch (AC 8), and the branch its
+    merge runs on for the `main` push rule: the setting `EASY_KIT_DEFAULT_BRANCH`, default `main`
+    (`auto_mode.default_branch`); None for a value that is not a plain branch name."""
+    return auto_mode.default_branch()
+
+
+def _default_branch_refusal():
+    """T370: why no `[admin]`/`[ticket]` merge or push may run under the current setting, or None."""
+    if _main_branch() is not None:
+        return None
+    env = auto_mode.DEFAULT_BRANCH_ENV
+    shown = _shown(os.environ.get(env, "").strip(), ADMIN_SHOWN_CHARS)
+    return (f"`{env}` is {shown}, not a plain branch name: `[admin]` and `[ticket]` merge and push "
+            f"nothing until it names one branch (or is unset, for `{auto_mode.DEFAULT_BRANCH}`)")
+
+
 def _admin_remote_refusal():
     """T321: why no `[admin]`/`[ticket]` push may run under the current setting, or None."""
     if _admin_remote() is not None:
@@ -1712,7 +1728,7 @@ def _session_admin_merges(transcript_path, when, id_regex):
             continue
         for args, where in _git_actions(command, call_cwd) or []:
             # Round 2: only a merge run with `main` checked out counts.
-            if args[0] != "merge" or where is None or _current_branch(where) != ADMIN_MAIN_BRANCH:
+            if args[0] != "merge" or where is None or _current_branch(where) != _main_branch():
                 continue
             names = [n for _, n in _merge_sources(args[1:], where)]
             task_id = _ref_task_id(names[0], id_regex) if len(names) == 1 else None
@@ -2256,8 +2272,8 @@ def _remote_main(where):
     """Round 2: the remote's real `main` sha from `git ls-remote origin refs/heads/main` (argv, no
     shell, a 10 s timeout, no prompt), never the local `refs/remotes/origin/main` the model can move.
     None on any failure, a timeout or no answer. T321: the remote is `_admin_remote()`."""
-    remote = _admin_remote()
-    if remote is None:
+    remote, branch = _admin_remote(), _main_branch()
+    if remote is None or branch is None:
         return None
     try:
         done = subprocess.run(
@@ -2265,14 +2281,14 @@ def _remote_main(where):
             # `--upload-pack` wins over `remote.origin.uploadpack`; a `-c` override does not, tested)
             # nor a repo-set proxy. Repo-local `core.sshCommand` was already refused above.
             ["git", "-c", f"remote.{remote}.proxy=", "-C", where, "ls-remote",
-             "--upload-pack=git-upload-pack", remote, f"refs/heads/{ADMIN_MAIN_BRANCH}"],
+             "--upload-pack=git-upload-pack", remote, f"refs/heads/{branch}"],
             capture_output=True, text=True, timeout=LS_REMOTE_TIMEOUT_S,
             env={**os.environ, "GIT_TERMINAL_PROMPT": "0"})
     except Exception:
         return None
     words = done.stdout.split() if done.returncode == 0 else []
     return words[0] if len(words) >= 2 and SHA_PATTERN.match(words[0]) and \
-        words[1] == f"refs/heads/{ADMIN_MAIN_BRANCH}" else None
+        words[1] == f"refs/heads/{branch}" else None
 
 
 def _rev(where, ref):
@@ -2336,12 +2352,12 @@ def _main_push_refusal(where, merged):
         return repo_refusal
     remote = _remote_main(where)
     if remote is None:
-        return (f"cannot read the remote's real `main`: `git ls-remote {_admin_remote()} "
-                "refs/heads/main` failed, timed out or returned nothing")
+        return (f"cannot read the remote's real `{_main_branch()}`: `git ls-remote {_admin_remote()} "
+                f"refs/heads/{_main_branch()}` failed, timed out or returned nothing")
     # Round 3 (N8): always the branch, never a tag of the same name.
     merged = merged if merged.startswith("refs/") else f"refs/heads/{merged}"
     tip = _rev(where, f"{merged}^{{commit}}")
-    main_sha = _rev(where, f"refs/heads/{ADMIN_MAIN_BRANCH}^{{commit}}")
+    main_sha = _rev(where, f"refs/heads/{_main_branch()}^{{commit}}")
     if tip is None or main_sha is None:
         return f"cannot resolve `main` or {merged}"
     if main_sha == tip:
@@ -2625,6 +2641,9 @@ def admin_refusal(command, cwd, transcript_path, admin, tag=None):
     the only binding, and only a push of the task branch is allowed: no merge, no `main` push."""
     try:
         when, text = admin
+        branch_refusal = _default_branch_refusal()  # T370: a bad default-branch setting refuses all
+        if branch_refusal:
+            return branch_refusal
         # Round 2: any `git -c <k>=<v>` (or `--config-env`) before the verb can change what a merge
         # or push runs (`core.hooksPath`) or where it goes, so `[admin]` refuses it.
         git_commands = 0
@@ -2699,9 +2718,9 @@ def admin_refusal(command, cwd, transcript_path, admin, tag=None):
                 own = _own_origin_refusal(where, cwd)
                 if own:
                     return own
-                if branch == ADMIN_MAIN_BRANCH and tag == "ticket":
+                if branch == _main_branch() and tag == "ticket":
                     return f"`[ticket]` never pushes `main`: only the task branch, to `{_admin_remote()}`"
-                if branch == ADMIN_MAIN_BRANCH:
+                if branch == _main_branch():
                     # AC 8 / 7b: `main` only after this session's own merge of the task branch,
                     # and only when `main` really holds that branch's tip.
                     merges = _session_admin_merges(transcript_path, when, id_regex)
@@ -2715,7 +2734,7 @@ def admin_refusal(command, cwd, transcript_path, admin, tag=None):
                                     "repository")
                         held = _git(where, "merge-base", "--is-ancestor",
                                     f"refs/heads/{merged}^{{commit}}",
-                                    f"refs/heads/{ADMIN_MAIN_BRANCH}^{{commit}}")
+                                    f"refs/heads/{_main_branch()}^{{commit}}")
                         if held is None or held.returncode != 0:
                             return f"`main` does not hold the merged branch {merged}"
                         refusal = _main_push_refusal(where, merged)
@@ -2853,7 +2872,6 @@ REVIEWER_DONE = "ReviewerDone"
 REVIEWED_COMMIT = re.compile(r"[0-9a-f]{40}")
 REVIEW_FREE_MEMORY = re.compile(r"memory/[^/]+\.md")
 REVIEW_FREE_FILES = ("PROJECT_KANBAN.md", MINIMAL_LOG_REL)
-REVIEW_BASE_REF = "refs/heads/main"
 UNRESOLVED_MERGE = re.compile(GIT_VERB_PREFIX + r"merge(?=\s|$)")
 REVIEW_REMEDY = (
     "{tid} (extended track) has no fresh reviewer record for {branch} at {tip}: spawn "
@@ -2958,7 +2976,9 @@ def review_in_scope(task_id, tip, directory):
     at_tip = _git(directory, "--no-replace-objects", "cat-file", "-e", f"{tip}:{rel}")
     if at_tip is None or at_tip.returncode == 0:
         return True
-    base = _git(directory, "rev-parse", "--verify", "--quiet", REVIEW_BASE_REF + "^{commit}")
+    name = _main_branch()  # T370: the set default branch; a bad setting reads the whole history
+    base = (_git(directory, "rev-parse", "--verify", "--quiet", f"refs/heads/{name}^{{commit}}")
+            if name else None)
     span = (f"{base.stdout.strip()}..{tip}" if base is not None and base.returncode == 0
             else tip)
     history = _git(directory, "--no-replace-objects", "log", "--format=%H", span, "--", rel)

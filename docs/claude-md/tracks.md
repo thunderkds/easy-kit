@@ -651,6 +651,15 @@ another one (set it by hand, then start a new session); every `origin` in the li
 one name, `origin` is refused, and a value that is not a plain remote name (a URL, a path, an option,
 a space, a leading `.`) refuses every push and names the value. A merge is unaffected.
 
+**The default branch (T370).** `main` unless `EASY_KIT_DEFAULT_BRANCH` in `.claude/settings.json` `"env"`
+names another one, for example `"EASY_KIT_DEFAULT_BRANCH": "master"` (set it by hand, then start a new
+session). Every `main` in the list below then reads as that branch: the one branch pushed after the
+merge, the branch the review and the docs-only verify are judged against, and the branch
+`scripts/cleanup_task.py` checks "merged" against. The gate never reads the branch from git: an agent can
+write every local ref, and the remote's HEAD depends on a URL an agent can change. A value that is not a
+plain branch name (an option, a range, `HEAD`, a space) refuses every `[admin]` and `[ticket]` merge and
+push and names the value.
+
 **Merge and push.** The Supervisor may merge the task branch and push it, after the auto verify run
 passed. The merge gate, `.claude/hooks/pre_bash_block_unsafe_merge.py`, reads the tag at the time of the
 command, from this session's transcript. It allows a `git merge` or `git push` only when all of these hold:

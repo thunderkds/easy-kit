@@ -192,6 +192,27 @@ TICKET_TAG = "[ticket]"
 STOP_TAG = "[stop]"
 SESSION_ID = re.compile(r"[A-Za-z0-9_-]+")
 
+# T370: the project's default branch is the setting `EASY_KIT_DEFAULT_BRANCH` (`.claude/settings.json`
+# `"env"`, the user's choice, like `EASY_KIT_ADMIN_REMOTE`), default `main`. Never a git ref: an agent
+# can write every local ref (`git remote set-head`, a new branch named `main`), and the remote's HEAD
+# depends on a URL an agent can change. One reader for the merge gate, `verify_record` and
+# `scripts/cleanup_task.py`.
+DEFAULT_BRANCH_ENV = "EASY_KIT_DEFAULT_BRANCH"
+DEFAULT_BRANCH = "main"
+BRANCH_NAME = re.compile(r"[A-Za-z0-9._/-]+")
+
+
+def default_branch():
+    """T370: the default branch, read at call time: the setting, or `main` when it is unset or
+    blank. None for any value that is not a plain branch name (an option, a range, `HEAD`, a space,
+    a `.lock` or `/` end): every caller then refuses."""
+    value = os.environ.get(DEFAULT_BRANCH_ENV, "").strip()
+    if not value:
+        return DEFAULT_BRANCH
+    bad = (not BRANCH_NAME.fullmatch(value) or value[0] in "-./" or value.endswith(("/", ".", ".lock"))
+           or ".." in value or "//" in value or "/." in value or value == "HEAD")
+    return None if bad else value
+
 
 def resume_mark_path(session_id):
     """T317 R2: `<$CLAUDE_TRACE_ANCHOR_DIR or ~/.claude/harness-anchors>/<repo slug>/resume-at-<id>`,
