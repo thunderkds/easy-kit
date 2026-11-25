@@ -34,7 +34,7 @@ class Dequote(FixRoundTest):
         with open(os.path.join(self.project, "config", ".env"), "w") as f:
             f.write("KEY=1\n")
         os.makedirs(os.path.join(self.project, "infra"), exist_ok=True)  # R1 P2-3: a `*` finds a folder
-        for name in ("prod-values.yaml", "tls_cert.pem", "server.pem"):  # R3: `*-*`, `*_*` find these
+        for name in ("prod-values.yaml", "tls_cert.pem", "server.pem", ".env"):  # R3: `*-*`, `*_*` find these; R4: `.??`
             with open(os.path.join(self.project, name), "w") as f:
                 f.write("x\n")
 
@@ -107,6 +107,22 @@ class Dequote(FixRoundTest):
         for cmd in ("echo '$HOME/.env'", "grep -n '$HOME/.env' README.md"):
             with self.subTest(command=cmd):  # a `$` inside single quotes is a letter, not a variable
                 self.assert_silent(self.pre("Bash", cmd))
+
+    def test_r4_p2_a_dollar_inside_a_spaced_quoted_span_stays_data(self):
+        for cmd in ('echo "Using $HOME/.env"', 'echo "see $x.env file"', 'grep -n "found $x.env here" README.md',
+                    'echo "it\'s $HOME/.env"'):
+            with self.subTest(command=cmd):
+                self.assert_silent(self.pre("Bash", cmd))
+
+    def test_r4_p2_a_dot_led_glob_split_by_a_quote_or_variable_is_a_name(self):
+        for cmd in ("cat .??''?", 'cat .?""??', "cat .*$x", "cat .?$x??", "cat .??${x}"):
+            with self.subTest(command=cmd):
+                self.assert_ask(self.pre("Bash", cmd))
+
+    def test_r4_p3_bang_is_a_built_part(self):
+        for cmd in ("cat .env$!", "cat .claude/sens$!itive-paths.txt"):
+            with self.subTest(command=cmd):
+                self.assert_ask(self.pre("Bash", cmd))
 
     def test_ac2_a_dollar_quote_word_is_dequoted_in_the_folder_rule(self):
         for cmd in ("find config -d$'elete'", 'find config -d$"elete"'):

@@ -77,8 +77,8 @@ Recorded limitations (cut list, TASK_GUIDE_T146; T363; T375):
   `python -c` / `node -e` spans are not resolved (T363 option C, T375). A built part is a `*`:
   it stays in one folder (a variable holding `/` is missed) and it finds only a file that exists
   (`echo x > .env$x` with no `.env` is silent) (T375 Debate). A built part made by `$(…)` or a
-  backtick is not read (`sens$(true)itive-paths.txt`). A short literal prefix next to a built part
-  asks when it globs a sensitive file (`"se$x"` finds `server.pem`). The folder rule does not read a
+  backtick is not read (`sens$(true)itive-paths.txt`), nor the default text in `${F:-.env}`.
+  A short literal prefix next to a built part asks when it globs a sensitive file (`"se$x"` finds `server.pem`). The folder rule does not read a
   built part (`find config -d${E}elete`, `rm -r conf${x}ig`). A quoted value after `=` is read even
   behind a data command (`grep --exclude=".env" KEY src` asks) (T375 review).
 * The folder rule knows only the verbs above: `git reset --hard`, `git clean`, `git stash`,
@@ -166,8 +166,9 @@ TOKEN_PATTERN = re.compile(r"[^\s;&|<>()`'\"=:]+")
 GLOB_CHARS = re.compile(r"[*?\[]")
 # T375: a word the shell reads as one: plain characters, `\x` pairs, `$'…'`, and quoted spans with no space.
 SHELL_WORD_PATTERN = re.compile(r"""(?:[^\s;&|<>()`'"\\]|\\[\s\S]|\$?'[^'\s]*'|\$?"[^"\s]*")+""")
-SHELL_WORD_MARKS = re.compile(r"""['"\\]|\$[{\w@*]""")
-BUILT_PART_PATTERN = re.compile(r"\$\{[^}]*\}|\$\w+|\$[@*]")
+SHELL_WORD_MARKS = re.compile(r"""['"\\]|\$[{\w@*!]""")
+BUILT_PART_PATTERN = re.compile(r"\$\{[^}]*\}|\$\w+|\$[@*!]")
+DOT_GLOB_PATTERN = re.compile(r"\.[*?\[]")  # `.??` names dotfiles; `*-*` and `./*` name nothing
 WHOLLY_QUOTED_PATTERN = re.compile(r"""\$?(["'])[^"']*\1""")
 # T342: a segment whose command neither globs its arguments nor runs a shell. Anchored at the
 # segment start like shell_data's DATA_COMMAND_PATTERN: only `VAR=value` and a path may come
@@ -410,6 +411,26 @@ def shell_word(word):
     return re.sub(r"[\"'\\()]", "", re.sub(r"\$(?=[\"'])", "", word.replace("\\\n", "")))
 
 
+def blank_spaced_spans(text):
+    """`text` with each quoted span that holds a space turned into spaces: it is a message, so a
+    `$` in it is no word (`echo "see $x.env file"`, round 4). Quotes pair left to right; an
+    unterminated quote or a `\\"` ends the scan."""
+    out, i = list(text), 0
+    while i < len(text):
+        if text[i] in "\"'":
+            if i and text[i - 1] == "\\":
+                break
+            close = text.find(text[i], i + 1)
+            if close == -1:
+                break
+            if re.search(r"\s", text[i:close + 1]):
+                out[i:close + 1] = " " * (close + 1 - i)
+            i = close + 1
+        else:
+            i += 1
+    return "".join(out)
+
+
 def dequoted_tokens(text, cwd):
     """T375: path-like tokens of each word of `text` that mixes a quote, a backslash or a `$` part
     with plain text, read as the shell reads it (`sens''itive-paths.txt`, `sensitive-pa\\ths.txt`). `text`
@@ -419,7 +440,7 @@ def dequoted_tokens(text, cwd):
     and as empty (`$E.env` is `.env`; a `*` never matches a leading dot). A word with no literal
     text (`"$F"`) is a recorded limit."""
     found = []
-    for match in SHELL_WORD_PATTERN.finditer(text):
+    for match in SHELL_WORD_PATTERN.finditer(blank_spaced_spans(text)):
         word = match.group()
         if not SHELL_WORD_MARKS.search(word):
             continue
@@ -435,7 +456,7 @@ def dequoted_tokens(text, cwd):
             readings = [built.replace("\0", "$"), BUILT_PART_PATTERN.sub("", word).replace("\0", "$")]
         for reading in readings:
             for token in TOKEN_PATTERN.finditer(reading):
-                if not re.search(r"[A-Za-z0-9]", token.group()):
+                if not re.search(r"[A-Za-z0-9]", token.group()) and not DOT_GLOB_PATTERN.match(token.group()):
                     continue  # `TOKEN_PATTERN` splits at `=` and `:`: a piece of only `*`, `/`, `.`, `-`, `_` or `?` is no name (rounds 2-3)
                 found.append(token.group())
                 if BRACE_PATTERN.search(token.group()):
