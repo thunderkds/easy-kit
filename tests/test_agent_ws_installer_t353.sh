@@ -129,6 +129,12 @@ pty_setup "$D" '2\n\n\n\n\n\n'   # Reinstall, Enter at every question
 check "SC6: Reinstall shows Yes as the default" 'grep -qF "$QUESTION [Y/n]" "$D.log"'
 check "SC6: Reinstall + Enter keeps it on" 'lock_has "$D" "\"agent_ws\": \"on\"" && [ "$(entries "$D")" -eq 3 ]'
 commit_all "$D" "reinstall on"
+printf '# kit change for SC6\n' >> "$FIXTURE/scripts/agent_ws.py"
+git -C "$FIXTURE" commit -q -am "kit: agent_ws change 2"
+pty_setup "$D" '2\n\n\n\n\n\n'   # Reinstall after a kit change; the user never edited the script
+check "SC6: an unedited script is not backed up on Reinstall" '[ -z "$(find "$D/scripts" -name "agent_ws.py.bak-*")" ]'
+check "SC6: and it is refreshed" 'cmp -s "$D/scripts/agent_ws.py" "$FIXTURE/scripts/agent_ws.py"'
+commit_all "$D" "reinstall after kit change"
 pty_setup "$D" '2\n\n\nn\n\n\n'   # Reinstall, n
 check "SC6: Reinstall + n removes the entries" '[ "$(entries "$D")" -eq 0 ]'
 check "SC6: Reinstall + n drops the lock key" '! lock_has "$D" "\"agent_ws\""'

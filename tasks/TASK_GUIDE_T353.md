@@ -88,7 +88,7 @@ The installer question text follows the draft: `Turn on parallel builds (agent-w
 
 **Depends on**: T345 — `scripts/agent_ws.py` (merged into local `main` `f90c93f7`)
 
-**Entry point**: `offer_agent_ws`
+**Entry point**: `prompt_agent_ws`
 
 ---
 

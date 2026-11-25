@@ -969,7 +969,11 @@ run_reinstall() {
   { cat "$_fresh_list"; printf '%s\n' "CLAUDE.md"; } > "$HARNESS_TEMP_DIR/.reinstall-list"
   if [ "${AGENT_WS:-off}" = on ] && [ -f "$HARNESS_TEMP_DIR/scripts/agent_ws.py" ]; then
     printf '%s\n' "scripts/agent_ws.py" >> "$HARNESS_TEMP_DIR/.reinstall-list"
-    harness_backup_path "$HARNESS_TEMP_DIR/scripts/agent_ws.py" ./scripts/agent_ws.py || exit 1
+    # Back it up only when the user edited it (the lock hash says so), as for every kit file.
+    if reinstall_needs_backup "$HARNESS_TEMP_DIR/scripts/agent_ws.py" ./scripts/agent_ws.py \
+        scripts/agent_ws.py "$_lock"; then
+      harness_backup_path "$HARNESS_TEMP_DIR/scripts/agent_ws.py" ./scripts/agent_ws.py || exit 1
+    fi
     warn_hand_wired_agent_ws
   elif [ "$(lock_agent_ws "$_lock")" = on ]; then
     log_info "agent-ws: turned off. Its hooks are removed from .claude/settings.json; scripts/agent_ws.py is left in place."
