@@ -286,7 +286,8 @@ def gate_project(tmp_path, in_progress=(IN_PROGRESS_ROW,), ready=(), files=None,
 
 def gate_env(project, **extra):
     env = {k: v for k, v in os.environ.items()
-           if k not in ("CLAUDE_ACTIVE_TASK", "CLAUDE_PROJECT_DIR", "LINEAR_API_KEY")}
+           if k not in ("CLAUDE_ACTIVE_TASK", "CLAUDE_PROJECT_DIR", "CLAUDE_AUTO_VERIFY_RUN",
+                        "LINEAR_API_KEY")}
     env["CLAUDE_PROJECT_DIR"] = str(project)
     env.update(extra)
     return env

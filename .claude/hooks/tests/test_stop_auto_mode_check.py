@@ -170,7 +170,8 @@ def _wrote_report(project, task_id, offset_s=-30):
 def _run(project, active=False, **env):
     event = {"session_id": "S1", "transcript_path": str(project / "transcript.jsonl"),
              "hook_event_name": "Stop", "stop_hook_active": active}
-    full_env = {k: v for k, v in os.environ.items() if k not in ("CLAUDE_PROJECT_DIR",)}
+    full_env = {k: v for k, v in os.environ.items()
+                if k not in ("CLAUDE_PROJECT_DIR", "CLAUDE_AUTO_VERIFY_RUN")}
     full_env["CLAUDE_PROJECT_DIR"] = str(project)
     full_env.update(env)
     result = subprocess.run([sys.executable, str(project / ".claude" / "hooks" / HOOK)],
