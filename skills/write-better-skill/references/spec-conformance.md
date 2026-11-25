@@ -1,6 +1,6 @@
 # write-better-skill — Agent Skills Spec Conformance
 
-> Moved here verbatim from `SKILL.md` by T355, so the skill body fits Codex's 8 KB cap. Read it when `SKILL.md` points here.
+> Moved here verbatim from `SKILL.md` by T355, so the skill body fits Codex's 8 KB cap. Read it when `SKILL.md` points here. *Writing the description* above is the `### Writing the description` section of `SKILL.md`.
 
 This framework's skills implement the open [Agent Skills specification](https://agentskills.io/specification). The rules below are **normative** — a skill that breaks one is malformed, not merely unpolished. Checked automatically by `.claude/hooks/tests/test_skill_spec_conformance.py` over every directory in `skills/`.
 

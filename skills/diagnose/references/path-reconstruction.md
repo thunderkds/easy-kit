@@ -1,6 +1,6 @@
 # diagnose — Stuck-Loop Checkpoint — path reconstruction
 
-> Moved here verbatim from `SKILL.md` by T355, so the skill body fits Codex's 8 KB cap. Read it when `SKILL.md` points here.
+> Moved here verbatim from `SKILL.md` by T355, so the skill body fits Codex's 8 KB cap. Read it when `SKILL.md` points here. *INCONCLUSIVE is below* names the verdicts that follow the pointer in `SKILL.md`'s `### Stuck-Loop Checkpoint`.
 
 **Path reconstruction — before assigning any verdict.** Group Phase 4's probes by trace-id, order
 each group by timestamp, and walk it comparing the observed value at each boundary against the value

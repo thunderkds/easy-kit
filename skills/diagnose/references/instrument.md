@@ -1,6 +1,6 @@
 # diagnose — Phase 4 — Instrument: the nine steps, backward tracing, the no-seam fallback, red flags
 
-> Moved here verbatim from `SKILL.md` by T355, so the skill body fits Codex's 8 KB cap. Read it when `SKILL.md` points here.
+> Moved here verbatim from `SKILL.md` by T355, so the skill body fits Codex's 8 KB cap. Read it when `SKILL.md` points here. *The Checkpoint below* and *the Stuck-Loop Checkpoint below* name the `### Stuck-Loop Checkpoint` section of `SKILL.md`.
 
 1. **Sink** — write to one local NDJSON log file (e.g. under the system temp dir), one per diagnosis
    session. Never *write* debug output to `memory/event-trace/` — that channel records tool calls,

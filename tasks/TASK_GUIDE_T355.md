@@ -116,7 +116,7 @@ Text-only change to one existing list item on `site/docs.html`: no new element o
 | `README.md`, `site/docs.html` | Codex sentence: no skill skipped today |
 | `tests/test_readme_current.sh`, `tests/test_site_content.py`, `tests/test_t347_readme_codex_list.py`, `tests/test_plugin_names.py`, `tests/test_site_visual_first.py` | empty oversize set is valid |
 | `tests/test_skill_codex_cap_t355.py` (new) | SC 1–2 |
-| Other pin tests | only where a pinned line moved |
+| Other pin tests (`tests/test_memory_slice.py`, `tests/test_spawn_startup_reads.py`, `.claude/hooks/tests/test_diagnose_evidence_loop.py`) | only where a pinned line moved; added at Stage 4 (lane check `unpredicted`) |
 
 ## Files Must NOT Touch
 
