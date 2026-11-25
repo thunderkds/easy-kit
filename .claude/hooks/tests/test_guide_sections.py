@@ -542,6 +542,22 @@ def _read(path):
         return f.read()
 
 
+def _skill_with_refs(path):
+    """T355: a SKILL.md with each `references/*.md` it links to read in at the linking line.
+
+    The bugfix skeleton and craft-spawn-prompt's elements 6-7 moved into reference files so the
+    skills fit Codex's 8 KB cap; what these tests pin is the skill's text, wherever it lives.
+    """
+    out, seen = [], set()
+    for line in _read(path).split("\n"):
+        out.append(line)
+        for ref in re.findall(r"\]\((references/[\w.-]+\.md)\)", line):
+            if ref not in seen:  # a file linked twice is read in once, at its first link
+                seen.add(ref)
+                out.append(_read(os.path.join(os.path.dirname(path), ref)))
+    return "\n".join(out)
+
+
 def _git_show(ref, path):
     return subprocess.run(
         ["git", "show", f"{ref}:{path}"],
@@ -720,7 +736,7 @@ def test_ac11_negative_control_detects_each_token_form():
 # ==========================================================================
 
 def test_ac12_bugfix_skeleton_splits_the_same_two_sections():
-    skill = _read(os.path.join(REPO_ROOT, "skills", "bugfix", "SKILL.md"))
+    skill = _skill_with_refs(os.path.join(REPO_ROOT, "skills", "bugfix", "SKILL.md"))
     assert "TASK_REVIEW_" in skill, "the bugfix skeleton never names the review file"
     evidence = _slice(skill, EVIDENCE_SLICE_RE)
     assert evidence, "`### Evidence` heading missing from the bugfix skeleton"
@@ -731,7 +747,7 @@ def test_ac12_bugfix_skeleton_splits_the_same_two_sections():
 def test_ac12_both_flavors_keep_identical_field_names():
     """The property delivery-report depends on to need no flavor branch."""
     review = _read(os.path.join(TEMPLATES_DIR, "TASK_REVIEW_template.md"))
-    bugfix = _read(os.path.join(REPO_ROOT, "skills", "bugfix", "SKILL.md"))
+    bugfix = _skill_with_refs(os.path.join(REPO_ROOT, "skills", "bugfix", "SKILL.md"))
     fields = re.findall(r"\*\*(BEFORE|AFTER|DELTA|WITNESS)\*\*", review)
     assert fields == ["BEFORE", "AFTER", "DELTA", "WITNESS"]
     bugfix_review = bugfix[bugfix.index("TASK_REVIEW"):]
@@ -750,7 +766,7 @@ def test_ac12_gate_finds_the_verify_row_in_a_real_split_bugfix_pair(tmp_path):
     to the Supervisor rather than edited green.
     """
     review = _read(os.path.join(TEMPLATES_DIR, "TASK_REVIEW_template.md"))
-    bugfix = _read(os.path.join(REPO_ROOT, "skills", "bugfix", "SKILL.md"))
+    bugfix = _skill_with_refs(os.path.join(REPO_ROOT, "skills", "bugfix", "SKILL.md"))
     extra_rows = [
         l for l in bugfix.splitlines()
         if l.startswith(("| Repro loop |", "| Regression test |", "| Smoke suite |"))
@@ -772,7 +788,7 @@ def test_ac12_gate_finds_the_verify_row_in_a_real_split_bugfix_pair(tmp_path):
 
 
 def test_ac13_craft_spawn_prompt_targets_the_review_file_by_absolute_path():
-    skill = _read(
+    skill = _skill_with_refs(
         os.path.join(REPO_ROOT, "skills", "craft-spawn-prompt", "SKILL.md")
     )
     element7 = skill[skill.index("Element 7"):]

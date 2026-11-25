@@ -1522,7 +1522,7 @@ Decided by: auto-approve (overwrite all)
     },
     {
      "title": "Pre-flight structural-reference check",
-     "note": "Read extract_structural_task_ids() directly from .claude/hooks/pre_agent_validate_guide.py — do not re-derive or approximate the pattern, it must stay byte-for-byte in sync with what the hook enforces. Run it against the assembled prompt text:"
+     "note": "Run the check in references/preflight.md against the assembled prompt. Flag what it finds; never rewrite the prompt to pass it."
     },
     {
      "title": "Recommend spawn model",
@@ -2332,7 +2332,7 @@ Decided by: auto-approve (overwrite all)
     },
     {
      "title": "Agent Skills Spec Conformance",
-     "note": "This framework's skills implement the open Agent Skills specification. The rules below are normative — a skill that breaks one is malformed, not merely unpolished. Checked automatically by .claude/hooks/tests/test_skill_spec_conformance.py over every…"
+     "note": "The spec's rules are normative: a skill that breaks one is malformed. Read references/spec-conformance.md before you write or check frontmatter, size a SKILL.md, bundle a directory, or add a script call."
     },
     {
      "title": "Leading Words",
@@ -2340,7 +2340,7 @@ Decided by: auto-approve (overwrite all)
     },
     {
      "title": "Information Hierarchy",
-     "note": "A skill is built from steps (ordered actions) and reference (rules, definitions, facts). The hierarchy ranks by how immediately the agent needs the material:"
+     "note": "Rank material by how soon the agent needs it: steps first, reference after. The ranking and its rules are in references/information-hierarchy.md."
     },
     {
      "title": "Completion Criteria",
@@ -2356,11 +2356,11 @@ Decided by: auto-approve (overwrite all)
     },
     {
      "title": "Sourcing",
-     "note": "Start from real expertise. A skill drafted from the model's general training knowledge produces generic filler — \"handle errors appropriately\", \"follow best practices\" — instead of the specific conventions, edge cases, and commands that make a skill worth…"
+     "note": "Start from real expertise, not general training knowledge. How to source a skill: references/sourcing.md."
     },
     {
      "title": "Fidelity Gate (Hallucination Check)",
-     "note": "Consulted by teach and craft-agent immediately before they emit a draft — a drafted skill/agent is *durable*: unlike a bad code change caught by Stage 4 review for one task, a hallucinated or over-scoped draft lives in skills/ or agents/ and silently affects…"
+     "note": "teach and craft-agent run this gate immediately before they emit a draft. The checks are in references/fidelity-gate.md."
     },
     {
      "title": "Pipeline Integration (This Framework)",

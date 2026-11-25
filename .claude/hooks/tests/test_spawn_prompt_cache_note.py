@@ -17,6 +17,8 @@ import re
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 SKILL_MD = os.path.join(ROOT, "skills", "craft-spawn-prompt", "SKILL.md")
+# T355: step 3's DDR-0004 note and the element 6-7 detail moved here (Codex 8 KB skill cap).
+SPAWN_LINES = os.path.join(ROOT, "skills", "craft-spawn-prompt", "references", "spawn-lines.md")
 DDR_GLOB = os.path.join(ROOT, "docs", "ddr", "0004-*.md")
 
 BANNED_WORDS = ["budget", "target", "limit", "at most", "should be under"]
@@ -41,21 +43,23 @@ def _skill_step_3():
         re.DOTALL,
     )
     assert m, "SKILL.md has no '#### 3. Assemble the prompt' ... '#### 4.' span"
-    return m.group(1)
+    assert "references/spawn-lines.md" in m.group(1), "step 3 no longer points at spawn-lines.md"
+    return m.group(1) + "\n" + _read(SPAWN_LINES)
 
 
 def _added_passage(step_3_text):
     """The new cache-note paragraph: between the pre-existing caller-inputs
     sentence and the pre-existing '**Element 6' subsection that follows it."""
-    start_marker = "Any caller-supplied inputs"
+    assert "Any caller-supplied inputs" in step_3_text, \
+        "step 3 no longer contains the 'Any caller-supplied inputs' anchor sentence"
+    # T355: the note now opens references/spawn-lines.md, still right before '**Element 6'.
+    start_marker = "**Spawn-prompt size is not the cost lever"
     end_marker = "**Element 6"
     start = step_3_text.find(start_marker)
-    assert start != -1, "step 3 no longer contains the 'Any caller-supplied inputs' anchor sentence"
+    assert start != -1, "the DDR-0004 note is gone from step 3 and its reference"
     end = step_3_text.find(end_marker, start)
     assert end != -1, "step 3 no longer contains the pre-existing '**Element 6' subsection"
-    after_anchor = step_3_text[start:end]
-    end_of_anchor_sentence = after_anchor.find("\n")
-    return after_anchor[end_of_anchor_sentence:].strip("\n")
+    return step_3_text[start:end].strip("\n")
 
 
 def _normalize_number(raw):

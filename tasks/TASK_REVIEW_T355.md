@@ -13,6 +13,7 @@ Mode: auto
 Checks: _pending_
 Memory: _pending_
 Not done: _pending_
+Paused: auto-mode check failed — Risk Medium: decision 3 (`FACT`) is a choice — its FACT has no Citation (`path:line "quoted text"`) — so it must be `DEBATED` with exactly 2 Advocates named; Risk Medium, but the trace has no `security-review` Skill call [report 734edc54eecc]
 
 ## Evidence
 
