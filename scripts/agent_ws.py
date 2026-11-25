@@ -48,6 +48,7 @@ import cleanup_task as ct  # noqa: E402  (removal rules: T327; not edited)
 
 NAME_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}")
 POINTER = ".cargo/config.toml"
+LEASE_KEYS = ("name", "path", "branch", "base")
 SHELLS = {"sh", "bash", "zsh", "dash", "fish", "python3", "python", "env", "timeout", "nice", "flock"}
 
 
@@ -104,9 +105,15 @@ class Repo:
             if n.endswith(".json"):
                 try:
                     with open(os.path.join(self.leases, n)) as f:
-                        out.append(json.load(f))
+                        lease = json.load(f)
                 except (OSError, ValueError):
                     err(f"unreadable lease {n}: skipped")
+                    continue
+                missing = [k for k in LEASE_KEYS if not isinstance(lease, dict) or not lease.get(k)]
+                if missing:
+                    err(f"lease {n} lacks {', '.join(missing)}: skipped")
+                    continue
+                out.append(lease)
         return out
 
     def find(self, key):
@@ -286,7 +293,10 @@ def cmd_new(args):
         if a == "--branch":
             branch = next(it, None)
         elif a == "--owner-pid":
-            pid = int(next(it, "0"))
+            raw = next(it, "")
+            if not raw.isdigit():
+                raise Refused(f"--owner-pid needs a process number, not {raw!r}")
+            pid = int(raw)
         elif name is None:
             name = a
         else:
@@ -445,9 +455,14 @@ def cmd_gc(args):
         name = lease.get("name", "?")
         leased.add(os.path.realpath(lease.get("path", "")))
         build = lease.get("build_dir")
-        if build and os.path.isdir(build):
-            used += sum(os.path.getsize(os.path.join(d, f)) for d, _, fs in os.walk(build) for f in fs
-                        if not os.path.islink(os.path.join(d, f)))
+        if dry and build and os.path.isdir(build):
+            for d, _, fs in os.walk(build):
+                for f in fs:
+                    try:  # a running cargo build adds and deletes files while we count
+                        if not os.path.islink(os.path.join(d, f)):
+                            used += os.path.getsize(os.path.join(d, f))
+                    except OSError:
+                        pass
         if owner_alive(lease):
             print(f"kept {name}: owner {lease['owner_pid']} alive", flush=True)
             continue

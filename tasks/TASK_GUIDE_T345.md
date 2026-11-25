@@ -360,7 +360,7 @@ Queue modes (R7, R8) wrap the command: 1 slot `flock -o $W/locks/slot.0 cargo â€
 | 11 | On a filesystem where a reflink probe fails, `new` seeds nothing and says so on stderr | S1 |
 | 12 | With the queue on, `agent-ws run` prints `waiting for build slot` on stderr while queued | S4 |
 | 13 | A SessionStart hook exports the profile environment through `$CLAUDE_ENV_FILE` | C1 |
-| 14 | **tmpfs build folder by default**: after `agent-ws new`, a `cargo build` in the worktree writes `target/` under the tmpfs folder `<mount>/agent-ws-<uid>/<name>/` (checked with `stat -f -c %T` = `tmpfs`), not into the worktree. The folder is `0700`, owned by the user, never a symlink (D4) | R9, R10, D3, D4 |
+| 14 | **tmpfs build folder by default**: after `agent-ws new`, a `cargo build` in the worktree writes `target/` under the tmpfs folder `<mount>/agent-ws-<uid>/<repo id>/<name>-<token>/` (path widened 2026-11-25 by the Edge Case rows "two repos with the same worktree name" and the R5 no-reuse rule: `TASK_REVIEW_T345.md` decision 6; checked with `stat -f -c %T` = `tmpfs`), not into the worktree. The folder is `0700`, owned by the user, never a symlink (D4) | R9, R10, D3, D4 |
 | 15 | **tmpfs fallback**: when no tmpfs exists or free space is under 4 GB, `new` uses an on-disk `target/` and says so on stderr; it never fails creation for this reason | R10 cost list |
 | 16 | `rm` and `gc` remove the worktree's tmpfs folder only after AC 9's checks pass; after a reboot (tmpfs gone) a `cargo build` recreates it and `gc` raises no error | R10, G2b |
 | 17 | `agent-ws run` runs the command under `nice -n 19` and never under `ionice` (no effect on `mq-deadline`) | R9 |
@@ -381,7 +381,7 @@ Queue modes (R7, R8) wrap the command: 1 slot `flock -o $W/locks/slot.0 cargo â€
 | 4 | 8 parallel `agent-ws new` | 8 worktrees, exit 0 each | automated test |
 | 5 | worktree with unmerged commit, dead lease PID; `agent-ws gc` | worktree and branch still there, exit 1, reason printed | automated test |
 | 6 | merged, clean worktree, dead lease PID; `agent-ws gc` | worktree and branch gone | automated test |
-| 7 | worktree from `agent-ws new` with a tmpfs available; `cargo build` of a 1-file crate with no dependencies | `target/` is under `<mount>/agent-ws-<uid>/<name>/`, `stat -f -c %T` prints `tmpfs`, worktree has no `target/` | automated test |
+| 7 | worktree from `agent-ws new` with a tmpfs available; `cargo build` of a 1-file crate with no dependencies | `target/` is under `<mount>/agent-ws-<uid>/<repo id>/<name>-<token>/`, `stat -f -c %T` prints `tmpfs`, worktree has no `target/` | automated test |
 | 8 | same, but the tmpfs candidates are forced absent (test seam) | stderr says on-disk `target/`; creation exit 0 | automated test |
 | 9 | merged, clean worktree with a tmpfs folder; `agent-ws rm` | worktree, branch and tmpfs folder gone; same call on an unmerged branch leaves all three | automated test |
 | 10 | two worktrees, one with a marker string in `src/lib.rs`; build both with `agent-ws` env | each artifact holds only its own source (the shared-target stale build of R5 cannot happen) | automated test |

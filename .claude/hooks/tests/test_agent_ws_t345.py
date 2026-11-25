@@ -746,3 +746,43 @@ def test_rm_never_deletes_a_build_folder_off_tmpfs_even_if_the_lease_says_so(tmp
     open(lp, "w").write(json.dumps(lease))
     r = ws(repo, env, "rm", "x3")
     assert r.returncode == 1 and (victim / "data").read_text() == "precious\n"
+
+
+def load_module():
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("agent_ws_under_test", SCRIPT)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def test_gc_does_not_walk_build_folders_unless_dry_run(tmp_path, env, shm, monkeypatch):
+    repo = make_repo(tmp_path, rust=True)
+    e = {**env, "AGENT_WS_TMPFS_CANDIDATES": shm}
+    ws(repo, e, "new", "y1", "--owner-pid", str(dead_pid()))
+    open(os.path.join(lease_of(repo, "y1")["build_dir"], "f"), "w").write("x")
+    mod = load_module()
+
+    def vanished(_path):
+        raise FileNotFoundError("a cargo build deleted it")
+    monkeypatch.setattr(mod.os.path, "getsize", vanished)
+    monkeypatch.chdir(repo)
+    for k, v in e.items():
+        monkeypatch.setenv(k, v)
+    assert mod.cmd_gc([]) == 0  # no walk, no crash
+    assert not (tmp_path / "wt-y1").exists()
+    ws(repo, e, "new", "y2", "--owner-pid", str(os.getpid()))
+    open(os.path.join(lease_of(repo, "y2")["build_dir"], "f"), "w").write("x")
+    assert mod.cmd_gc(["--dry-run"]) == 0  # a vanished file is skipped, not fatal
+
+
+def test_bad_owner_pid_and_broken_lease_are_refusals_not_tracebacks(tmp_path, env):
+    repo = make_repo(tmp_path)
+    r = ws(repo, env, "new", "z1", "--owner-pid", "abc")
+    assert r.returncode == 1 and "Traceback" not in r.stderr
+    leases = os.path.join(repo, ".git", "agent-ws", "leases")
+    os.makedirs(leases, exist_ok=True)
+    open(os.path.join(leases, "broken.json"), "w").write('{"name": "broken"}')
+    for args in (["gc"], ["rm", "broken"], ["rm", str(tmp_path / "wt-none")]):
+        r = ws(repo, env, *args)
+        assert "Traceback" not in r.stderr, (args, r.stderr)
