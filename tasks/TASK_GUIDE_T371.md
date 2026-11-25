@@ -31,10 +31,10 @@ Before writing any code:
 - A hard deny stays a deny.
 
 **Restated intent**:
-1. `[admin]` is read from the transcript exactly as the merge gate reads it: the session tag, or the latest request the user typed.
+1. `[admin]` is the session tag, read from the transcript (`auto_mode.session_request`, which honours `[stop]`, another tag and a resume).
 2. A read passes with no output.
 3. Any other sensitive call gets no decision (the normal permission flow; the hook never emits `allow`, T146). The hook first appends one JSON line to `<anchors base>/<repo slug>/sensitive-admin-<session>.jsonl`, and emits an `additionalContext` note that asks for the final-report line.
-4. A write to the guard's own files (`PROTECTED_PATTERNS`) still asks.
+4. A call that touches the guard's own files (`PROTECTED_PATTERNS`) still asks, a read included.
 5. A call whose log line cannot be written asks.
 
 **Out of scope**: headless verify sessions (no `[admin]` is typed there, so they still ask); a Stop-check rule that enforces the report line (the note asks for it); changing which paths are sensitive.
@@ -67,7 +67,7 @@ Before writing any code:
 
    The `additionalContext` names the log.
 3. Under `[admin]`, a read (`cat config/.env`, `grep -rn KEY config`, `ls -a config`, `find config -name …`, `git diff -- …`, a pipe of reads) passes with no log line. A read with a redirect, `tee`, `find -delete`, `git diff --output=…` or a destructive segment is a write.
-4. Under `[admin]`, a write to `.claude/sensitive-paths.txt`, `.claude/state/**`, the approval file, or `rm -rf .claude` still asks.
+4. Under `[admin]`, a read or a write of `.claude/sensitive-paths.txt`, `.claude/state/**`, the approval file, or `rm -rf .claude` still asks.
 5. Under `[admin]`, a log folder that cannot be created or a symlinked log file asks.
 6. The log only grows (append), one line per approved call.
 7. Every earlier sensitive-path and `tracks.md` test passes unchanged; `docs/claude-md/tracks.md` `### Admin tag` says the rule.
