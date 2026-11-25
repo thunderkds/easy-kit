@@ -363,7 +363,7 @@ BASELINE_SENTENCES = [
     ("0b3ee3f81ee6", "Codex executes the kit's skills directly, by nam"),
     ("a006ebe681ba", "Each skill's body is capped at 8 KB per Codex's "),
     ("183089d98455", 'A skill over the cap is skipped with a named, lo'),
-    ("c4c0e14260fd", "Four of this kit's skills currently exceed it an"),
+    ("d8d98ca1bdc4", "No kit skill is over the cap today: a long skil"),  # T355 (was c4c0e14260fd)
     ("19affec83916", 'What a non-Claude provider still cannot enforce:'),
     ("430eaddbdbc7", 'code-review, security-review, verify, release-pl'),  # T352 (was d51a57bb889f)
     ("96780aea2886", 'Those stay on the Claude supervisor: an adapter '),

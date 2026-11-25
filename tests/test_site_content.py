@@ -608,7 +608,9 @@ def test_providers_section_names_codex_skill_cap_and_skipped_skills():
     )
 
     skipped = _skills_over_codex_cap(cap_bytes)
-    assert skipped, "no skill exceeds the Codex cap on disk — fixture broken"
+    if not skipped:  # T355: none is over the cap; the page must say so, not keep a stale list
+        assert _word_present(body, "No kit skill is over the cap today"), (
+            "no skill exceeds the Codex cap on disk, but the Providers section does not say so")
     missing = [name for name in skipped if not _word_present(body, name)]
     assert not missing, (
         f"Providers section does not name skill(s) skipped for exceeding the Codex cap: {missing}"

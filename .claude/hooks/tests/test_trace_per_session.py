@@ -173,7 +173,7 @@ def test_ac7_incident_replay_has_no_crossings_and_t188_is_not_verified_by_t190()
 
 REPO_ROOT = os.path.dirname(os.path.dirname(HOOKS_DIR))
 LIVE_INSTRUCTIONS = (
-    "skills/craft-spawn-prompt/SKILL.md",
+    "skills/craft-spawn-prompt/references/spawn-lines.md",  # T355: element 6 moved here
     "skills/resolve-question/SKILL.md",
     "docs/claude-md/tracks.md",
     ".claude/hooks/pre_bash_block_unsafe_merge.py",

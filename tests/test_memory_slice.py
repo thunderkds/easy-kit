@@ -201,7 +201,10 @@ def test_ac4_element_4_runs_the_slice_and_carries_the_escape_hatch():
     assert "scripts/memory_slice.py" in row and "verbatim" in row
     assert ("Read `memory/MEMORY.md` in full only if your work reaches a file, hook, skill "
             "or decision the slice does not cover.") in skill
-    preflight = skill.split("#### 4.")[1].split("#### 5.")[0]
+    step4 = skill.split("#### 4.")[1].split("#### 5.")[0]
+    assert "references/preflight.md" in step4  # T355: step 4 runs the check in its reference
+    preflight = step4 + (ROOT / "skills" / "craft-spawn-prompt" / "references" / "preflight.md").read_text(
+        encoding="utf-8")
     assert "<!-- memory-slice:" in preflight
 
 

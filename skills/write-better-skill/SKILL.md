@@ -34,36 +34,7 @@ Read [`references/descriptions.md`](references/descriptions.md) when writing or 
 
 ## Agent Skills Spec Conformance
 
-This framework's skills implement the open [Agent Skills specification](https://agentskills.io/specification). The rules below are **normative** — a skill that breaks one is malformed, not merely unpolished. Checked automatically by `.claude/hooks/tests/test_skill_spec_conformance.py` over every directory in `skills/`.
-
-**`name`** (required):
-- 1–64 characters
-- unicode lowercase alphanumeric (`a-z`, `0-9`) and hyphens (`-`) only — uppercase is invalid
-- must not start or end with a hyphen
-- must not contain consecutive hyphens (`--`)
-- must match the parent directory name
-
-**`description`** (required): non-empty, max 1024 characters. Craft guidance is in *Writing the description* above; this is the hard limit.
-
-**Optional fields:**
-- `license` — the licence applied to the skill. Add only when the skill ships under terms different from the repo's; keep it to a licence name or a bundled file name.
-- `compatibility` — max 500 characters. Add only when the skill has real environment requirements (intended product, required system packages, network access). Most skills do not need it.
-- `metadata` — a map from string keys to string values, for properties the spec does not define. Use unique-ish key names to avoid collisions.
-- `allowed-tools` — **out of scope in this framework.** The spec marks it Experimental and states support varies by implementation; no skill here uses it.
-
-**Progressive-disclosure budgets** (spec numbers, not prose):
-- metadata (`name` + `description`) ≈ **100 tokens**, loaded at startup for **every** skill — this is why description pruning pays repo-wide
-- `SKILL.md`: **≤ 500 lines** and **≤ 5,000 tokens** once the skill activates. The line budget is measured over the **whole file, frontmatter included** — trimming the body to exactly 500 still fails, because the conformance test counts every line in `SKILL.md`.
-- resources (`scripts/`, `references/`, `assets/`) load **on demand only**
-
-**Bundled directories** — the spec's conventional layout beside `SKILL.md`:
-- `scripts/` — executable code the agent runs; self-contained or with documented dependencies
-- `references/` — documentation loaded on demand; keep each file focused
-- `assets/` — templates, images, data files
-
-**File references** use relative paths from the skill root (`references/REFERENCE.md`, `scripts/extract.py`) and stay **one level deep**. Avoid deeply nested reference chains.
-
-**Script calls** name the script by `${CLAUDE_SKILL_DIR}`, never by a repo-relative path: the user's project holds none of the kit's files when the kit runs as a plugin (T234). One rule serves the plugin and a `setup.sh` install. Quote the variable, because the folder may hold a space. A skill's own script: `python3 "${CLAUDE_SKILL_DIR}/scripts/x.py"`. A shared script in the kit's `scripts/`: `python3 "${CLAUDE_SKILL_DIR}/../../scripts/x.py"`. Claude Code fills the variable in `SKILL.md`; in a `references/` file read it as the skill's base directory. In a `setup.sh` install the value is `<project>/.claude/skills/<name>`, and `.claude/skills` is a symlink. A script that finds the kit by its own location uses `os.path.realpath(__file__)`, never `abspath`, which drops `..` without following the symlink. The Codex installer rewrites the variable in its copies (`lib/harness-fetch.sh`, `_harness_rewrite_skill_dir`): the source files keep it. A script finds the project by the working directory (`script_project_root()` in `.claude/hooks/lib/project_root.py`), not by its own location. `tests/test_plugin_names.py` runs every command in both layouts and fails on a repo-relative call.
+The spec's rules are normative: a skill that breaks one is malformed. Read [`references/spec-conformance.md`](references/spec-conformance.md) before you write or check frontmatter, size a `SKILL.md`, bundle a directory, or add a script call.
 
 ---
 
@@ -84,17 +55,7 @@ You win twice: fewer tokens, sharper hook for the agent.
 
 ## Information Hierarchy
 
-A skill is built from **steps** (ordered actions) and **reference** (rules, definitions, facts). The hierarchy ranks by how immediately the agent needs the material:
-
-1. **In-skill step** — an ordered action in SKILL.md. Each step ends on a **completion criterion**: checkable (can the agent tell done from not-done?) and exhaustive ("every modified file accounted for", not "produce a change list"). Vague criteria invite **premature completion**.
-2. **In-skill reference** — definitions and rules consulted on demand. A legitimately flat peer-set is fine (not a smell). This skill is all reference.
-3. **External reference** — pushed out of SKILL.md into a sibling file (e.g. `GLOSSARY.md`), reached via a **context pointer**. Loaded only when the pointer fires.
-
-**Progressive disclosure** is the move down the ladder — out of SKILL.md into a linked file — so the top stays legible. A **context pointer** must name the *trigger condition* for loading the file, not just its existence, and must be written as a **Markdown link** — the two pointers in this file are the worked examples: each names when to load its target, and each is a link. Never a bare "see `references/` for details", and never a path in plain backticks: `.claude/hooks/tests/test_skill_reference_pointers.py` resolves links only, so a backticked path is a pointer nothing checks — it can rot to a missing file and the suite stays green. A pointer without a trigger condition is a pointer the agent cannot decide to follow; a pointer without link syntax is one nothing can verify.
-
-**Co-location**: keep a concept's definition, rules, and caveats under one heading so reading one part brings its neighbours.
-
-Split signal: inline what every branch needs; push behind a pointer what only some branches reach.
+Rank material by how soon the agent needs it: steps first, reference after. The ranking and its rules are in [`references/information-hierarchy.md`](references/information-hierarchy.md).
 
 Read [`references/instruction-patterns.md`](references/instruction-patterns.md) when drafting or restructuring a skill *body* — six reusable structures (gotchas, output templates, checklists, validation loops, plan-validate-execute, bundled scripts) and the rules for calibrating how tightly each part instructs.
 
@@ -138,29 +99,13 @@ A weak leading word (*be thorough*) is a no-op when the agent is already thoroug
 
 ## Sourcing
 
-**Start from real expertise.** A skill drafted from the model's general training knowledge produces generic filler — "handle errors appropriately", "follow best practices" — instead of the specific conventions, edge cases, and commands that make a skill worth loading. The model already knows the generic version; the skill exists for what it does not know.
-
-Source material must be **project-specific**: execution traces (`memory/event-trace/`), corrections the user made mid-task, git history — especially fixes, which show what actually went wrong — review comments, and real failure cases (`memory/learnings.md`).
-
-Two routes to it:
-- **Extract from a completed hands-on task.** Run the real task with an agent, then lift the reusable pattern: the sequence that worked, each correction you made, the input/output shapes, and the project facts you had to supply.
-- **Synthesize from existing project artifacts.** Feed the body of knowledge you already have — runbooks, specs, schemas, configs, incident write-ups — and draft from it. A skill built from this repo's own hook failures beats one built from an article about writing hooks.
-
-Then refine against real execution: run the draft on real tasks and feed back *all* results, not just the failures. Read the traces, not only the final output — an agent trying several approaches signals instructions that are too vague; an agent following an instruction that does not apply signals one that should be conditional or cut.
+Start from real expertise, not general training knowledge. How to source a skill: [`references/sourcing.md`](references/sourcing.md).
 
 ---
 
 ## Fidelity Gate (Hallucination Check)
 
-Consulted by `teach` and `craft-agent` immediately before they emit a draft — a drafted skill/agent is *durable*: unlike a bad code change caught by Stage 4 review for one task, a hallucinated or over-scoped draft lives in `skills/` or `agents/` and silently affects every future session until someone notices.
-
-Check every claim in the draft against a source, not against plausibility:
-
-1. **Traceability** — every capability the draft claims (each Workflow step, each Karpathy override, each "Required skills/expertise" line) must trace to `PRD.md`, `PROJECT_SPEC.md`, or the user's literal words in the current session. An untraceable claim is a hallucination — cut it, don't soften it.
-2. **Reference resolution** — every `Skill({ skill: "..." })` or `Agent({ subagent_type: "..." })` call written inside the draft must resolve to a name that actually exists (check `skills/*/SKILL.md` and `agents/*.md` frontmatter). If it doesn't, don't drop the draft — flag the line inline as `[UNRESOLVED: references "<name>" — does not exist yet, draft separately]` and still emit.
-3. **Scope containment** — the draft must not claim authority the Permanent Rules reserve elsewhere (e.g. an agent writing to `memory/` directly, when only the Supervisor writes memory). Flag any such overreach rather than emitting it silently.
-
-**Completion criterion**: every claim traces to a source or is cut; every internal `Skill()`/`Agent()` reference resolves or is flagged `[UNRESOLVED: ...]`; no unflagged Permanent-Rules overreach. State "Fidelity gate: PASS" or list the cuts/flags immediately before the Registration checklist.
+`teach` and `craft-agent` run this gate immediately before they emit a draft. The checks are in [`references/fidelity-gate.md`](references/fidelity-gate.md).
 
 ---
 

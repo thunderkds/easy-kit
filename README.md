@@ -59,7 +59,7 @@ project**, and on Linux whether to turn on **parallel builds** (agent-ws; off by
 
 Codex caps a skill body at 8 KB. A skill whose body currently exceeds that cap is **skipped**
 entirely on a Codex install — never truncated — with a named, loud warning. Skills currently
-affected: `bugfix`, `craft-spawn-prompt`, `diagnose`, `write-better-skill`.
+affected: none (long skills keep their detail in reference files).
 
 To update, run the same line again and choose **Update** — it keeps the CLIs your project already has,
 so a Codex-only install stays Codex-only. Edited kit files get one choice: ask about each one, overwrite
