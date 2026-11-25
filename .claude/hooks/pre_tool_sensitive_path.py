@@ -68,9 +68,13 @@ not a link; the file is opened `O_APPEND|O_NOFOLLOW`, 0600), and an `additionalC
 line in the task's final report. A call that touches the guard's own files (`PROTECTED_PATTERNS`)
 still asks, a read included, and so does any call whose log line cannot be written.
 
-Recorded limitations (cut list, TASK_GUIDE_T146; T363):
-* Paths built from variables (`cat "$F"`, `${f}itive-paths.txt`), `eval`, and the code of
-  `python -c` / `node -e` spans are not resolved (T363 option C).
+Words (T375): a word that holds a quote, a backslash or `$'…'` is also read as the shell reads it
+(`sens''itive-paths.txt`, `sensitive-pa\ths.txt`, `-d$'elete'`). A part the shell still builds
+(`${x}`, `$x`) next to literal text is read as `*` and globbed (`sens${x}itive-paths.txt`).
+
+Recorded limitations (cut list, TASK_GUIDE_T146; T363; T375):
+* A word that is only a variable (`cat "$F"`), `eval`, `$'\x65'` escapes, and the code of
+  `python -c` / `node -e` spans are not resolved (T363 option C, T375).
 * The folder rule knows only the verbs above: `git reset --hard`, `git clean`, `git stash`,
   `cp -r`, `rsync --delete`, `tar -x`, `ln -sf`, a script or an alias acting on a folder do not
   ask (T363 option C). Nor does a destructive command inside quoted code (`bash -c "rm -rf x"`,
@@ -154,6 +158,10 @@ except Exception as exc:  # pragma: no cover - exercised via subprocess test
 # `:` too (T314): `git show :.env` and `HEAD:.env` read the file; splitting only adds asks.
 TOKEN_PATTERN = re.compile(r"[^\s;&|<>()`'\"=:]+")
 GLOB_CHARS = re.compile(r"[*?\[]")
+# T375: a word the shell reads as one: plain characters, `\x` pairs, `$'…'`, and quoted spans with no space.
+SHELL_WORD_PATTERN = re.compile(r"""(?:[^\s;&|<>()`'"\\]|\\.|\$?'[^'\s]*'|\$?"[^"\s]*")+""")
+SHELL_WORD_MARKS = re.compile(r"""['"\\]|\$[{\w]""")
+BUILT_PART_PATTERN = re.compile(r"\$\{[^}]*\}|\$\w+")
 # T342: a segment whose command neither globs its arguments nor runs a shell. Anchored at the
 # segment start like shell_data's DATA_COMMAND_PATTERN: only `VAR=value` and a path may come
 # first, so `sudo sed`, `xargs grep` keep the default (expand). Short on purpose: a command
@@ -386,7 +394,37 @@ def command_tokens(command, cwd):
         if GLOB_CHARS.search(masked[start:end]):
             matches = glob.iglob(os.path.join(cwd, match.group()), recursive=True)
             tokens.extend(itertools.islice(matches, MAX_GLOB_MATCHES))
+    tokens.extend(dequoted_tokens(text, cwd))
     return tokens
+
+
+def shell_word(word):
+    """`word` as the shell reads it: `$` before a quote, quotes, backslashes and parens dropped (T375)."""
+    return re.sub(r"[\"'\\()]", "", re.sub(r"\$(?=[\"'])", "", word))
+
+
+def dequoted_tokens(text, cwd):
+    """T375: path-like tokens of each word of `text` that holds a quote, a backslash or a `$` part,
+    read as the shell reads it (`sens''itive-paths.txt`, `sensitive-pa\\ths.txt`). A part the shell
+    still builds (`${x}`, `$x`) next to literal text becomes `*` and is globbed like any token
+    (`sens${x}itive-paths.txt`); a word with no literal text (`"$F"`) is a recorded limit."""
+    found = []
+    for match in SHELL_WORD_PATTERN.finditer(text):
+        word = match.group()
+        if not SHELL_WORD_MARKS.search(word):
+            continue
+        word = shell_word(word)
+        built = BUILT_PART_PATTERN.sub("*", word)
+        if built != word:
+            if not built.strip("*/"):
+                continue
+            word = built
+        for token in TOKEN_PATTERN.finditer(word):
+            found.append(token.group())
+            if GLOB_CHARS.search(token.group()):
+                matches = glob.iglob(os.path.join(cwd, token.group()), recursive=True)
+                found.extend(itertools.islice(matches, MAX_GLOB_MATCHES))
+    return found
 
 
 def unexpanded_globs(text):
@@ -644,7 +682,7 @@ def folder_hits(command, cwd, roots, patterns):
     hits, wheres, budget, walked = [], [cwd], [_walk_cap()], set()
     for segment in SEGMENT_BOUNDARY_PATTERN.split(text):
         # the shell drops quotes and backslashes inside a word too (`-de''lete` is `-delete`, T371)
-        words = [re.sub(r"[\"'\\()]", "", re.split(r"\d*[<>]", w, 1)[0]) for w in segment.split()]
+        words = [shell_word(re.split(r"\d*[<>]", w, 1)[0]) for w in segment.split()]
         words = [w for w in words if w and not w.startswith(("<", ">", "2>", "&>"))]
         readings = [_segment_command(words)]
         plain = _segment_command(words, skip_values=False)
@@ -699,7 +737,7 @@ def only_reads(tool_name, tool_input):
     seen = False
     for segment in SEGMENT_BOUNDARY_PATTERN.split(text):
         # the shell drops quotes and backslashes inside a word (`-de''lete` is `-delete`)
-        words = [re.sub(r"[\"'\\()]", "", w) for w in segment.split()]
+        words = [shell_word(w) for w in segment.split()]
         words = [w for w in words if w]
         if not words:
             continue

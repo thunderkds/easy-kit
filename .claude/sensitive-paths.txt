@@ -1,6 +1,6 @@
 # Sensitive paths (T146) — an Edit, Write or Bash call that touches a path matching
 # a line below asks the human first, unless the active task's guide lists that exact
-# path under "## Files to Change (Predicted)". Read by
+# path under "## Files to Change (Predicted)", or the session tag [admin] holds (T371). Read by
 # .claude/hooks/pre_tool_sensitive_path.py; T147's sub-agent sandbox profile is
 # generated from it (scripts/gen_sandbox_profile.py).
 #
