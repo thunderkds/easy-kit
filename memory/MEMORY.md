@@ -370,3 +370,4 @@
 - [Whole-page pins; sub-agent traps (T311–T312)](learnings.md) — see entry
 - [Merge-gate traps (T310)](learnings.md) — an orphan Ready row blocks merges
 - [Merge-gate traps (T309)](learnings.md) — stale untracked guides, truncated trace summaries, suite deletes worktree files
+- [Two live `[admin]` sessions on one board](learnings.md) — T365: check the worktree's last commit and `active_task.d/` before resuming a paused task; claim another ticket instead
