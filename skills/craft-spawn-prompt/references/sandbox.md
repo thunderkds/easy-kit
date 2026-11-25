@@ -40,7 +40,8 @@ Limits — say them, don't paper over them:
   inside the worktree are therefore stopped by T146's hook, not by the OS.
 - A `!` negation can't be expressed as a permission rule, so the profile is stricter than the list
   (`.env.example` is denied too).
-- After editing `.claude/sensitive-paths.txt`, regenerate with
+- After editing `.claude/sensitive-paths.txt` or the hook's `PROTECTED_PATTERNS` (its state folder,
+  the approval file and the list itself, denied for `Edit` only), regenerate with
   `python3 scripts/gen_sandbox_profile.py`. `tests/test_subagent_sandbox_profile.py` fails until you
   do.
 

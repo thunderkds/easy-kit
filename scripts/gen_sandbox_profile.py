@@ -20,6 +20,10 @@ What the profile does, and why each piece is there:
   because permission rules have no braces. A `!` negation cannot be expressed — an allow
   rule never carves an exception out of a deny — so the profile is stricter there
   (`.env.example` is denied too).
+* One `Edit(...)` deny per pattern the hook always protects (`PROTECTED_PATTERNS`: its state
+  folder, the approval file, the list itself; T314, T316), read from the hook, never copied. A
+  name with no `/` gets `**/`, as the hook matches it in any directory. No `Read` deny: they
+  guard integrity, not secrets, and a sandboxed test run still reads the list.
 * `Edit(memory/**)` deny — memory is Supervisor-only (Memory Write Protocol).
 * `WebFetch` / `WebSearch` denied as whole tools, plus an OS sandbox around Bash with
   no allowed domains, `strictAllowlist`, no unsandboxed retry and `failIfUnavailable`:
@@ -49,12 +53,13 @@ TEST_RUNNER_ALLOW = [
 ]
 
 
-def _expand_braces():
-    """T146's brace expansion, so the hook and the profile read the list identically."""
+def _hook():
+    """The hook module: T146's brace expansion and T364's protected patterns, so the hook and
+    the profile read the list identically."""
     spec = importlib.util.spec_from_file_location("pre_tool_sensitive_path", HOOK_FILE)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
-    return module.expand_braces
+    return module
 
 
 def sensitive_globs(text, expand_braces):
@@ -71,11 +76,19 @@ def sensitive_globs(text, expand_braces):
     return globs
 
 
-def build_profile(text, expand_braces):
+def build_profile(text, expand_braces, protected=()):
     deny = []
-    for glob in sensitive_globs(text, expand_braces):
+    globs = sensitive_globs(text, expand_braces)
+    for glob in globs:
         deny.append(f"Read({glob})")
         deny.append(f"Edit({glob})")
+    for pattern in protected:
+        body = pattern.strip().replace("\\", "/").strip("/")
+        if not body or body.startswith(("#", "!")):
+            continue  # as `sensitive_globs` skips them; a negation has no deny form
+        glob = body if "/" in body else "**/" + body
+        if glob not in globs and f"Edit({glob})" not in deny:
+            deny.append(f"Edit({glob})")
     deny += ["Edit(memory/**)", "WebFetch", "WebSearch"]
     return {
         "permissions": {
@@ -96,13 +109,14 @@ def build_profile(text, expand_braces):
     }
 
 
-def render(text, expand_braces):
-    return json.dumps(build_profile(text, expand_braces), indent=2) + "\n"
+def render(text, expand_braces, protected=()):
+    return json.dumps(build_profile(text, expand_braces, protected), indent=2) + "\n"
 
 
 def main(argv):
     with open(PATTERNS_FILE, encoding="utf-8") as f:
-        rendered = render(f.read(), _expand_braces())
+        hook = _hook()
+        rendered = render(f.read(), hook.expand_braces, hook.PROTECTED_PATTERNS)
     if "--check" in argv:
         try:
             with open(PROFILE_FILE, encoding="utf-8") as f:
