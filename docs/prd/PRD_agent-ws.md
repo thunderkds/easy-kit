@@ -1,5 +1,5 @@
 # PRD — agent-ws: worktrees and build folders for many agents and sessions
-**Last updated**: 2026-11-25
+**Last updated**: 2026-11-25 (FR-002, T353)
 **Status**: Draft (auto, Supervisor 2026-11-25) — from the T345 restated intent the user confirmed on 2026-11-25 ("yes, confirmed"); not approved as a PRD by the user
 **Owner**: kit maintainer (thunderkds)
 
@@ -31,11 +31,12 @@ not CPU. A shared build folder gives stale builds (R5). Worktrees that agents le
 | ID | Requirement | Acceptance |
 |----|-------------|-----------|
 | FR-001 | One command, `agent-ws` (`scripts/agent_ws.py`, Python 3), makes and removes agent worktrees beside the repo. A Rust worktree builds into a private tmpfs build folder by default (on-disk fallback). `agent-ws run` runs a heavy command under `nice -n 19`, with an opt-in cross-session build-slot queue. `rm` and `gc` never lose work: they refuse on unmerged, dirty or untracked work and on a live process inside. Claude Code's `WorktreeCreate` / `WorktreeRemove` hooks and a SessionStart env export call it. No two worktrees share one build folder. | `tasks/TASK_GUIDE_T345.md` `## Acceptance Criteria` 1–19 |
+| FR-002 | The installer offers agent-ws as an opt-in choice on Install and Reinstall (default No; No with no terminal). A yes copies `scripts/agent_ws.py` into the project and registers its three hooks; the answer is remembered and Update keeps it. `site/docs.html` has a how-to section and `site/index.html` points to it. | `tasks/TASK_GUIDE_T353.md` `## Acceptance Criteria` 1–10 |
 
 ---
 
 ## Out of scope
 
-Shipping the hooks to installed projects (`.claude/settings.json`, `hooks/hooks.json`, `MANIFEST`);
+Shipping the hooks to plugin users (`hooks/hooks.json`) or to projects that did not opt in;
 plan Phases 2–4 (pnpm/uv store layout, sccache/ccache/Gradle caches, `PATH` shims, `agent-ws stats`);
 native Windows. See the T345 guide's cut list.
