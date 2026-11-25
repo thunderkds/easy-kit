@@ -125,7 +125,7 @@ The installer question text follows the draft: `Turn on parallel builds (agent-w
 ### Verification Command (exact, runnable)
 
 ```bash
-bash tests/test_agent_ws_installer_t353.sh && python3 -m pytest tests/test_site_story.py tests/test_site_content.py tests/test_site_visual_first.py tests/test_docs_match_installer.py tests/test_plugin_package.py -q && bash tests/test_one_command_menu.sh && bash tests/test_cli_and_project_menus.sh && bash tests/test_settings_merge.sh
+bash tests/test_agent_ws_installer_t353.sh && python3 -m pytest tests/test_merge_settings_agent_ws_t353.py tests/test_site_story.py tests/test_site_content.py tests/test_site_visual_first.py tests/test_docs_match_installer.py tests/test_plugin_package.py -q && bash tests/test_one_command_menu.sh && bash tests/test_cli_and_project_menus.sh && bash tests/test_settings_merge.sh
 ```
 
 ### Evidence (filled by reviewer at Stage 4/5)

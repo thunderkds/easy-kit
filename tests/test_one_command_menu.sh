@@ -258,10 +258,11 @@ fi
 git -C "$FIXTURE" reset -q --hard HEAD~2
 
 # ── SC5 / AC7 — `cat setup.sh | sh`: prompts still reach the terminal ───────
-# Answers: Enter (Install), Enter (CLIs), 2 (existing / legacy project), Enter (plan). The pack
-# prompt is stdin-gated (T115's) and is skipped because stdin is the script.
+# Answers: Enter (Install), Enter (CLIs), 2 (existing / legacy project), Enter (agent-ws: No,
+# T353), Enter (plan). The pack prompt is stdin-gated (T115's) and is skipped because stdin is
+# the script.
 T=$(new_repo sc5)
-pty_setup "$T" '\n\n2\n\n' "cat '$SETUP' | sh"; RC=$?
+pty_setup "$T" '\n\n2\n\n\n' "cat '$SETUP' | sh"; RC=$?
 if [ "$RC" -eq 0 ] && grep -q 'bootstrapping a full checkout' "$T.log" \
    && grep -q '"claude_md_source": "CLAUDE_LEGACY.md"' "$T/.claude/harness-lock.json" 2>/dev/null \
    && cmp -s "$FIXTURE/CLAUDE_LEGACY.md" "$T/CLAUDE.md"; then
