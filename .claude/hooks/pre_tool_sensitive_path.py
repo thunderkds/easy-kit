@@ -57,6 +57,17 @@ listed or protected file in it, or the walk cannot finish or cannot read a folde
 segment, wrapped or not, adds its target to the folders later segments are judged against (T374). A `{a,b}` brace token is expanded and each
 expansion is checked as a path; a token over `MAX_BRACE_EXPANSIONS` paths asks.
 
+Under `[admin]` (T371): when the session tag `[admin]` holds (`auto_mode.session_request`, which
+honours `[stop]`, another tag and a resume), the hook does not ask. A call that only reads
+(`READ_ONLY_COMMANDS`, words dequoted, no environment prefix, redirect, `tee` or word the shell still
+builds with `$`, a backtick or `{`) gets no output. Any
+other call gets no decision (the normal permission flow, never `allow`) after one JSON line (time,
+session, agent, task, tool, target, paths, patterns) is appended to
+`<anchors base>/<repo slug>/sensitive-admin-<session>.jsonl` (the folder must be ours, mode 0700 and
+not a link; the file is opened `O_APPEND|O_NOFOLLOW`, 0600), and an `additionalContext` note asks for a
+line in the task's final report. A call that touches the guard's own files (`PROTECTED_PATTERNS`)
+still asks, a read included, and so does any call whose log line cannot be written.
+
 Recorded limitations (cut list, TASK_GUIDE_T146; T363):
 * Paths built from variables (`cat "$F"`, `${f}itive-paths.txt`), `eval`, and the code of
   `python -c` / `node -e` spans are not resolved (T363 option C).
@@ -85,7 +96,9 @@ import itertools
 import json
 import os
 import re
+import stat
 import sys
+from datetime import datetime, timezone
 
 HOOKS_DIR = os.path.dirname(os.path.abspath(__file__))
 PATTERNS_RELPATH = os.path.join(".claude", "sensitive-paths.txt")
@@ -130,6 +143,8 @@ try:
     from shell_data import SEGMENT_BOUNDARY_PATTERN, SPAN_EXECUTOR_PATTERN  # noqa: E402
     from task_context import resolve_task_id  # noqa: E402
     from board.moments import board_mode  # noqa: E402
+    import auto_mode  # noqa: E402
+    from trace_chain import ANCHOR_DIR_ENV, DEFAULT_ANCHOR_BASE, repo_slug  # noqa: E402
     IMPORT_ERROR = None
 except Exception as exc:  # pragma: no cover - exercised via subprocess test
     IMPORT_ERROR = exc
@@ -193,6 +208,15 @@ DIR_CHANGE_COMMANDS = {"cd", "pushd"}
 # are both covered without telling them apart. The set can double with each `cd`: past the cap the
 # check asks (a `ValueError` main() turns into an ask), never drops a folder (T374 round 4).
 MAX_CD_FOLDERS = 64
+# T371: under `[admin]` a call that only reads passes with no log. A read is a Bash call whose every
+# segment runs one of these commands, with no output redirect or `tee` anywhere; anything else is a
+# write (an unknown command too) and is logged. Short on purpose: a command missing here only adds a
+# log line.
+# Only programs that cannot write or run anything (round 1: `rg --pre`, `file -C`, and `git`, whose
+# repository config can run a program on `diff`/`log`, are writes).
+READ_ONLY_COMMANDS = {"ls", "cat", "head", "tail", "grep", "egrep", "fgrep", "wc", "stat", "find"}
+FIND_WRITE_FLAG_PREFIXES = ("-delete", "-exec", "-ok", "-fprint", "-fls")
+ADMIN_LOG_PREFIX = "sensitive-admin-"
 # The walk of a folder stops after this many entries; a folder it could not finish counts as
 # holding a sensitive path (toward the human). Overridable for tests.
 FOLDER_WALK_MAX = 20000
@@ -619,7 +643,8 @@ def folder_hits(command, cwd, roots, patterns):
     text = strip_quoted_spans(strip_heredoc_bodies(command))
     hits, wheres, budget, walked = [], [cwd], [_walk_cap()], set()
     for segment in SEGMENT_BOUNDARY_PATTERN.split(text):
-        words = [re.split(r"\d*[<>]", w, 1)[0].strip("\"'()") for w in segment.split()]
+        # the shell drops quotes and backslashes inside a word too (`-de''lete` is `-delete`, T371)
+        words = [re.sub(r"[\"'\\()]", "", re.split(r"\d*[<>]", w, 1)[0]) for w in segment.split()]
         words = [w for w in words if w and not w.startswith(("<", ">", "2>", "&>"))]
         readings = [_segment_command(words)]
         plain = _segment_command(words, skip_values=False)
@@ -652,6 +677,79 @@ def folder_hits(command, cwd, roots, patterns):
                 if found:
                     hits.append((arg, path_forms(folder, cwd, roots), found[1]))
     return hits
+
+
+def admin_in_force(event):
+    """T371: True when `[admin]` holds for this call: the session tag, or the latest request the user
+    typed (outside code spans and quotes, `[stop]` in it turns it off). Read only from the
+    transcript, as the merge gate reads it; any doubt is False (the hook asks)."""
+    # The session tag only: every typed `[admin]` sets it, and it is the reader that honours `[stop]`,
+    # another tag and a resume (round 1: a fallback to the latest request kept a pre-resume tag).
+    session = auto_mode.session_request(event.get("transcript_path"))
+    return session is not None and session[0] == "admin"
+
+
+def only_reads(tool_name, tool_input):
+    """T371: True when the call can only read (see `READ_ONLY_COMMANDS`); an Edit or Write never is."""
+    if tool_name != "Bash":
+        return False
+    text = strip_quoted_spans(strip_heredoc_bodies(tool_input.get("command") or ""))
+    if re.search(r"[<>]|\btee\b", text):
+        return False
+    seen = False
+    for segment in SEGMENT_BOUNDARY_PATTERN.split(text):
+        # the shell drops quotes and backslashes inside a word (`-de''lete` is `-delete`)
+        words = [re.sub(r"[\"'\\()]", "", w) for w in segment.split()]
+        words = [w for w in words if w]
+        if not words:
+            continue
+        seen = True
+        if re.match(r"[A-Za-z_]\w*=", words[0]):
+            return False  # an environment prefix can make a reader run a program
+        if any(re.search(r"[$`{]", w) for w in words):
+            return False  # round 2 (F6): a word the shell still builds (`-d$'elete'`, `{e,}`) is unknown
+        for verb, args in (_segment_command(words), _segment_command(words, skip_values=False)):
+            if verb not in READ_ONLY_COMMANDS:
+                return False
+            if verb == "find" and any(a.startswith(FIND_WRITE_FLAG_PREFIXES) for a in args):
+                return False
+    return seen
+
+
+def admin_log_path(root, session_id):
+    """`<anchors base>/<repo slug>/sensitive-admin-<session>.jsonl` (the folder `.claude/settings.json`
+    denies agents write access to), or a `ValueError` (main() asks)."""
+    base = os.environ.get(ANCHOR_DIR_ENV) or os.path.expanduser(DEFAULT_ANCHOR_BASE)
+    if not os.path.isabs(base):
+        raise ValueError("the anchors folder is not an absolute path")
+    if not isinstance(session_id, str) or not auto_mode.SESSION_ID.fullmatch(session_id):
+        raise ValueError("no session id to name the [admin] approval log")
+    return os.path.join(base, repo_slug(root), f"{ADMIN_LOG_PREFIX}{session_id}.jsonl")
+
+
+def log_admin_approval(root, event, task_id, listed):
+    """T371: append one JSON line for an approved write; the path of the log. Any failure raises
+    (main() then asks): the approval exists only with its log line."""
+    path = admin_log_path(root, event.get("session_id"))
+    folder = os.path.dirname(path)
+    os.makedirs(folder, mode=0o700, exist_ok=True)
+    info = os.lstat(folder)  # round 1: the folder itself must be ours, private, and not a link
+    if stat.S_ISLNK(info.st_mode) or not stat.S_ISDIR(info.st_mode) or info.st_mode & 0o077 \
+            or info.st_uid != os.getuid():
+        raise ValueError(f"the [admin] approval log folder {folder} is a link, shared or not ours")
+    tool_input = event.get("tool_input") or {}
+    target = tool_input.get("command") if event.get("tool_name") == "Bash" else tool_input.get("file_path")
+    line = {"time": datetime.now(timezone.utc).isoformat(), "session": event.get("session_id"),
+            "decision": "not asked by the hook ([admin])",
+            "agent": event.get("agent_id"), "task": task_id, "tool": event.get("tool_name"),
+            "target": str(target)[:2000], "paths": [p for p, _ in listed],
+            "patterns": [pat for _, pat in listed]}
+    fd = os.open(path, os.O_WRONLY | os.O_APPEND | os.O_CREAT | getattr(os, "O_NOFOLLOW", 0), 0o600)
+    try:
+        os.write(fd, (json.dumps(line, sort_keys=True) + "\n").encode("utf-8"))
+    finally:
+        os.close(fd)
+    return path
 
 
 def sensitive_hits(tool_name, tool_input, cwd, roots, patterns):
@@ -785,6 +883,18 @@ def main():
                 keys.append(key)
         if not unpredicted:
             sys.exit(0)
+        if admin_in_force(event) and not any(pat in PROTECTED_PATTERNS for _, pat in unpredicted):
+            # T371: the guard's own files always ask, a read form included (round 1, V1)
+            if only_reads(tool_name, tool_input):
+                sys.exit(0)  # a read passes under [admin], with no log
+            log = log_admin_approval(root, event, task_id, unpredicted)
+            note = ("[admin]: the sensitive-path hook did not ask about this " + tool_name + " call (" +
+                    ", ".join(f"{p} (pattern `{pat}`)" for p, pat in unpredicted) +
+                    f"); not asked, logged to {log}. The normal permission flow still applies. "
+                    "Add one line for it to the task's final report.")
+            print(json.dumps({"hookSpecificOutput": {"hookEventName": "PreToolUse",
+                                                     "additionalContext": note}}))
+            sys.exit(0)  # no decision: the normal permission flow; never `allow`
         if online_task and keys and approvable:
             record_pending(root, event.get("tool_use_id"), task_id, keys)
     except SystemExit:
