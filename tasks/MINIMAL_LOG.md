@@ -14,13 +14,16 @@ Mode: auto
 3. One `common-infrastructure` implementer, `haiku`, effort `low` — RULE: AGENTS.md § Hard-Stop Gates (Gate 1: an implementer only for 2+ independent tasks at once); `PROJECT_SPEC.md` CLI Model Table (claude, C0: haiku).
 4. The defect was the shared helper's message, not the summary: the T174 summary already prints `kept (backup failed: …)` (`lib/harness-update.sh:864`), but `harness_backup_path` (`lib/harness-fetch.sh:289`) said "paths before it in this run, if any, were already installed", false for an Update run that goes on. Dropped that clause, so the message makes no claim about other paths. A `setup.sh` abort now no longer says earlier paths were installed ⚠ decided for you — please review
 **Checked:**
+- New test `T253 SC8` in `tests/test_update_auto_approve.sh` (an Update run that goes on after a failed backup prints no "paths before it" claim) — `90 passed, 1 failed` before the change, `91 passed, 0 failed` after
 - BEFORE (implementer, 2026-11-25T05:29:30Z): new check `T253 SC8` in `tests/test_update_auto_approve.sh` — `90 passed, 1 failed` (`[error] Could not back up './agents/qa.md' … paths before it in this run, if any, were already installed`)
 - AFTER (Supervisor, at fe9a5ee2): `tests/test_update.sh` `38 passed, 0 failed`; `tests/test_update_auto_approve.sh` `91 passed, 0 failed`; `tests/test_install_backups.sh` `18 passed, 0 failed` (its T119 check now asserts the clause is absent); `tests/test_update_removals.sh` `34 passed, 0 failed`; `tests/test_install_update_smoke.sh` `9 passed, 0 failed`
 - Stale-reference sweep: `git grep "paths before it"` outside `tasks/` and `memory/` — only the board row and the two negative checks
 - Simplify: skipped: under 20 lines
+- verify: ☑ pass — auto-run by hook, session ed9d9d20-495b-4ff2-b0ff-f49a10ab89ff, commit dbc5735f818b119d282dc561b9ef101ba90f07b5, log .claude/verify-runs/T253-dbc5735f818b.log; done not moved: Gate 5: no `New test` line with its result under `Checked:`
 **Memory:** nothing new
 **Files:** `lib/harness-fetch.sh`, `tests/test_update_auto_approve.sh`, `tests/test_install_backups.sh`, `tasks/MINIMAL_LOG.md`, `PROJECT_KANBAN.md`
-**Not done:** merge (admin: after the auto verify pass); push (no push remote set: T321 waits on `/verify T321`); auto verify: running (T182)
+**Not done:** merge (admin: after the auto verify pass); push (no push remote set: T321 waits on `/verify T321`); auto verify: ☑ pass (session ed9d9d20-495b-4ff2-b0ff-f49a10ab89ff, commit dbc5735f818b119d282dc561b9ef101ba90f07b5, log .claude/verify-runs/T253-dbc5735f818b.log)
+Paused: done not moved — Gate 5: no `New test` line with its result under `Checked:`
 
 ## T347 — CI fails on `main`: `tests/test_readme_current.sh` cannot parse the README's Codex-skip list · minimal
 Mode: auto
