@@ -103,7 +103,6 @@
 
 
 ### In Progress
-- [ ] **T367** — CI fails on `main` (v2.3.0, run 45570715182): `tests/test_pack_catalog.sh` `install_both` sends no answer to T353's Linux-only agent-ws question, so `Proceed?` gets none (`10 passed, 6 failed`) | common-infrastructure | C0 | Risk: Low | P0 | Registered 2026-11-25, user: "seem like the Ci is fail also" | Guide: `tasks/TASK_GUIDE_T367.md` | Track: minimal | Record: tasks/MINIMAL_LOG.md | Depends on: T353 | Started 2026-11-25 [admin], worktree `../wt-t367`, branch `fix/t367-pack-catalog-agent-ws` | Ready for Review 2026-11-25 [admin]: head `48a724ab`, Reviewer PASS (P3 only, commit `c97a785c`), record in `tasks/MINIMAL_LOG.md` on the branch | Paused 2026-11-25: auto verify blocked twice (SKIP on a tests-only change; the hook passes a SKIP only for docs-only changes) — needs `/verify T367` by the user, then `merge T367 [admin]` | Back to In Progress 2026-11-25 [admin]: the cause of both blocked runs is fixed by T368 (the request now names a changed shell suite); rerun as its fix round after T368's merge
 
 
 
@@ -432,6 +431,7 @@
 
 ## Blocked
 
+- [ ] **T367** — CI fails on `main` (v2.3.0, run 45570715182): `tests/test_pack_catalog.sh` `install_both` sends no answer to T353's Linux-only agent-ws question, so `Proceed?` gets none (`10 passed, 6 failed`) | common-infrastructure | C0 | Risk: Low | P0 | Registered 2026-11-25, user: "seem like the Ci is fail also" | Guide: `tasks/TASK_GUIDE_T367.md` | Track: minimal | Record: tasks/MINIMAL_LOG.md | Depends on: T353 | Started 2026-11-25 [admin], worktree `../wt-t367`, branch `fix/t367-pack-catalog-agent-ws` | Ready for Review 2026-11-25 [admin]: head `48a724ab`, Reviewer PASS (P3 only, commit `c97a785c`), record in `tasks/MINIMAL_LOG.md` on the branch | Paused 2026-11-25: auto verify blocked twice (SKIP on a tests-only change; the hook passes a SKIP only for docs-only changes) — needs `/verify T367` by the user, then `merge T367 [admin]` | Back to In Progress 2026-11-25 [admin]: the cause of both blocked runs is fixed by T368 (the request now names a changed shell suite); rerun as its fix round after T368's merge | Blocked 2026-11-25 on T368's merge (the merge gate counts an In Progress task of this session as unfinished work)
 - [ ] **T147** — Spawned sub-agents run under a tighter sandbox profile than the Supervisor | common-infrastructure | C2 | Risk: Medium | P2 | Guide: `tasks/TASK_GUIDE_T147.md` | Branch: `feat/t146-t147-harness-hardening` (one agent, T146 then T147), started 2026-10-17 | Depends on: T146 | Registered 2026-10-16 from the improvement-list grilling + brainstorm (`docs/brainstorming/BRAINSTORMING_LOG_harness-hardening.md`): **HITL**: whether in-process `Agent()` spawns can be sandboxed depends on hook input identifying a sub-agent — verify, then the user decides | **Blocked 2026-10-17**: user /verify FAIL — every sandboxed Bash call dies with `apply-seccomp: write /proc/self/setgroups (nested userns is capability-restricted ...)` under Ubuntu `kernel.apparmor_restrict_unprivileged_userns = 1`; needs an environment decision before it can pass
 
 ---
