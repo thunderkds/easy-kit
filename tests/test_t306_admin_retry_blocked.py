@@ -48,8 +48,9 @@ RETRY_NEEDLES = (
     "If the second run is also `blocked`, the Supervisor stops: it merges nothing, says why in one line "
     "and asks you to run `/verify <ID>`",
     "It never starts a third run",
-    # AC 4 — a `fail` is never retried
-    "A `fail` is never retried",
+    # AC 4 — a `fail` is not a `blocked`: T368 replaced "A `fail` is never retried" with fix rounds
+    "A `fail` starts a **fix round** (T368)",
+    "It does at most 2 fix rounds",
     # AC 5 — the gate keeps its rule
     "Only a hook-written pass unlocks the merge",
     "never edits a `pass` row",
@@ -94,7 +95,8 @@ def test_mutation_control_dropping_a_retry_statement_is_caught(cut):
 
 @pytest.mark.parametrize("cut, replacement", [
     ("re-runs the auto verify once,", "re-runs the auto verify,"),  # SC 3: delete the "once"
-    ("A `fail` is never retried", ""),                               # SC 3: delete the "fail" sentence
+    ("A `fail` starts a **fix round** (T368)", ""),                  # SC 3: delete the "fail" sentence (T368)
+    ("It does at most 2 fix rounds", "It does fix rounds"),         # T368: drop the cap
 ])
 def test_sc3_mutation_control_once_and_fail(cut, replacement):
     original = TRACKS.read_text(encoding="utf-8")

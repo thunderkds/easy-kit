@@ -6,6 +6,8 @@ For each task on PROJECT_KANBAN.md's `### Ready for Review` whose result is not 
 head commit of the checkout holding its report, it starts one detached run and returns at once:
 
     claude -p "/verify <ID>" --max-budget-usd 2 --output-format json      (cwd = that checkout)
+    (T368: a branch that changes `tests/**/test_*.sh` suites gets them named in the request, with an
+    ask to run each and answer PASS or FAIL by its exit code: `verify_request`)
 
 T203 D1: the task needs no marker — before T203 only a task with the T180 `Mode: auto` line ran.
 `CLAUDE_AUTO_VERIFY=off` (D3) restores that rule: then only a marked task (`Mode: auto` alone on a
@@ -383,8 +385,19 @@ def parse(stdout):
     return "blocked", session, "no single verdict line"
 
 
-def call_claude(checkout):
-    command = ["claude", "-p", f"/verify {sys.argv[2]}", "--max-budget-usd", budget(),
+def verify_request(task_id, checkout, head):
+    """The `-p` text: `/verify <ID>`, plus, when the branch changes shell test suites, a request to
+    run each (T368). A `.sh` suite is never docs-only (T289), so a SKIP on it always blocked."""
+    suites = vr.shell_suites_changed(checkout, head)
+    if not suites:
+        return f"/verify {task_id}"
+    return (f"/verify {task_id} — this branch changes the shell test suite(s) {', '.join(suites)}: "
+            "they are its runtime surface. Run each with `bash <path>` from the repository root and "
+            "answer PASS or FAIL by its exit code; SKIP is not an answer for them.")
+
+
+def call_claude(checkout, head=None):
+    command = ["claude", "-p", verify_request(sys.argv[2], checkout, head), "--max-budget-usd", budget(),
                "--output-format", "json"]
     print("$ " + shlex.join(command), flush=True)
     env = {k: v for k, v in os.environ.items() if k != "CLAUDE_PROJECT_DIR"}
@@ -499,7 +512,7 @@ def run():
     minimal = track == "minimal"
     # T203 D6: a run started by a hook before T203 passes no 9th argument; it was always marked.
     marked = len(sys.argv) < 9 or sys.argv[8] == "marked"
-    out, reason = call_claude(checkout)
+    out, reason = call_claude(checkout, head)
     if reason:
         verdict, session = "blocked", "none"
     else:

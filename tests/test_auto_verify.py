@@ -1635,7 +1635,8 @@ def test_t189_ac6_the_run_issues_no_git_command_that_writes(tmp_path):
     subcommands = {_git_subcommand(a) for a in issued}
     assert not subcommands & WRITING_GIT, subcommands
     # read-only only: `config` is `trace_chain.repo_slug`'s `config --get remote.origin.url`
-    assert subcommands <= {"rev-parse", "diff", "worktree", "config"}, subcommands
+    # T368: `merge-base` (read-only) finds the base for the changed-shell-suite check.
+    assert subcommands <= {"rev-parse", "diff", "worktree", "config", "merge-base"}, subcommands
     assert all(a[a.index("worktree") + 1] == "list" for a in issued if "worktree" in a)
     assert all(a[a.index("config") + 1] == "--get" for a in issued if "config" in a)
 

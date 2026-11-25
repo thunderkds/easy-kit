@@ -130,3 +130,5 @@ New pytest file with a fixture git repo and the fake `claude` the existing `test
 ---
 
 ## Questions Log
+
+- 2026-11-25 DEBATE How should a shell-suite-only change stop always blocking auto verify? → (A) the /verify request names the changed suites and asks for PASS or FAIL by exit code (Advocate 1: A, limited to otherwise docs-only branches; Advocate 2: A, a SKIP on named suites stays blocked; Advocate 3: A, smallest safe change) — settled by Decide rule 1: B breaks docs/claude-md/tracks.md:491, C is cut by this guide (reports/question_T368_20261125T165656.html)

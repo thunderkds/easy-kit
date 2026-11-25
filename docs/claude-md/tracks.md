@@ -422,7 +422,8 @@ which file holds its report. The auto-mode check above reads the same module, so
 disagree about which tasks are in auto mode.
 
 The hook then starts one new headless session in the task's checkout (the main checkout or its worktree):
-`claude -p "/verify <ID>" --max-budget-usd 2 --output-format json`. The session uses your normal permission
+`claude -p "/verify <ID>" --max-budget-usd 2 --output-format json` (when the branch changes a shell test
+suite, the request also names it and asks for a real run: T368, below). The session uses your normal permission
 settings, never `--dangerously-skip-permissions`. The hook returns at once: the run is detached in its own
 session (`setsid`). `CLAUDE_AUTO_VERIFY_BUDGET_USD` changes the budget, and `CLAUDE_AUTO_VERIFY_TIMEOUT_S`
 the time limit (default 1800). The run writes its output to `.claude/verify-runs/<ID>-<commit>.log`
@@ -491,6 +492,11 @@ this list, the hook writes `☑ pass` with the Notes
   `conftest.py`, a `.sh` file, `tests/lib/` or `merge_gate_guard.py`;
 - a `*.md` file in the repository root, except `AGENTS.md`, `CLAUDE.md`, `CLAUDE_LEGACY.md`,
   `PROJECT_KANBAN.md`, `PROJECT_SPEC.md`, `PROJECT_KANBAN_SITE.md` and `PROJECT_SPEC_SITE.md`.
+
+A `tests/**/test_*.sh` suite is never in the list, so a SKIP on it is `blocked`. When the branch
+changes one (added or modified, a regular file with a safe name, not under `tests/lib/`), the hook
+names each such suite in the `/verify` request and asks for PASS or FAIL by its exit code (T368,
+`verify_record.shell_suites_changed`); a branch with no changed suite gets `/verify <ID>` alone.
 
 Everything else has a runtime surface, for example `skills/`, `agents/`, `templates/`,
 `docs/claude-md/`, `AGENTS.md`, `CLAUDE.md`, `.claude/`, `lib/`, `scripts/`, `site/`, code, and a `.py`,
@@ -724,7 +730,10 @@ command, from this session's transcript. It allows a `git merge` or `git push` o
 With `[admin]`, the Supervisor starts the run itself: as soon as the task is at Ready for Review, it runs
 `--start <ID>` (the full command is in step 4 below) and waits for the verdict. It never runs `/verify` in
 its own session. Only on a pass does it go on to merge and push, without asking. On `blocked` or
-`fail` it merges nothing. A `fail` is never retried: the Supervisor reports why and stops. A task that
+`fail` it merges nothing. A `fail` starts a **fix round** (T368): the Supervisor fixes the cause on the
+task branch, gets a fresh `Reviewer: <ID>` pass on the new commit (the merge gate checks the reviewer
+ran on the code it merges), and starts the run again on that commit. It does at most 2 fix rounds;
+after the second failed one it merges nothing, says why in one line and stops. A task that
 changes only files with no runtime surface (docs, task files, memory, tests: `### Auto verify (Stop hook)`)
 gets a pass when the run answers `skip`, so it needs no typed `/verify`. A `skip` for any other task is
 `blocked`: its `/verify` then falls back to you after the one retry below.
