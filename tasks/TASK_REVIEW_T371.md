@@ -10,6 +10,20 @@
 
 ---
 
+## Auto decisions
+
+Mode: auto
+1. Took T371 after T374, stacked on T374's branch (the same hook; T363 and T374 are Done, not merged) — RULE: `docs/claude-md/tracks.md` `### Admin tag` (one `[admin]` request runs each task from Stage 0 to Stage 5; the user's request "continue [admin] 371 and 374"), and `tasks/TASK_GUIDE_T371.md` § Dependencies & Reachability ("Depends on: T363, T374")
+2. Track extended — RULE: `docs/claude-md/tracks.md` § Track rule (Risk High row)
+3. The Supervisor wrote the code, one fresh `Reviewer: T371` spawn per round (three rounds) — RULE: `docs/claude-md/pipeline-stages.md:198` "the Supervisor writes the code itself, in the task's worktree, test first"
+4. The guard's own files (`PROTECTED_PATTERNS`) still ask under `[admin]`, a read included; the log lives in the anchors folder — DEBATED: Advocate 1: let the protected patterns pass too, log in the anchors folder; Advocate 2: the protected patterns still ask, log in the anchors folder (agents are denied writes there); Advocate 3: protected writes ask and reads pass, log in the anchors folder opened `O_APPEND|O_NOFOLLOW`, an unknown command is a write, a failed log line asks. Settled by a written rule: `.claude/hooks/pre_tool_sensitive_path.py:37` "Always sensitive and never approvable" (Advocate 1 named this line as the main risk of its own proposal); reads of them ask too after the security review (V1)
+5. "Approve" means no decision (the normal permission flow), never `allow` — RULE: `.claude/hooks/pre_tool_sensitive_path.py:14` "Deliberately NOT `allow`"
+6. Fixed every finding of rounds 1–2 (F1 P1 a pre-resume tag; F2, F6 P2 code runners and shell-built words read as reads; F3 test gaps; F4, F5 P3) and of the Supervisor's `security-review` (V1 the guard's files through a read form; V2 in-word quotes), and spawned the reviewer again after each — RULE: `docs/claude-md/pipeline-stages.md:198` "one fresh-context reviewer spawn per extended task at Stage 4, which the merge gate requires"
+7. Round 2's F8 (the token check does not dequote, outside `[admin]` too) registered as T375, and round 3's F9/F10 (test gaps, P3) left — RULE: `skills/code-review/SKILL.md:28` "| **P3** | Style, minor improvement, documentation | Optional |"
+Checks: tests `python3 -m pytest -q -p no:cacheprovider .claude/hooks/tests/test_t371_admin_approval.py` — 22 passed (red first: `18 failed, 6 passed` at 2026-11-25T13:13:29Z before the change; round 1's tests `7 failed` at 13:21:16Z; round 2's test failed at 14:13:08Z, before their fixes); the 11 sensitive-path and `tracks.md` suites `260 passed`; full suite at `10469631` `60 failed, 8001 passed`, the same 60 as `main`; reviews `Reviewer: T371` round 1 FAIL (1 P1, 2 P2, 2 P3, all fixed), round 2 FAIL (1 P2, fixed), round 3 PASS (P3 only); `security-review` skill in the Supervisor session (temporary `refs/remotes/origin/HEAD` at `107969fe`, removed right after) — two findings (V1 9/10, V2 8–9/10), both fixed; real run: the reviewers' probes ran the real hook as a subprocess under a constructed `[admin]` transcript (auto-checked, not /verify)
+Memory: nothing new
+Not done: merge (admin: after the auto verify pass, and after T363 and T374); auto verify: running (T182); push (no `origin`; `EASY_KIT_ADMIN_REMOTE` is not set to `github`); T375 (the token check's dequoting) registered, not started
+
 ## Evidence
 
 | Check | Result | Notes / output snippet |
@@ -19,7 +33,7 @@
 | Negative cases hold | ☑ pass (with gaps) | Mutations on a scratch copy (no repo edit): 18 of 25 turn a test red; survivors: drop `[stop]` check (M3), `[ticket]` as admin (M4), no session-tag read (M23), `git push` in READ_ONLY_GIT (M20), dir/file mode (M21/M22), origin check in lib (M18, double-guarded). See Findings F1, F3. |
 | verify | ☐ pass / ☐ fail / ☐ N/A | [leave it: the auto verify hook writes this row, with its run record. If you ran /verify yourself, tick pass and make the whole Notes cell "/verify by the user, session <id>, commit <sha>" (the full 40-character commit). The merge gate counts no other row, even with the word "pass" in it] |
 | Review scope bounded to the change's blast radius (affected set, not whole repo) | ☑ pass | Range fix/t374-folder-rule-followups...3b41a1d1: hook, test, tracks.md; read lib/auto_mode.py tag readers and the merge gate's reading (pre_bash_block_unsafe_merge.py:2754-2785). Skipped: unrelated hooks. |
-| Full smoke suite still green (no regression) | ☐ pass / ☐ fail | Not run: a full run is in progress in the worktree (per the Supervisor). |
+| Full smoke suite still green (no regression) | ☑ pass | Not green, no regression (Supervisor, at `10469631`): `60 failed, 8001 passed, 24 skipped` — the same 60 failures as the clean `main` worktree (`60 failed, 7943 passed, 24 skipped`). The round-1 run at `97a3678d` had one extra timing test (`test_auto_verify_skip_pass.py::test_ac3_one_path_outside_the_list_and_a_skip_answer_stays_blocked[docs/claude-md/tracks.md]`), passing alone (`19 passed`) |
 | **Companion score (easy-verifier)** | ☑ N/A | Not run. |
 | **UI: Visual regression (diff or verdict pasted)** | ☑ N/A | No UI. |
 | **UI: Design-system compliance (tokens/colors/typography verified)** | ☑ N/A | No UI. |
@@ -62,7 +76,19 @@ Commands: `python3 -I /tmp/claude-1000/.../scratchpad/mut.py` (mutations), `prob
 
 ## Demonstration
 
-Not filled by the reviewer.
+**BEFORE** (2026-11-25T13:13:29Z, the new test file against T374's hook, before the first implementation commit): `python3 -m pytest -q -p no:cacheprovider .claude/hooks/tests/test_t371_admin_approval.py` printed `18 failed, 6 passed`. Under a typed `[admin]`, a Write of `.env`, `rm -rf config` (holding `.env`) and `cat config/.env` each asked, the same as outside it, and nothing was logged.
+
+**AFTER** (branch head `10469631`): the same file printed `22 passed, 51 subtests passed`.
+- Under `[admin]`, a read of a listed secret passes with no output and no log line.
+- A write, delete or move passes with no decision, after one JSON line in `sensitive-admin-<session>.jsonl` (mode 0600, in a private folder) and a note asking for the report line.
+- A read or a write of the guard's own files asks.
+- A pre-resume tag, `[stop]`, `[ticket]` or an untyped tag approves nothing.
+- A log that cannot be written asks.
+- Outside `[admin]` every call asks, as before.
+
+**DELTA**: an `[admin]` run no longer stops on a sensitive-path prompt for the user's listed files. Every write it makes there leaves a log line, and the guard's own files still stop it.
+
+**WITNESS**: Supervisor session acceb8c1, 2026-11-25 (BEFORE red run, the per-round red runs, full-suite comparison); `Reviewer: T371`, fresh qa-expert spawns in three rounds (`3b41a1d1`, `97a3678d`, `10469631`), each running the real hook as a subprocess under constructed transcripts, with mutation runs.
 
 
 ---
@@ -102,3 +128,36 @@ Red: 29 of 37 (M1-M3, M4, M5-M17, M19, M21, M22, M26, M27, M29-M34, M40, M42). S
 (The script prints `GREEN` for M3, M4 and M11 because its FAILED-line regex finds no names; their summary lines show failures, so they are red.)
 
 Commands: `python3 -m pytest -q -p no:cacheprovider <the guide's seven files>` -> `191 passed, 170 subtests passed in 12.26s`; `python3 -I .../scratchpad/mut3.py`, `probe.py`, `probe2.py`, `probe3.py`, `probe4.py`, `probe5.py`, `probe6.py`, `cmp5.py` (round-1 hook against this one).
+
+
+---
+
+## Round 3 (Reviewer: T371, commit 10469631)
+
+Verdict: **PASS** (no P0-P2). Round-2 F6 is fixed; F7 is partly closed (see survivors); F8 is T375, out of scope. Two P3 test gaps remain.
+
+Verification Command (worktree, commit 10469631): `192 passed, 180 subtests passed in 14.60s`. The full suite was not run.
+
+### Round-2 items re-probed with the real hook (scratchpad probe4.py, probe5.py, probe6.py, probe7.py; mut4.py)
+
+| Item | Result |
+|------|--------|
+| F6 shell-built find flag | Fixed. `find config/.env -d$'elete'`, `-$'delete'`, `-d$"elete"`, `-$'exec' rm {} ;`, `-de${x}lete`, `-d{e,}lete`, `-d$(echo)elete`, `` -d`echo`elete ``, `-$'\x64elete'`, `find config/.env "$X"`, `"${A:--delete}"`, `-d"$e"lete`: all LOGGED (a write), none silent. The change is in `only_reads` only: any word with `$`, a backtick or `{` (after the quote strip) makes the segment a write. Over-reach (a read with `$HOME` or `{a,b}` now logs instead of passing) goes toward a log line, not an ask, and only under `[admin]`. |
+| F7 survivors | `-fprint`, `-fls` (M35, M37) and the `-ok` / `-exec` prefixes are now red or double-guarded; survivors listed below. |
+| Any write read as a read | None found. Still silent under `[admin]`, all because the hit detection misses the call outside `[admin]` too (the F8 class, T375): `find config/.env$IFS-delete`, `find config/.env!-delete`, `cat .claude/sens''itive-paths.txt`, `cat .claude/sensitive-pa\ths.txt`. Probed outside `[admin]`: `find config/.env$IFS-delete` is silent there as well, so no `[admin]` regression. |
+| `[admin]` counting when the user did not type it | None. `admin_in_force` is `auto_mode.session_request` only; the earlier probes (tool result, sidechain, `[ticket]`, `[auto]`, code span, quote, resume mark, `garbage` mark) and tests `AdminInAToolResult`, `test_f3_*` still pass. Round 3 did not touch it. |
+| Guard-file call that passes | None: `cat/ls/grep/head` of `.claude/sensitive-paths.txt`, `.claude/state/*`, and a `;` chain all ASK (probe4). The in-word-quote forms are not a hit at all (F8/T375). |
+| New ask outside `[admin]` | None. The range 97a3678d..10469631 changes `only_reads` (called only after `admin_in_force`) plus a docstring and 12 test lines; `folder_hits` and `sensitive_hits` are byte-identical to round 2, whose round-1 comparison (cmp5.py) showed no new ask on ordinary commands. |
+
+### Findings
+
+| # | Sev | Conf | Where | Finding | One-line fix |
+|---|-----|------|-------|---------|--------------|
+| F9 | P3 | 80 | `test_t371_admin_approval.py` `test_r2_shell_built_words_...` | Every `-exec`/`-ok` probe also carries `{}`, which the new brace check catches, so the `-exec` and `-ok` prefixes in `FIND_WRITE_FLAG_PREFIXES` are no longer pinned (M34, M36 survive): `find config/.env -exec rm -rf config ;` (no braces) would still be read as a read if a prefix were dropped. Current code is right; the pin is gone. | Add `find config/.env -exec rm x ;` and `find config/.env -ok rm x ;` (no `{}`) to the test. |
+| F10 | P3 | 75 | same file | Carry-over survivors with no wrong behaviour: M28 (folder owner check), M38 (`return seen` -> True, an empty command counts as a read), M39 (second `_segment_command` reading), M41 (default anchors base), M43 (the note's "final report" line), M52 (backtick in the build check: double-guarded, a backtick splits the segment first). | One test each where cheap (an empty/whitespace Bash command is not a read; the note contains "final report"); accept M28, M52. |
+
+### Mutation survivors (scratch copy, 41 mutations: mut3.py's 37 plus 4 for the new `$`/backtick/`{` check)
+
+Red: M1-M3, M4-M17, M19, M21, M22, M26, M27, M29-M33, M35, M37, M40, M42, M50 (check dropped), M51 (`$` dropped), M53 (`{` dropped). Survivors: M28, M34, M36, M38, M39, M41, M43, M52 (F9, F10). (The script prints `GREEN` for M3, M4 and M11 because its FAILED-line regex finds no names; their summary lines show failures, so they are red.)
+
+Commands: `python3 -m pytest -q -p no:cacheprovider <the guide's seven files>` -> `192 passed, 180 subtests passed in 14.60s`; `python3 -I .../scratchpad/probe4.py`, `probe5.py`, `probe6.py`, `probe7.py`, `mut4.py`.
