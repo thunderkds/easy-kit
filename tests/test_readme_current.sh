@@ -104,23 +104,23 @@ for name in $OVERSIZE; do
 done
 
 # ── Reverse direction: parse the skill names the README's Codex-skip list actually
-# contains (the bullet list following "Skills currently affected:"), and fail for any
-# named skill that is no longer over the derived cap — a stale over-claim. ──
+# contains (every `name` after "Skills currently" up to the next blank line: an inline
+# list or a bullet list), and fail for any named skill that is no longer over the
+# derived cap — a stale over-claim. T347: the README writes the list inline. ──
 README_LISTED="$(awk '
-  /Skills currently/ { seeking=1; next }
-  seeking && /^-[[:space:]]*`/ {
-    inlist=1
-    line=$0
-    sub(/^-[[:space:]]*`/, "", line)
-    sub(/`.*/, "", line)
-    print line
-    next
+  function names(line) {
+    while (match(line, /`[^`]+`/)) {
+      print substr(line, RSTART + 1, RLENGTH - 2)
+      line=substr(line, RSTART + RLENGTH)
+    }
   }
-  inlist && /^[[:space:]]*$/ { inlist=0; seeking=0 }
+  seeking && /^[[:space:]]*$/ { exit }
+  seeking { names($0); next }
+  /Skills currently/ { seeking=1; line=$0; sub(/.*Skills currently/, "", line); names(line) }
 ' "$README")"
 
 if [ -z "$README_LISTED" ]; then
-  fail "AC2: could not parse any skill names from README's Codex-skip bullet list"
+  fail "AC2: could not parse any skill names from README's Codex-skip list"
 fi
 
 for name in $README_LISTED; do
