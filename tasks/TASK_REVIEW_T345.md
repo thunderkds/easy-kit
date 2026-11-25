@@ -25,7 +25,7 @@ Checks: tests `python3 -m pytest .claude/hooks/tests/test_agent_ws_t345.py -q` �
 Memory: `memory/decisions.md` — 2026-11-25 T345: `agent-ws` stays local, nothing ships; `memory/learnings.md` — 2026-11-25 T345 traps (Debate the Stop hook cannot see; Claude keeps a worktree with an untracked file; main's overwritten `CLAUDE.md` fails 2 tests; `git stash` negative check). `memory/MEMORY.md` not touched: over its budget (43,909 chars), a `/compact-memory` job
 Not done: merge (admin: after the auto verify pass); auto verify: PENDING
 Paused: auto-mode check failed — extended track, but the trace has no `code-review` Skill call (Stage 4 runs in auto mode); Risk High, but the trace has no `security-review` Skill call [report c54b4e946dba]
-Paused: auto-mode check failed — Risk High, but the trace has no `security-review` Skill call [report 2d7d32f98a6e]
+Paused: auto-mode check failed — Risk High, but the trace has no `security-review` Skill call [report 465fb71aaca2]
 
 ## Evidence
 
@@ -163,3 +163,50 @@ Boundaries looked at: other local users on a shared `/dev/shm` and `/tmp`; the h
 ### Verdict
 
 PASS WITH FINDINGS: 0 P0, 0 P1, 1 P2, 4 P3. The P2 (F1) should be fixed before merge: it is small and safe to fix; the P3s may be fixed or recorded.
+
+
+### Round 2 (Reviewer: T345, commit a9861d08)
+
+Commit reviewed: `a9861d08e4d7156ae96de17fdd3e0217f2e258b8` (`git diff main...a9861d08`: 9 files; the fix itself is `git diff d2ba1e20 a9861d08`: `scripts/agent_ws.py`, the test file, `tasks/TASK_GUIDE_T345.md`). Risk High, C3.
+
+Method: no `Skill` tool was run in this context, so `code-review` and `security-review` were done inline (the whole diff re-read against `skills/code-review/references/security-reviewer.md`; no built-in `security-review` started). No code edited.
+
+```
+$ python3 -m pytest .claude/hooks/tests/test_agent_ws_t345.py -q   (scratchpad venv first on PATH)
+59 passed in 12.42s
+```
+
+Whole repo suite not run, as instructed.
+
+#### Round-1 findings
+
+| Finding | Status | Evidence |
+|---|---|---|
+| P2-1 `gc` size walk crash and cost | Fixed | `scripts/agent_ws.py` `cmd_gc`: the walk is guarded by `if dry and ...`, and each `islink`/`getsize` is in `try/except OSError`. Test `test_gc_does_not_walk_build_folders_unless_dry_run` |
+| P3-1 tracebacks on bad input | Fixed | `cmd_new`: `--owner-pid` must be `isdigit()` else `Refused`; `all_leases` skips a lease lacking `name`/`path`/`branch`/`base` (`LEASE_KEYS`) with a stderr line. Test `test_bad_owner_pid_and_broken_lease_are_refusals_not_tracebacks`. Callers at `Repo.find`, `remove`, `cmd_gc` now see only leases with those keys |
+| P3-2 unknown owner start means dead | Left open by decision (auto decision 14); `blockers` still guards unmerged, dirty and in-use work. Not re-raised | n/a |
+| P3-3 AC 14 / SC 7 path text | Fixed | `tasks/TASK_GUIDE_T345.md` AC 14 and SC 7 row 7 now name `<mount>/agent-ws-<uid>/<repo id>/<name>-<token>/` and cite decision 6 |
+| P3-4 note (AC 4 by local registration) | Unchanged, recorded in the record's `Not done:` | n/a |
+
+#### Security review (inline), delta and whole
+
+The fix adds no new boundary: `--owner-pid` is now stricter, lease validation only skips more, the walk only runs under `--dry-run`. The round-1 conclusion stands: private tmpfs chain checked by `lstat` (symlink, owner, mode), hook `name` reduced and matched by `NAME_RE`, argument-list `git` calls, no `--force` or `branch -D`, `remove_build_dir` re-checks the `agent-ws-<uid>` parent, owner, non-symlink and `tmpfs` regardless of the lease. No confirmed security finding; no `needs_validation` lead.
+
+#### New findings
+
+**P0: none. P1: none. P2: none.**
+
+**P3-5: `--owner-pid` check accepts non-ASCII digits**
+- `scripts/agent_ws.py` `cmd_new`, `raw.isdigit()`. `"²".isdigit()` is true but `int("²")` raises `ValueError`, so that one input still ends in a traceback (exit 1, nothing created, so safe).
+- Action: use `raw.isascii() and raw.isdigit()`. Optional.
+
+**P3-6 (note): `cmd_gc` prints `lease['owner_pid']` with a hard key**
+- `scripts/agent_ws.py` the `kept {name}: owner {lease['owner_pid']} alive` line. Reached only when `owner_alive` is true, which needs a readable `owner_pid` matching `owner_start`, so no crash is reachable. `LEASE_KEYS` does not list `owner_pid`; harmless. No action.
+
+#### Gate rows (not mine to close)
+
+The `verify` row and the Supervisor-trace `Paused:` lines (missing `code-review` / `security-review` Skill calls) belong to the auto verify hook and the Supervisor; this review does not repair them. The smoke-suite comparison against `main` in the record was not re-run.
+
+#### Verdict
+
+PASS WITH FINDINGS: 0 P0, 0 P1, 0 P2, 1 P3 new (P3-5), 1 P3 note (P3-6); round-1 P2-1, P3-1, P3-3 confirmed fixed, P3-2 left by decision, P3-4 unchanged. Fit to merge once the gate rows are closed by their owners.
