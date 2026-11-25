@@ -155,6 +155,46 @@ v2.0.0 moves canon from `.claude/agents/` and `.claude/skills/` to plain root an
   create are unconfirmed against a live workspace; online `PROJECT_KANBAN.md` is still tracked (T162); a missing
   key reads "board unreachable" in pull moments (T163); `create` twice makes two issues.
 
+### v2.3.0 — deploy, health check and rollback notes
+
+- **What the push publishes.** `github/main` is already at `5a686858`: about 1,260 commits since `v2.2.0`
+  (T345, T350, T352 among them) are live, untagged. This release pushes the last 39 local commits — merges
+  `da038f57` (T347), `5054139f` (T354), `8b4d4085` (T353) and their board/memory commits — then tags the
+  result `v2.3.0`. Not in scope: T321 (In Progress; only its board row is on `main`), T348, T349, T351.
+- **Pre-deploy checks** (as §Deploy step 1), plus: T345 shows `- [x]` in Done (it waits in Ready for Review:
+  the hook's close-out did not run, `tasks/TASK_REVIEW_T345.md` `Paused: done not moved`), and
+  `tasks/TASK_REVIEW_T345.md`, `TASK_REVIEW_T347`, `TASK_REVIEW_T353`, `TASK_REVIEW_T354` (or `MINIMAL_LOG.md`)
+  each hold a `verify` row reading `☑ pass`.
+- **Smoke test, defined before the deploy** — §Deploy step 4 from the published `main`, no terminal
+  (`setsid -w sh -c '<the curl line>' </dev/null`), then in the install:
+  ```sh
+  test ! -e scripts/agent_ws.py && ! grep -q '"agent_ws"' .claude/harness-lock.json   # T353: off by default
+  test -f skills/release-plan/SKILL.md                                                 # T352 rename
+  grep -c 'agent_ws.py' .claude/settings.json                                          # must print 0
+  ```
+  **Pass**: the §Deploy step-4 condition holds and all three lines succeed (the last prints `0`).
+  Then the §Deploy step-5 plugin check; **pass** also needs `claude plugin list` to show version `2.3.0`.
+- **Opt-in smoke (Linux, a terminal)**: in a second empty repo run the same `curl … | sh`, press Enter at
+  every prompt except `y` at `Turn on parallel builds (agent-ws)? [y/N]`. **Pass**: `scripts/agent_ws.py`
+  exists, `grep -c 'agent_ws.py hook-' .claude/settings.json` prints `3`, and the lock holds
+  `"agent_ws": "on"`.
+- **Deploy** (operator): `git checkout main && git merge --ff-only release/v2.3.0`, then §Deploy steps 2–3
+  with `vX.Y.Z` = `v2.3.0` (`git tag -a v2.3.0 -m "release v2.3.0 — about 100 tasks since v2.2.0"`, `git push github main`,
+  `git push github v2.3.0`).
+- **Rollback trigger**: either smoke test fails; a project that answered No shows any `agent_ws` change; an
+  Update of an existing install drops or duplicates kit hook entries; the plugin check fails.
+- **Rollback** (never force: `main` was already public before this push): revert the merges this push
+  added, newest first, then push and drop the tag:
+  ```sh
+  git revert --no-edit -m 1 8b4d4085 && git revert --no-edit -m 1 5054139f && git revert --no-edit -m 1 da038f57
+  git push github main
+  git push github :refs/tags/v2.3.0 && git tag -d v2.3.0
+  ```
+  Re-run the smoke test against the reverted `main`. **Downstream exposure**: a project that answered `y`
+  keeps `scripts/agent_ws.py` and its 3 hook entries. After the rollback the merge no longer owns that
+  form, so an Update keeps the entries as the user's and stops refreshing the script: remove them by hand,
+  or Reinstall and answer `n` before the rollback.
+
 ## Deploying the landing site
 
 **Deployed URL**: [`https://personal-agentic-claude.vercel.app/`](https://personal-agentic-claude.vercel.app/)
@@ -284,3 +324,4 @@ gitignored).
 | v2.0.0 | 2026-09-05 | **BREAKING.** T086, T089, T090–T104 — canon relocated to plain root (`agents/`, `skills/`) with `.claude/*` kept as committed relative symlinks (T096, DDR-0007); per-harness install projection and `setup.sh --harness codex|claude` (T097/T098); provider adapters `AGENTS.md` + `.cursor/rules/agent-base.mdc` (T090/T091); merge-gate and quoted-span hook fixes (T094/T095/T099); Response Standard inlined into `CLAUDE.md` (T100/T103); docs and baseline reconciliation (T101/T102); site names the shipping version (T104) | hungnh1110@gmail.com | **Deployed 2026-09-05.** `main` fast-forwarded `a586000` → `b6ef559` (0 divergent commits, clean FF — this is the first release to actually reverse the 2026-08-25 v2/main freeze; `main` is now the v2.0.0 codebase). Tagged `v2.0.0`, pushed `main` + tag. Health check PASS: fresh `curl \| — | sh` install from the published `main` exited 0, printed `Setup complete`, and all three post-install assertions held (`harness-lock.json` present, `TASK_GUIDE_template.md` complexity-matrix reference found, `agents/backend.md` has 4 complexity rows) |
 | v2.1.0 | 2026-10-19 | T153, T154, T155, T156, T157, T158, T159, T160, T161, T164 — online board mode (Linear first, opt-in at setup, experimental): board-ID config, `board_sync.py` pull/push/flush/decide/init/create/update/triage, outbox, pull moments, my-task merge-gate filters, Decision Log, spawn gate blocks an incomplete guide. Not in scope: T162, T163 (Todo) | hungnh1110@gmail.com | hungnh1110@gmail.com / 2026-10-19 / "Approve v2.1.0 @ d632579 (Recommended)" — approved for branch `feat/online-board` @ `d632579`, tag to go on the PR merge commit; release-metadata commit `689f602` adds only RUNBOOK.md and the site version label | _pending operator execution — PR to main not yet merged_ |
 | v2.2.0 | 2026-10-27 | T178, T179, T180, T181, T182 — two tracks (minimal: Supervisor codes + Decision record; extended: the pipeline), Debate in auto mode, `[auto]` with a final report and an auto-mode Stop hook, auto `/verify` by a Stop hook with a protected run record, README + site describe them; also T165–T168 (scan-first site, skill flow, no sideways tables, MCPs section), T169 (Writing Principles), T170 (`resolve-question`), T173 (`AGENTS.md` primary, `CLAUDE.md` = `@AGENTS.md`), T174 (Update overwrite/keep-all + `.claude/update-log.md`), T175 (kit-arms experiment fixture), T183 (subagent frontmatter), T185 + T187 (site Settings tool: Build and Check modes; T184 closed, will not do). Doctrine label 1.17 → 1.18. Not in scope: T176, T177 (report-only, on their branches), T186 (Todo) | hungnh1110@gmail.com | hungnh1110@gmail.com / 2026-10-28 / "Approve v2.2.0 @ 45b6957 (Recommended)" — approved for branch `release/v2.2.0` @ `45b6957` (an earlier approval of `99d55be` lapsed when GitHub `main` moved); this release-metadata commit adds only this row's approval and outcome; tag `v2.2.0` goes on it | **Deployed 2026-10-28.** `main` fast-forwarded to `45b6957` plus this metadata commit; tagged `v2.2.0`; pushed `main` + tag (`8048c7a..d645990`). **Health check PASS** (2026-10-28): fresh `curl … | sh` install from published `main` into an empty repo, exit 0, `Setup complete`; `harness-lock.json` present (`kit_commit: d645990`), no `.claude/hooks/tests`, template grep ok, `backend.md` 4 complexity rows; new `stop_auto_verify.py` + `stop_auto_mode_check.py` shipped and wired; `AGENTS.md` `Version: 1.18` |
+| v2.3.0 | 2026-11-25 | about 100 tasks since v2.2.0 ( full list: `site/docs.html#changelog`, Unreleased). Largest: `[admin]` / `[ticket]` / `[stop]` session tags; auto verify for every task and auto close-out; the merge gate counts only hook-written verify rows and a finished fresh reviewer (DDR-0011); the Claude Code plugin and `/easy-kit:init`; the story landing page; self-review; agent-ws worktrees and tmpfs build folders (T345) as an opt-in installer choice (T353); the Stage 5 skill is now `release-plan` (T352). Not in scope: T321, T348, T349, T351 (open) | operator (yours) | _pending — production approval not yet recorded for v2.3.0 @ `f8d2ae18` (main; no tag yet)_ | _pending operator execution_ |
