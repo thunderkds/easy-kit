@@ -101,7 +101,6 @@
 
 
 ### In Progress
-- [ ] **T370** — `[admin]` on a repo whose default branch is `master`: `main` is hard-coded in the merge gate (`ADMIN_MAIN_BRANCH`, `REVIEW_BASE_REF`, the remote `refs/heads/main` check), `verify_record.BASE_REF` and `scripts/cleanup_task.py` `MAIN`; read the default branch once (e.g. `git symbolic-ref refs/remotes/<remote>/HEAD`, else `main`) | common-infrastructure | C2 | Risk: High | P1 | Registered 2026-11-25, user: "final flow with [admin] tag is automatically to merge to the main or master." (split from T368) | Track: extended | Claimed 2026-11-25 [admin] (session 43b43f7e, user: "Take T372 and T370"): runs after T372; branch `fix/t370-default-branch`, worktree `../wt-t370` | Back to Todo 2026-11-25 [admin]: an In Progress row blocks the T372 merge (pipeline gate); still claimed by session 43b43f7e, next after T372 | Started 2026-11-25 [admin] (session 43b43f7e): branch `fix/t370-default-branch`, worktree `../wt-t370`
 
 
 
@@ -115,6 +114,7 @@
 
 
 ### Ready for Review
+- [ ] **T370** — `[admin]` on a repo whose default branch is `master`: `main` is hard-coded in the merge gate (`ADMIN_MAIN_BRANCH`, `REVIEW_BASE_REF`, the remote `refs/heads/main` check), `verify_record.BASE_REF` and `scripts/cleanup_task.py` `MAIN`; read the default branch once (e.g. `git symbolic-ref refs/remotes/<remote>/HEAD`, else `main`) | common-infrastructure | C2 | Risk: High | P1 | Registered 2026-11-25, user: "final flow with [admin] tag is automatically to merge to the main or master." (split from T368) | Track: extended | Claimed 2026-11-25 [admin] (session 43b43f7e, user: "Take T372 and T370"): runs after T372; branch `fix/t370-default-branch`, worktree `../wt-t370` | Back to Todo 2026-11-25 [admin]: an In Progress row blocks the T372 merge (pipeline gate); still claimed by session 43b43f7e, next after T372 | Started 2026-11-25 [admin] (session 43b43f7e): branch `fix/t370-default-branch`, worktree `../wt-t370` | Guide: `tasks/TASK_GUIDE_T370.md` | Ready for Review 2026-11-25 [admin]: Reviewer: T370 round 2 PASS (`52a59aab`; P2-1 fixed, P3 only), security-review no findings
 - [ ] **T365** — T321 follow-ups in the merge gate: `EASY_KIT_ADMIN_REMOTE` naming a remote that does not exist is refused with the generic push text, not "no such remote"; the verify run-record slug comes from `origin`'s URL whatever the setting, so renaming or removing `origin` hides earlier passes; under a bad value the `[ticket]` merge refusal and `_main_push_refusal` read `None`; the `_own_origin_refusal` and `_remote_main` docstrings still say `origin` | common-infrastructure | C1 | Risk: High | P2 | Registered 2026-11-25 [admin], user: "yes" (follow-ups named in the T304/T316/T321 close-outs) | Guide: `tasks/TASK_GUIDE_T365.md` | Track: extended | Started 2026-11-25 [admin]: branch `fix/t365-admin-remote-texts`, worktree `../wt-t365`; Reviewer: T365 PASS (P3 only, `f364bded`), both P3 fixed in `979783b3`; item 2 split to T369 (3-Advocate Debate) | `AUTHORISED_TASKS` gains T365 2026-11-25 (user: "approve") | Ready for Review 2026-11-25 [admin] (Reviewer: T365 round 2 pass, `18a8fce2`)
 
 
