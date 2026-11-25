@@ -77,6 +77,8 @@ In a project whose `config/` holds `.env` and whose `.claude/` holds `sensitive-
 python3 -m pytest -q -p no:cacheprovider .claude/hooks/tests/test_t375_dequote_tokens.py .claude/hooks/tests/test_t371_admin_approval.py .claude/hooks/tests/test_t374_folder_rule_followups.py .claude/hooks/tests/test_t363_folder_level.py .claude/hooks/tests/test_pre_tool_sensitive_path.py .claude/hooks/tests/test_t316_list_self_protect.py
 ```
 
+**Real-run scope (the first auto verify stopped here).** Run AC 1, 2 (the path-form cases), 3 and 4 against the hook, on `main` and on the branch. The folder-rule cases (`find config -d$'elete'`, `find config -d$"elete"`) need a sensitive folder inside the project, and a headless run cannot create one: the guard asks on the `.env` it would write, and a split name routes around the guard. The unit tests (`test_t375_dequote_tokens.py`, `test_t363_folder_level.py`) drive the real hook as a subprocess in a temp project that holds `config/.env`; they are the evidence for those cases. Do not stop for a fixture.
+
 ### Evidence (filled by reviewer at Stage 4/5)
 
 > **Moved.** Filled in `tasks/TASK_REVIEW_T375.md`.
