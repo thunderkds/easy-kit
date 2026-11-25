@@ -63,3 +63,42 @@ Commands: `python3 -I /tmp/claude-1000/.../scratchpad/mut.py` (mutations), `prob
 ## Demonstration
 
 Not filled by the reviewer.
+
+
+---
+
+## Round 2 (Reviewer: T371, commit 97a3678d)
+
+Verdict: **FAIL** (one P2: a write that deletes a protected file is still read as a read, a V2 class the dequoting did not close). Round-1 F1, F2 (as probed), F4 and F5 and V1 are fixed.
+
+Verification Command (worktree, commit 97a3678d): `191 passed, 170 subtests passed in 12.26s`. The full suite was not run.
+
+### Round-1 findings and V1/V2, re-probed with the real hook (scratchpad probe.py, probe2.py, probe3.py, probe4-6.py)
+
+| Item | Result |
+|------|--------|
+| F1 stale tag after a resume | Fixed. A resume mark after the tag, and a mark holding `garbage`: both ask. `[ticket]`, `[auto]` after `[admin]`, a code span, a quoted line: ask. A plain request after `[admin]` keeps the session tag (by design). |
+| F2 code runners read as reads | Fixed for the round-1 probes: `GIT_EXTERNAL_DIFF=rm git diff ...`, `git diff --ext-diff`, `git ...`, `file -C`, `env rm -rf config`, `xargs rm`, `sh` are logged; `rg`, `file`, `git` are off the read list (M31-M33 red). `rg --pre` and `git log --output` on a non-sensitive path give no decision outside `[admin]` too (not a hit). |
+| F3 test gaps | Closed for `[ticket]`/`[auto]`, the held session tag, resume, folder/file modes, symlinked folder (M4, M3, M21, M22, M26, M27 red). Still open: see survivors. |
+| F4 log folder checks | Fixed: `os.lstat` of the folder (link, mode, owner). Owner check has no test (M28 survives). tracks.md now says the log is by convention. |
+| F5 wording | Fixed: "not asked by the hook", `decision` field in the line. |
+| V1 guard files read form | Fixed: `cat/ls/grep/head` of `.claude/sensitive-paths.txt` and `.claude/state/**`, also in a `;` chain, ask (M11 red, 7 failures). |
+| V2 in-word quotes | Fixed for `-de''lete`, `-de'le'te`, `-d"elete"`, `-ex''ec`, `-o''k`, `-fpr''int`, `r''m`, `t''ee`, `\r\m`, `>''x`, `-de\lete`: all logged. NOT fixed for `$'...'`, `${x}` and `{e,}`: see F6. |
+| Folder rule dequoting adds no ask on an ordinary command | Checked: 22 commands run through the round-1 hook (3b41a1d1) and this one, `rm`/`mv`/`cp`/`git rm`/`echo >`/`ls` on `build`, `node_modules`, quoted, escaped, `(build)`, globs: identical. The only differences are `rm -rf con''fig`, `con""fig`, `\config`, `conf\ig` (now ask: they are the folder `config`, correct) and `rm -rf config\ x` (asks, though the true target is the file `config x`: over-ask toward the human, rare). |
+
+Checked and held: the hook never emits `allow` (M16 red); no change outside `[admin]` (the branch sits behind `admin_in_force`; the T374/T363/T314/T316 suites pass); log failure asks (M15 red); a log line cannot be forged by a command (`json.dumps`, target cut at 2000); a tag in a tool result, a sub-agent prompt or a quote does not count.
+
+### Findings
+
+| # | Sev | Conf | Where | Finding | One-line fix |
+|---|-----|------|-------|---------|--------------|
+| F6 | P2 | 85 | `.claude/hooks/pre_tool_sensitive_path.py` `only_reads` (the dequote at the word loop, ~line 705) | A `find` whose write flag is built by the shell is read as a read: under `[admin]` it passes silent, with no log, and deletes or writes a protected-by-pattern file. Probed (all ASK outside `[admin]`, SILENT-NO-LOG under it): `find config/.env -d$'elete'`, `-$'delete'`, `-d$"elete"`, `-$'exec' rm {} ;`, `-de${x}lete`, `-d{e,}lete` (brace expands to `-delete -dlete`), `-$'\x64elete'`. The dequote strips the quote but keeps the `$`, so the word is `-d$elete`. | In `only_reads`: a `find` (or any read verb) word that contains `$`, a backtick, `{` or `\` after the quote strip makes the call a write; or drop `find` from `READ_ONLY_COMMANDS`; add the probes above to `test_v2_f2_...`. |
+| F7 | P3 | 80 | `test_t371_admin_approval.py` | Mutation survivors (test gaps, no wrong behaviour seen): M28 folder owner check dropped; M35/M36/M37 `-fprint`, `-ok`, `-fls` prefixes dropped (only `-delete`, `-exec` are tested; `-fprint`/`-ok` via prefix cover `-fprintf`, `-okdir`); M38 `return seen` -> True (empty command counts as a read); M39 the `skip_values=False` reading dropped; M41 default anchors base; M43 the note's "final report" line. | One test per survivor (a `find -fprint config/.env`, `-ok`, `-fls` call; a `chown`-ed folder is hard, so assert the check by a mock-free uid compare or accept M28). |
+| F8 | P3 | 75 | `pre_tool_sensitive_path.py` hit detection (pre-existing, not this range) | `cat .claude/sens''itive-paths.txt`, `cat .claude/sensitive-pa\ths.txt` and `find config -d$'elete'` are not a hit at all, so they pass outside `[admin]` as well. V1's "any PROTECTED_PATTERNS hit asks" cannot cover a call the hit detection misses. | Out of scope for T371; note it in the cut list / a follow-up (dequote the words in `sensitive_hits`). |
+
+### Mutation survivors (scratch copy, 37 mutations, real hook as a subprocess; mut3.py)
+
+Red: 29 of 37 (M1-M3, M4, M5-M17, M19, M21, M22, M26, M27, M29-M34, M40, M42). Survivors: M28, M35, M36, M37, M38, M39, M41, M43 (all F7). Mutations that undo a round-2 fix are all red: M3 (fallback back), M9 (env prefix), M11 (V1), M29 (dequote in `only_reads`), M30 (folder-rule dequote), M31-M33 (rg/file/git back on the list).
+(The script prints `GREEN` for M3, M4 and M11 because its FAILED-line regex finds no names; their summary lines show failures, so they are red.)
+
+Commands: `python3 -m pytest -q -p no:cacheprovider <the guide's seven files>` -> `191 passed, 170 subtests passed in 12.26s`; `python3 -I .../scratchpad/mut3.py`, `probe.py`, `probe2.py`, `probe3.py`, `probe4.py`, `probe5.py`, `probe6.py`, `cmp5.py` (round-1 hook against this one).

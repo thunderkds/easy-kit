@@ -205,6 +205,18 @@ class RoundOneFixes(AdminApproval):
                 self.assert_approved(self.pre("Bash", cmd))
         self.assertEqual(len(self.log_lines()), 9)
 
+    def test_r2_shell_built_words_and_every_find_write_flag_are_writes(self):
+        """Round 2 (F6, F7): a word the shell still expands (`$'…'`, `${x}`, `{e,}`, a backtick)
+        is never read as a read; each find write flag counts; the plain reading counts."""
+        cmds = ("find config/.env -d$'elete'", "find config/.env -$'delete'", "find config/.env -de${x}lete",
+                "find config/.env -d{e,}lete", "find config/.env -$'exec' rm {} ;", "cat config/.env `x`",
+                "find config/.env -ok rm {} ;", "find config/.env -fprint out", "find config/.env -fls out",
+                "sudo -h find config/.env -delete")
+        for cmd in cmds:
+            with self.subTest(command=cmd):
+                self.assert_approved(self.pre("Bash", cmd))
+        self.assertEqual(len(self.log_lines()), len(cmds))
+
     def test_v2_quoted_find_flags_ask_outside_admin_too(self):
         self.write_transcript("do the task")
         for cmd in ("find config -de''lete", "find config -ex\"ec\" rm {} +", "find config -\\delete"):

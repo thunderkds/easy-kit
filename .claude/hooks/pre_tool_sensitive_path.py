@@ -59,7 +59,8 @@ expansion is checked as a path; a token over `MAX_BRACE_EXPANSIONS` paths asks.
 
 Under `[admin]` (T371): when the session tag `[admin]` holds (`auto_mode.session_request`, which
 honours `[stop]`, another tag and a resume), the hook does not ask. A call that only reads
-(`READ_ONLY_COMMANDS`, words dequoted, no environment prefix, redirect or `tee`) gets no output. Any
+(`READ_ONLY_COMMANDS`, words dequoted, no environment prefix, redirect, `tee` or word the shell still
+builds with `$`, a backtick or `{`) gets no output. Any
 other call gets no decision (the normal permission flow, never `allow`) after one JSON line (time,
 session, agent, task, tool, target, paths, patterns) is appended to
 `<anchors base>/<repo slug>/sensitive-admin-<session>.jsonl` (the folder must be ours, mode 0700 and
@@ -705,6 +706,8 @@ def only_reads(tool_name, tool_input):
         seen = True
         if re.match(r"[A-Za-z_]\w*=", words[0]):
             return False  # an environment prefix can make a reader run a program
+        if any(re.search(r"[$`{]", w) for w in words):
+            return False  # round 2 (F6): a word the shell still builds (`-d$'elete'`, `{e,}`) is unknown
         for verb, args in (_segment_command(words), _segment_command(words, skip_values=False)):
             if verb not in READ_ONLY_COMMANDS:
                 return False
