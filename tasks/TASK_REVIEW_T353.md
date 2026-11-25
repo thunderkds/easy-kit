@@ -48,3 +48,29 @@ Paused: auto-mode check failed — extended track, but the trace has no `code-re
 **DELTA**:
 
 **WITNESS**:
+
+## Stage 4 review (Reviewer: T353, fresh context)
+
+Scope: `main...492c5efb` (setup.sh, lib/harness-update.sh, lib/merge-settings.py, lib/agent-ws-hooks.json, tests, site, docs). Method: code-review and security-review criteria applied inline (`skills/code-review/references/security-reviewer.md`); the Skill tool was not used.
+
+Verification command (venv on PATH), all green:
+- `bash tests/test_agent_ws_installer_t353.sh`: 33 passed, 0 failed
+- `pytest tests/test_merge_settings_agent_ws_t353.py tests/test_site_story.py tests/test_site_content.py tests/test_site_visual_first.py tests/test_docs_match_installer.py tests/test_plugin_package.py -q`: 236 passed
+- `tests/test_one_command_menu.sh` 22/0, `tests/test_cli_and_project_menus.sh` 25/0, `tests/test_settings_merge.sh` 49/0
+- Extra probe (edge case): opted-in project, user deleted `scripts/agent_ws.py`, no-terminal Update: script restored, 3 entries present, lock keeps `agent_ws: on` and the script hash.
+
+Acceptance and Success Criteria: AC 1-10 and SC 1-6 are met by code and tests (AC 1 with the D2 note below). AC 7: `hooks/hooks.json` and the kit `.claude/settings.json` are not in the diff. AC 2: SC2 diffs a pty Enter install against a no-terminal install byte for byte.
+
+Security: no injection path found. The overlay path comes from the fetch temp dir and is quoted; the lock value is compared literally to `on`; the ownership regex is anchored and only matches the exact `"$CLAUDE_PROJECT_DIR"/scripts/agent_ws.py` form; a No answer ships nothing new. Hooks run a project-local script, the same trust level as the repo's other hooks.
+
+### Findings
+
+- **P2** `lib/agent-ws-hooks.json` + `setup.sh:430-435`: the three entries are written to the tracked `.claude/settings.json`, so a teammate on macOS or Windows who clones an opted-in project gets a `WorktreeCreate` hook that the script itself calls Linux only (`scripts/agent_ws.py:29`). Failure scenario: `claude --worktree` fails for that teammate if `hook-create` exits non-zero off Linux. `docs/agent-ws.md` says macOS is "untested" and Windows unsupported, and the question is asked on Linux only, but nothing here shows `hook-create` degrades. Action: confirm (or test) that `hook-create` falls back to plain `git worktree` or exits 0 off Linux, or record the risk in the guide as accepted. Not blocking: debated as D1, flagged "decided for you".
+- **P3** `setup.sh:350-353` vs AC 1: on Reinstall of an opted-in project, Enter keeps Yes (D2), so "Enter means No" holds only for Install. It is documented (auto decision 7) and tested (SC6), so reword AC 1 or accept as is.
+- **P3** `lib/harness-update.sh:979` (Reinstall answered n): `scripts/agent_ws.py` stays on disk but leaves the lock, so it becomes an untracked orphan the kit no longer refreshes. The log line says it is left in place. Accepted behaviour; mention it in `docs/agent-ws.md` "turn it off".
+- **P3** `lib/merge-settings.py` `AGENT_WS_RE`: a user who hand-wired the exact `"$CLAUDE_PROJECT_DIR"/scripts/agent_ws.py` form (the form the docs give for this repo) loses those entries when they answer No or the script is absent. The doc's by-hand snippet in a project installed before T353 uses an absolute path, so it is unaffected. Action: none needed; optional doc sentence.
+- **P3** process: the Evidence table, `Checks:`, `Memory:` and `Not done:` slots in this file and the guide's Completion and Edge-Case checklists are still unfilled, and the Test Plan's real `claude -p --worktree` run in an easy-note-mcp clone is not recorded. Supervisor to fill before verify.
+
+Counts: P0 0, P1 0, P2 1, P3 4.
+
+Verdict: PASS (no P0/P1; resolve or accept the P2 before merge).
