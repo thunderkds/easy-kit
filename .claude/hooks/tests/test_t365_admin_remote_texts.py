@@ -33,7 +33,10 @@ def test_ac1_a_missing_set_remote_is_named(gate, tmp_path, monkeypatch, command)
     fx = gate(kanban(ready=("T900",)))
     auto_verified(fx)  # `origin` only: no `github` remote
     text = reason(command, fx.wt, session(tmp_path, fx, "do it [admin]"))
-    assert text is not None and "no remote `github`" in text and ENV in text, text
+    assert text is not None and "no remote `github`" in text, text
+    # the setting is named by the refusal itself, not only by the AUTO_MODE_LIMIT text `reason` adds
+    own = merge_gate._missing_remote_refusal(fx.wt)
+    assert own is not None and ENV in own and "`github`" in own, own
 
 
 def test_ac1_the_ticket_push_names_the_missing_remote_too(gate, tmp_path, monkeypatch):
@@ -51,6 +54,24 @@ def test_ac1_control_the_remote_exists_and_the_push_runs(gate, tmp_path, monkeyp
     auto_verified(fx)
     own_remote(fx, "github")
     assert reason(PUSH + " github " + BRANCH, fx.wt, session(tmp_path, fx, "do it [admin]")) is None
+
+
+@pytest.mark.parametrize("returncode,stderr,named", [
+    (2, "error: No such remote 'github'", True),
+    (128, "fatal: not a git repository (or any of the parent directories): .git", False),
+    (1, "error: could not lock config file", False),
+    (0, "", False),
+], ids=["no-such-remote", "not-a-repo", "other-error", "found"])
+def test_ac1_only_git_no_such_remote_counts_as_missing(monkeypatch, returncode, stderr, named):
+    """Another `git remote get-url` failure is not "no remote": the later checks refuse it."""
+    import subprocess
+    monkeypatch.setenv(ENV, "github")
+    done = subprocess.CompletedProcess(["git"], returncode, stdout="", stderr=stderr)
+    monkeypatch.setattr(merge_gate, "_git", lambda *a, **k: done)
+    text = merge_gate._missing_remote_refusal("/nowhere")
+    assert (text is not None) is named, text
+    monkeypatch.setattr(merge_gate, "_git", lambda *a, **k: None)  # git could not run at all
+    assert merge_gate._missing_remote_refusal("/nowhere") is None
 
 
 # ══ AC 2 — a bad value: no refusal prints `None` ═══════════════════════════════════════════════
