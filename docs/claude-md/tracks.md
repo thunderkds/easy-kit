@@ -640,6 +640,11 @@ While a process runs there it refuses and removes nothing: the Supervisor report
 It refuses unmerged or dirty work and then removes nothing; the Supervisor reports the refusal and goes on.
 When the hook left `Paused: done not moved`, the row is not in Done and the command refuses: that is expected.
 
+**The remote (T321).** `origin` unless `EASY_KIT_ADMIN_REMOTE` in `.claude/settings.json` `"env"` names
+another one (set it by hand, then start a new session); every `origin` in the list below then reads as that
+one name, `origin` is refused, and a value that is not a plain remote name (a URL, a path, an option,
+a space, a leading `.`) refuses every push and names the value. A merge is unaffected.
+
 **Merge and push.** The Supervisor may merge the task branch and push it, after the auto verify run
 passed. The merge gate, `.claude/hooks/pre_bash_block_unsafe_merge.py`, reads the tag at the time of the
 command, from this session's transcript. It allows a `git merge` or `git push` only when all of these hold:
@@ -961,6 +966,9 @@ request and runs no two tickets at once.
   verify, for the loop's task only. The gate blocks a merge, a `main` push, a pull, a force push, a
   `+ref`, another destination, `--all`, `--tags`, `--no-verify`, another remote and a hidden git verb
   such as `eval`.
+- The remote (T321): `origin` unless `EASY_KIT_ADMIN_REMOTE` in `.claude/settings.json` `"env"` names
+  another one (for example `"EASY_KIT_ADMIN_REMOTE": "github"`); it is still one remote, and every
+  `origin` above then reads as that name. A value that is not a plain remote name refuses every push.
 
 **Bash without prompts.** No tag approves a tool call, and no hook returns `allow`. To run Bash without
 prompts, apply the opt-in `settings-setup` profile `autonomous`. It sets only

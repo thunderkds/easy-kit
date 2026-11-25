@@ -116,9 +116,13 @@ GATE_REL = ".claude/hooks/pre_bash_block_unsafe_merge.py"
 #          this run's own pass record from that session, after the own `--start`, held by the branch;
 #          `tasks/TASK_GUIDE_T354.md`, AC 1-5). Supervisor sign-off under session `[admin]`: the user's
 #          "yes, let fix this", 2026-11-25.
+#   T321 — the `[admin]`/`[ticket]` push remote is the setting `EASY_KIT_ADMIN_REMOTE`
+#          (`.claude/settings.json` `"env"`, default `origin`; a bad value refuses every push;
+#          `tasks/TASK_GUIDE_T321.md`, AC 1-6). Supervisor sign-off under session `[admin]`: the
+#          user's "T321 [admin]" (2026-11-25).
 AUTHORISED_TASKS = ("T182", "T188", "T190", "T197", "T196", "T210", "T211", "T232", "T250", "T284",
                     "T289", "T291", "T296", "T295", "T308", "T309", "T317", "T323", "T326", "T341",
-                    "T320", "T354")
+                    "T320", "T354", "T321")
 
 
 def _git(root, *args):

@@ -121,9 +121,10 @@ def test_the_allowlist_names_the_tasks_that_own_rules_in_the_gate():
     # T341 added (tasks/TASK_GUIDE_T341.md names the gate: a fresh reviewer record is required at merge).
     # T320 added (tasks/TASK_GUIDE_T320.md names the gate: `gh pr merge` and the GitHub merge API are merges).
     # T354 added (tasks/TASK_GUIDE_T354.md names the gate: the loop binds a row the close-out moved to Done).
+    # T321 added (tasks/TASK_GUIDE_T321.md names the gate: the push remote is a setting).
     assert guard.AUTHORISED_TASKS == ("T182", "T188", "T190", "T197", "T196", "T210",
                                     "T211", "T232", "T250", "T284", "T289", "T291", "T296", "T295",
-                                    "T308", "T309", "T317", "T323", "T326", "T341", "T320", "T354")
+                                    "T308", "T309", "T317", "T323", "T326", "T341", "T320", "T354", "T321")
     text = open(os.path.join(os.path.dirname(os.path.abspath(__file__)),
                              "merge_gate_guard.py"), encoding="utf-8").read()
     for task in guard.AUTHORISED_TASKS:
