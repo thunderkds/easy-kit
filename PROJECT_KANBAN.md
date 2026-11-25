@@ -8,7 +8,6 @@
 ## Board
 
 ### Todo
-- [ ] **T355** — Split the 4 skills over Codex's 8 KB cap (`bugfix` 10.3 KB, `craft-spawn-prompt` 14.9 KB, `diagnose` 13.5 KB, `write-better-skill` 15.8 KB) into a SKILL.md under 8,192 bytes + `references/`, so a Codex install skips none (GitHub #95) | common-infrastructure | C2 | Risk: Medium | P1 | Registered 2026-11-25, user: "if you can fix all in this session, let do it in this session only [admin], if not, let note the new task" (after the issue-list check: #81 #83 #95 #98 #99 #122) | Run in this session [admin]
 - [ ] **T356** — A review-only middle track for medium changes ("do it, I'll review the PR"): lighter than extended, more than minimal | common-infrastructure | C2 | Risk: Medium | P2 | Registered 2026-11-25, user: "if you can fix all in this session, let do it in this session only [admin], if not, let note the new task" (after the issue-list check: #81 #83 #95 #98 #99 #122) | No GitHub issue yet (critique point 3) | Before start: brainstorming + the user's choice of what it drops (guide? reviewer spawn? auto verify?)
 - [ ] **T357** — Onboarding: one "minimum you need to know" page (track, session tag, task guide, board, merge gate; nothing else) on the site, linked from README and `index.html` | frontend-developer | C1 | Risk: Low | P2 | Registered 2026-11-25, user: "if you can fix all in this session, let do it in this session only [admin], if not, let note the new task" (after the issue-list check: #81 #83 #95 #98 #99 #122) | No GitHub issue yet (critique point 4)
 - [ ] **T358** — `resolve-question` fan-out scales with risk up to 5 read-only agents (now 2–3 Scanners, at most 3 Advocates; T179, T221) (GitHub #98) | common-infrastructure | C2 | Risk: Medium | P2 | Registered 2026-11-25, user: "if you can fix all in this session, let do it in this session only [admin], if not, let note the new task" (after the issue-list check: #81 #83 #95 #98 #99 #122) | Cost check with `scripts/token_meter.py` against #95 before merge
@@ -100,6 +99,7 @@
 
 
 ### In Progress
+- [ ] **T355** — Split the 4 skills over Codex's 8 KB cap (`bugfix` 10.3 KB, `craft-spawn-prompt` 14.9 KB, `diagnose` 13.5 KB, `write-better-skill` 15.8 KB) into a SKILL.md under 8,192 bytes + `references/`, so a Codex install skips none (GitHub #95) | common-infrastructure | C2 | Risk: Medium | P1 | Registered 2026-11-25, user: "if you can fix all in this session, let do it in this session only [admin], if not, let note the new task" (after the issue-list check: #81 #83 #95 #98 #99 #122) | Guide: `tasks/TASK_GUIDE_T355.md` | Track: extended | Started 2026-11-25 [admin], worktree `../wt-t355`, branch `feat/t355-skill-split`
 
 
 
