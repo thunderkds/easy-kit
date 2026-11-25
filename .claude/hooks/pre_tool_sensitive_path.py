@@ -76,7 +76,8 @@ Recorded limitations (cut list, TASK_GUIDE_T146; T363; T375):
 * A word that is only a variable (`cat "$F"`), `eval`, `$'\x65'` escapes, and the code of
   `python -c` / `node -e` spans are not resolved (T363 option C, T375). A built part is a `*`:
   it stays in one folder (a variable holding `/` is missed) and it finds only a file that exists
-  (`echo x > .env$x` with no `.env` is silent) (T375 Debate).
+  (`echo x > .env$x` with no `.env` is silent) (T375 Debate). The folder rule
+  does not read a built part inside a flag word (`find config -d${E}elete`) (T375 review).
 * The folder rule knows only the verbs above: `git reset --hard`, `git clean`, `git stash`,
   `cp -r`, `rsync --delete`, `tar -x`, `ln -sf`, a script or an alias acting on a folder do not
   ask (T363 option C). Nor does a destructive command inside quoted code (`bash -c "rm -rf x"`,
@@ -164,6 +165,7 @@ GLOB_CHARS = re.compile(r"[*?\[]")
 SHELL_WORD_PATTERN = re.compile(r"""(?:[^\s;&|<>()`'"\\]|\\.|\$?'[^'\s]*'|\$?"[^"\s]*")+""")
 SHELL_WORD_MARKS = re.compile(r"""['"\\]|\$[{\w]""")
 BUILT_PART_PATTERN = re.compile(r"\$\{[^}]*\}|\$\w+")
+WHOLLY_QUOTED_PATTERN = re.compile(r"""\$?(["'])[^"']*\1""")
 # T342: a segment whose command neither globs its arguments nor runs a shell. Anchored at the
 # segment start like shell_data's DATA_COMMAND_PATTERN: only `VAR=value` and a path may come
 # first, so `sudo sed`, `xargs grep` keep the default (expand). Short on purpose: a command
@@ -396,7 +398,7 @@ def command_tokens(command, cwd):
         if GLOB_CHARS.search(masked[start:end]):
             matches = glob.iglob(os.path.join(cwd, match.group()), recursive=True)
             tokens.extend(itertools.islice(matches, MAX_GLOB_MATCHES))
-    tokens.extend(dequoted_tokens(text, cwd))
+    tokens.extend(dequoted_tokens(unheredoc, cwd))  # before strip_quoted_spans blanks a data command's spans
     return tokens
 
 
@@ -406,26 +408,33 @@ def shell_word(word):
 
 
 def dequoted_tokens(text, cwd):
-    """T375: path-like tokens of each word of `text` that holds a quote, a backslash or a `$` part,
-    read as the shell reads it (`sens''itive-paths.txt`, `sensitive-pa\\ths.txt`). A part the shell
-    still builds (`${x}`, `$x`) next to literal text becomes `*` and is globbed like any token
-    (`sens${x}itive-paths.txt`); a word with no literal text (`"$F"`) is a recorded limit."""
+    """T375: path-like tokens of each word of `text` that mixes a quote, a backslash or a `$` part
+    with plain text, read as the shell reads it (`sens''itive-paths.txt`, `sensitive-pa\\ths.txt`). `text`
+    is read before `strip_quoted_spans`, so `echo x > .e"n"v` and `grep KEY .e''nv` are seen; a
+    wholly quoted word (`grep ".env" f`) is data there, as before. A part the shell still builds
+    (`${x}`, `$x`) next to literal text is read twice: as `*`, globbed (`sens${x}itive-paths.txt`),
+    and as empty (`$E.env` is `.env`; a `*` never matches a leading dot). A word with no literal
+    text (`"$F"`) is a recorded limit."""
     found = []
     for match in SHELL_WORD_PATTERN.finditer(text):
         word = match.group()
-        if not SHELL_WORD_MARKS.search(word):
+        if not SHELL_WORD_MARKS.search(word) or WHOLLY_QUOTED_PATTERN.fullmatch(word):
             continue
         word = shell_word(word)
+        readings = [word]
         built = BUILT_PART_PATTERN.sub("*", word)
         if built != word:
             if not built.strip("*/"):
                 continue
-            word = built
-        for token in TOKEN_PATTERN.finditer(word):
-            found.append(token.group())
-            if GLOB_CHARS.search(token.group()):
-                matches = glob.iglob(os.path.join(cwd, token.group()), recursive=True)
-                found.extend(itertools.islice(matches, MAX_GLOB_MATCHES))
+            readings = [built, BUILT_PART_PATTERN.sub("", word)]
+        for reading in readings:
+            for token in TOKEN_PATTERN.finditer(reading):
+                found.append(token.group())
+                if BRACE_PATTERN.search(token.group()):
+                    found.extend(capped_brace_expansion(token.group()))
+                if GLOB_CHARS.search(token.group()):
+                    matches = glob.iglob(os.path.join(cwd, token.group()), recursive=True)
+                    found.extend(itertools.islice(matches, MAX_GLOB_MATCHES))
     return found
 
 

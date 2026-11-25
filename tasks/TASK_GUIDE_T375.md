@@ -55,8 +55,8 @@ In a project whose `config/` holds `.env` and whose `.claude/` holds `sensitive-
 
 1. These ask: `cat .claude/sens''itive-paths.txt`, `cat .claude/sens""itive-paths.txt`, `cat .claude/sensitive-pa\ths.txt`, `cat .claude/"sensitive-paths.txt"`, `cat conf''ig/.env`.
 2. `find config -d$'elete'` and `find config -d$"elete"` ask (folder rule). `find config -name x` stays silent.
-3. `cat .claude/sens${x}itive-paths.txt` and `cat .claude/sens$x/itive-paths.txt` ask when the glob finds the file. `cat "$F"` and `echo $HOME` stay silent.
-4. Text in a quoted span with a space stays data: `echo "see .env file"` and `echo 'a b .env c'` stay silent. (A `git commit -m` message is already scanned on `main`; unchanged.)
+3. `cat .claude/sens${x}itive-paths.txt` and `cat .claude/sens$xitive-paths.txt` ask when the glob finds the file. A built part is also read as empty: `cat $E.env` and `cat config/${E}.env` ask. `cat "$F"`, `echo $HOME` and `ls $D/$E` stay silent, even when the project has a folder a `*` would match.
+4. A word that mixes quotes with plain text is read behind `echo`, `printf`, `grep` and `rg` too: `echo x > .e"n"v` and `grep KEY .e''nv` ask. A brace next to a quote is expanded: `cat .claude/sens''{itive,x}-paths.txt` asks. Text in a quoted span with a space stays data, and so does a wholly quoted word behind a data command (`grep -n ".env" .gitignore`): `echo "see .env file"` and `echo 'a b .env c'` stay silent. (A `git commit -m` message is already scanned on `main`; unchanged.)
 5. Under `[admin]`: `find config/.env -exec rm x ;` and `find config/.env -ok rm x ;` (no `{}`) are writes (logged, not read-only). An empty Bash command is not a read. The note holds the words "final report".
 6. Line 2 of `.claude/sensitive-paths.txt` names the `[admin]` exception ("or the session tag `[admin]` holds (T371)").
 7. Every other sensitive-path test passes unchanged.

@@ -33,6 +33,7 @@ class Dequote(FixRoundTest):
         os.makedirs(os.path.join(self.project, "config"), exist_ok=True)
         with open(os.path.join(self.project, "config", ".env"), "w") as f:
             f.write("KEY=1\n")
+        os.makedirs(os.path.join(self.project, "infra"), exist_ok=True)  # R1 P2-3: a `*` finds a folder
 
     def test_ac1_quotes_and_backslashes_in_a_word_are_dropped(self):
         for cmd in ("cat .claude/sens''itive-paths.txt", 'cat .claude/sens""itive-paths.txt',
@@ -40,6 +41,35 @@ class Dequote(FixRoundTest):
                     "cat conf''ig/.env"):
             with self.subTest(command=cmd):
                 self.assert_ask(self.pre("Bash", cmd))
+
+    def test_r1_p1_a_data_command_does_not_hide_a_mixed_word(self):
+        """Round 1 P1-1: `echo`, `printf`, `grep`, `rg` blank their quoted spans, so a word that mixes
+        quoted and plain text (`.e"n"v`) must be read before that."""
+        for cmd in ('echo x > .e"n"v', "echo x > .claude/sens''itive-paths.txt", "printf x > .e''nv",
+                    "grep KEY .e''nv", "grep KEY config/.e''nv", 'rg KEY .e""nv',
+                    'echo x >> ".claude/sens"itive-paths.txt'):
+            with self.subTest(command=cmd):
+                self.assert_ask(self.pre("Bash", cmd))
+        for cmd in ('echo ".env"', 'grep -n ".env" .gitignore', "grep -n '.env' .gitignore"):
+            with self.subTest(command=cmd):  # a wholly quoted word is data behind a data command
+                self.assert_silent(self.pre("Bash", cmd))
+
+    def test_r1_p2_a_built_part_that_is_empty_is_tried_too(self):
+        """Round 1 P2-1: `*` never matches a leading dot, and `$E` may be empty."""
+        for cmd in ("cat ${E}.env", "cat $E.env", "cat config/${E}.env"):
+            with self.subTest(command=cmd):
+                self.assert_ask(self.pre("Bash", cmd))
+
+    def test_r1_p2_a_quote_next_to_a_brace_is_expanded(self):
+        for cmd in ("cat .claude/sens''{itive,x}-paths.txt", "cat .claude/sens''itive-paths.tx{t,u}"):
+            with self.subTest(command=cmd):
+                self.assert_ask(self.pre("Bash", cmd))
+
+    def test_r1_p2_a_word_that_is_only_variables_stays_silent_next_to_a_folder(self):
+        """Round 1 P2-3: with an `infra/` folder a `*` matches, so dropping the guard would ask."""
+        for cmd in ('cat "$F"', "cat $F", "echo $HOME", "ls $D/$E"):
+            with self.subTest(command=cmd):
+                self.assert_silent(self.pre("Bash", cmd))
 
     def test_ac2_a_dollar_quote_word_is_dequoted_in_the_folder_rule(self):
         for cmd in ("find config -d$'elete'", 'find config -d$"elete"'):
