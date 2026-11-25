@@ -118,8 +118,7 @@ class UnderAdmin(AdminApproval):
 
     def test_ac3_a_read_passes_with_no_log(self):
         for cmd in ("cat config/.env", "grep -rn KEY config", "ls -a config", "head -1 .env",
-                    "wc -l config/.env", "find config -name '*.env'", "git diff -- config/.env",
-                    "cat .claude/sensitive-paths.txt | grep env"):
+                    "wc -l config/.env", "find config -name '*.env'", "cat config/.env | grep KEY"):
             with self.subTest(command=cmd):
                 self.assert_approved(self.pre("Bash", cmd))
         self.assertEqual(self.log_lines(), [])
@@ -158,6 +157,84 @@ class UnderAdmin(AdminApproval):
         self.assert_approved(self.pre("Write", ".env"))
         self.assert_approved(self.pre("Bash", "rm -rf config"))
         self.assertEqual([line["tool"] for line in self.log_lines()], ["Write", "Bash"])
+
+
+class RoundOneFixes(AdminApproval):
+    """Reviewer round 1 (F1-F4) and the security scan (V1, V2)."""
+
+    def mark_resume(self, text):
+        sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "lib"))
+        import auto_mode
+        with mock.patch.dict(os.environ, {"CLAUDE_PROJECT_DIR": self.project}):
+            path = auto_mode.resume_mark_path(SID)
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "w") as f:
+            f.write(text)
+
+    def test_f1_a_tag_typed_before_a_resume_approves_nothing(self):
+        self.mark_resume(_ts(-60))  # resumed after the `[admin]` request at -600 s
+        self.assert_ask(self.pre("Write", ".env"))
+
+    def test_f1_an_unreadable_resume_mark_approves_nothing(self):
+        self.mark_resume("garbage")
+        self.assert_ask(self.pre("Write", ".env"))
+
+    def test_f3_ticket_and_auto_are_not_admin(self):
+        for texts in (("do it [ticket]",), ("do it [auto]",), ("do it [admin]", "next [ticket]"),
+                      ("do it [admin] [stop]",)):
+            with self.subTest(texts=texts):
+                self.write_transcript(*texts)
+                self.assert_ask(self.pre("Write", ".env"))
+
+    def test_f3_the_session_tag_holds_over_a_later_plain_request(self):
+        self.write_transcript("do it [admin]", "and now the next step")
+        self.assert_approved(self.pre("Write", ".env"))
+
+    def test_v1_the_guards_own_files_ask_even_for_a_read_form(self):
+        for cmd in ("find .claude/state -name sensitive-approvals.json -ex''ec cp x {} ;",
+                    "cat .claude/sensitive-paths.txt", "find .claude -name sensitive-paths.txt -delete"):
+            with self.subTest(command=cmd):
+                self.assert_ask(self.pre("Bash", cmd))
+
+    def test_v2_f2_quoted_flags_and_code_runners_are_writes(self):
+        for cmd in ("find config -de''lete", "find config -ex\"ec\" rm {} +", "find config -\\delete",
+                    "git diff --out''put=.env -- config/.env", "git diff -- config/.env",
+                    "GIT_EXTERNAL_DIFF=rm git diff --ext-diff config/.env", "rg --pre ./x.sh KEY config/.env",
+                    "file -C -m config/.env", "FOO=1 cat config/.env"):
+            with self.subTest(command=cmd):
+                self.assert_approved(self.pre("Bash", cmd))
+        self.assertEqual(len(self.log_lines()), 9)
+
+    def test_v2_quoted_find_flags_ask_outside_admin_too(self):
+        self.write_transcript("do the task")
+        for cmd in ("find config -de''lete", "find config -ex\"ec\" rm {} +", "find config -\\delete"):
+            with self.subTest(command=cmd):
+                self.assert_ask(self.pre("Bash", cmd))
+
+    def test_f4_the_log_folder_and_file_are_private(self):
+        self.assert_approved(self.pre("Write", ".env"))
+        log = next(os.path.join(t, n) for t, _, fs in os.walk(self.anchors) for n in fs
+                   if n.startswith("sensitive-admin-"))
+        self.assertEqual(os.stat(log).st_mode & 0o777, 0o600)
+        self.assertEqual(os.stat(os.path.dirname(log)).st_mode & 0o077, 0)
+
+    def test_f4_a_shared_or_symlinked_log_folder_asks(self):
+        self.assert_approved(self.pre("Write", ".env"))
+        log = next(os.path.join(t, n) for t, _, fs in os.walk(self.anchors) for n in fs
+                   if n.startswith("sensitive-admin-"))
+        folder = os.path.dirname(log)
+        os.chmod(folder, 0o777)
+        self.assert_ask(self.pre("Write", ".env"))
+        os.chmod(folder, 0o700)
+        real = folder + "-real"
+        os.rename(folder, real)
+        os.symlink(real, folder)
+        self.assert_ask(self.pre("Write", ".env"))
+
+    def test_f5_the_note_says_the_hook_did_not_ask(self):
+        out = self.assert_approved(self.pre("Write", ".env"))
+        self.assertIn("not asked", json.dumps(out))
+        self.assertEqual(self.log_lines()[0].get("decision"), "not asked by the hook ([admin])")
 
 
 class AdminInAToolResult(AdminApproval):
