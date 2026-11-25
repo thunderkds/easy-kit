@@ -51,6 +51,17 @@ class FollowUps(FixRoundTest):
             with self.subTest(command=cmd):
                 self.assert_ask(self.pre("Bash", cmd))
 
+    def test_r1_a_wrong_or_missing_table_entry_never_hides_the_command(self):
+        """Round 1 (F1, F2, F4): each segment is read both with and without the value skips, so an
+        option listed wrongly (`env -S` takes the command itself, a bare `sudo -h` is help) or a
+        value option the table lacks can only add an ask, never remove one."""
+        for cmd in ("env -S rm -rf config", "env --split-string rm -rf config", "sudo -h rm -rf config",
+                    "timeout --signal KILL 5 rm -rf config", "sudo -R /x rm -rf config",
+                    "sudo -T 5 rm -rf config", "time -o out.txt rm -rf config", "exec -a x rm -rf config",
+                    "env -P /bin rm -rf config"):
+            with self.subTest(command=cmd):
+                self.assert_ask(self.pre("Bash", cmd))
+
     def test_n1_timeout_on_a_reading_command_stays_silent(self):
         self.assert_silent(self.pre("Bash", "timeout -s KILL 5 ls config"))
 

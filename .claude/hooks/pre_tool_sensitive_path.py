@@ -63,7 +63,7 @@ Recorded limitations (cut list, TASK_GUIDE_T146; T363):
 * The folder rule knows only the verbs above: `git reset --hard`, `git clean`, `git stash`,
   `cp -r`, `rsync --delete`, `tar -x`, `ln -sf`, a script or an alias acting on a folder do not
   ask (T363 option C). Nor does a destructive command inside quoted code (`bash -c "rm -rf x"`,
-  `sh -c '…'`, `find -exec sh -c '…'`), one fed its folders by `xargs` (`… | xargs rm -rf`,
+  `sh -c '…'`, `find -exec sh -c '…'`, `env -S "…"`), one fed its folders by `xargs` (`… | xargs rm -rf`,
   `xargs rm -rf config`), a folder named through a variable (`$PWD/config`), or
   `git -C <dir> restore` (T374).
   A folder outside both roots is never walked (a sibling worktree).
@@ -166,13 +166,19 @@ FIND_ACTION_FLAGS = {"-delete", "-exec", "-execdir", "-ok", "-okdir"}
 GIT_FOLDER_SUBCOMMANDS = {"checkout", "restore"}
 COMMAND_PREFIXES = {"sudo", "env", "command", "nice", "nohup", "time", "exec", "timeout"}
 # T374: a wrapper option that takes its value as the next word (`timeout -s KILL`, `sudo -u root`),
-# so the value is not read as the command.
+# so the value is not read as the command. Each segment is read twice, with these skips and
+# without them, and the folder rule judges both readings: an entry that is wrong (an option that
+# takes no value) or missing can then only add an ask, never hide the command (T374 round 1).
+# `env -S` is not here: its value is the command line itself.
 PREFIX_VALUE_OPTIONS = {
     "timeout": {"-s", "--signal", "-k", "--kill-after"},
     "sudo": {"-u", "--user", "-g", "--group", "-C", "--close-from", "-h", "--host", "-p", "--prompt",
-             "-U", "--other-user", "-D", "--chdir", "-r", "--role", "-t", "--type"},
-    "env": {"-u", "--unset", "-C", "--chdir", "-S", "--split-string"},
+             "-U", "--other-user", "-D", "--chdir", "-r", "--role", "-t", "--type", "-R", "--chroot",
+             "-T", "--command-timeout"},
+    "env": {"-u", "--unset", "-C", "--chdir", "-P", "-a", "--argv0"},
     "nice": {"-n", "--adjustment"},
+    "time": {"-o", "--output", "-f", "--format"},
+    "exec": {"-a"},
 }
 # `find -exec`/`-ok` asks only when the command it runs deletes or moves (round 1: `-exec grep`
 # reads); `-delete` always does.
@@ -551,7 +557,7 @@ def held_sensitive_path(folder, cwd, roots, patterns, budget):
     return None
 
 
-def _segment_command(words):
+def _segment_command(words, skip_values=True):
     """The command word of a segment and its arguments, past `VAR=value` words and the
     `COMMAND_PREFIXES` wrappers (`sudo`, `env`, …) and their options; a path prefix is dropped."""
     i = 0
@@ -563,7 +569,7 @@ def _segment_command(words):
             wrapper = os.path.basename(word)
             i += 1
             while i < len(words) and words[i].startswith("-"):
-                i += 2 if words[i] in PREFIX_VALUE_OPTIONS.get(wrapper, ()) else 1
+                i += 2 if skip_values and words[i] in PREFIX_VALUE_OPTIONS.get(wrapper, ()) else 1
             if wrapper == "timeout" and i < len(words):
                 i += 1  # its duration
         else:
@@ -608,14 +614,18 @@ def folder_hits(command, cwd, roots, patterns):
     hits, where, budget = [], cwd, [_walk_cap()]
     for segment in SEGMENT_BOUNDARY_PATTERN.split(text):
         words = [re.split(r"\d*[<>]", w, 1)[0].strip("\"'()") for w in segment.split()]
-        verb, args = _segment_command([w for w in words if w and not w.startswith(("<", ">", "2>", "&>"))])
+        words = [w for w in words if w and not w.startswith(("<", ">", "2>", "&>"))]
+        verb, args = _segment_command(words)
         if verb in DIR_CHANGE_COMMANDS:
             target = next((a for a in args if not a.startswith("-")), None)
             where = os.path.normpath(os.path.join(where, os.path.expanduser(target))) if target else where
             continue
-        if verb not in FOLDER_VERBS:
-            continue
-        for arg in _folder_arguments(verb, args):
+        readings = [(verb, args)]
+        plain = _segment_command(words, skip_values=False)
+        if plain != (verb, args):
+            readings.append(plain)
+        targets = [a for v, rest in readings if v in FOLDER_VERBS for a in _folder_arguments(v, rest)]
+        for arg in dict.fromkeys(targets):  # each folder once: both readings share the walk budget
             base = os.path.join(where, os.path.expanduser(arg))
             folders = ([base] if not GLOB_CHARS.search(arg) else
                        list(itertools.islice(glob.iglob(base), MAX_GLOB_MATCHES)))

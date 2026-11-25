@@ -30,7 +30,7 @@ Before writing any code:
 - Also pin the walk budget: one budget per call, with folders counted (two mutants stay green).
 
 **Restated intent**:
-1. A wrapper option that takes its value as the next word is read past together with that value. This covers `timeout -s/-k`, `sudo -u/-g/…`, `env -u/-C/-S` and `nice -n`. So the command after the wrapper is the one the folder rule judges.
+1. A wrapper option that takes its value as the next word is read past together with that value. This covers `timeout -s/-k`, `sudo -u/-g/-R/-T/…`, `env -u/-C/-P/-a`, `nice -n`, `time -o/-f` and `exec -a` (not `env -S`: its value is the command itself). Each segment is read both with and without these skips, so a wrong or missing entry can only add an ask, never hide the command (round 1).
 2. The header names `xargs` and `find -exec sh -c` as open cases.
 3. Tests pin that one walk budget is shared by every folder of a call, and that folders count against it.
 
