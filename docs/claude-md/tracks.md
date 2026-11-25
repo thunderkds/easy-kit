@@ -165,8 +165,8 @@ runs and `post_tool_sensitive_approval.py` moves that entry's files to `.claude/
 (gitignored), only when the permission mode is `default` or `auto`. Approval covers files only, never a
 folder. A later Edit or Write of an approved file in that task gets no prompt from the hook. When a symlink
 makes the file differ from the path as written, the ask names both (`config/prod.json → .env`). With no active
-task, every call asks. `.claude/state`, everything in it, and any file named `sensitive-approvals.json*` are
-always sensitive. To withdraw all approvals, delete the file. Board mode `local` does not read or write any of
+task, every call asks. `.claude/state`, everything in it, any file named `sensitive-approvals.json*`, and
+the list itself (any file named `sensitive-paths.txt`, T316) are always sensitive. To withdraw all approvals, delete the file. Board mode `local` does not read or write any of
 it.
 
 ---
