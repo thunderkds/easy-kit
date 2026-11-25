@@ -10,6 +10,8 @@
 #   - "*" stays inside one directory, "**" crosses directories, {a,b} alternates
 #   - "!pattern" un-marks a path an earlier line marked; the last matching line wins
 # Lines starting with "#" and blank lines are ignored. Edit this file to change the list.
+# This file itself is always sensitive (T316, hard-coded in the hook): every edit of it
+# asks, and no line here, guide or approval can change that.
 
 .env
 .env.*
