@@ -36,7 +36,8 @@ file gets no output (no decision, never `allow`). When the key differs from the 
 as written (a symlink), the ask names both: `config/prod.json → .env`. No active task
 -> no approval, every call asks. Always sensitive and never approvable (hard-coded
 below, not in the pattern list): `.claude/state` and everything under it, any file
-named `sensitive-approvals.json*`, and `.claude` or `.claude/state` named in a Bash
+named `sensitive-approvals.json*`, any file named `sensitive-paths.txt` (the list itself,
+T316), and `.claude` or `.claude/state` named in a Bash
 call that changes directory or uses `-C`. A symlinked or bad approval file counts as
 empty. Local mode neither reads nor writes any of it. To withdraw every approval,
 delete the file.
@@ -87,7 +88,10 @@ PENDING_RELDIR = STATE_RELDIR + "/pending"
 # S2: the approval file's name is sensitive in any directory (a `cd .claude` call can
 # write it under a relative path no root-anchored pattern sees).
 APPROVALS_NAME_PATTERNS = ("sensitive-approvals.json", "sensitive-approvals.json.*")
-PROTECTED_PATTERNS = (STATE_PATTERN,) + APPROVALS_NAME_PATTERNS
+# T316: the pattern list itself, by name in any directory (a `cd .claude` call can write it
+# under a relative path). Without it an edit of the list could drop every line, with no ask.
+LIST_NAME_PATTERN = os.path.basename(PATTERNS_RELPATH)
+PROTECTED_PATTERNS = (STATE_PATTERN,) + APPROVALS_NAME_PATTERNS + (LIST_NAME_PATTERN,)
 # S2: a Bash token naming `.claude` or `.claude/state` asks when the call changes
 # directory or uses `-C`, because then a relative path may land in the state folder.
 DIR_CHANGE_TOKENS = {"cd", "pushd", "-C", "--directory"}

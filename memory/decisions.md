@@ -4,6 +4,11 @@
 
 ## Architecture
 
+### 2026-11-25 — T316: the sensitive-path list is a protected pattern (always asks, never predicted or approved)
+**Decision** ([admin], extended track; Debate 3/3 for option (a)): `pre_tool_sensitive_path.py` adds the list's name, `sensitive-paths.txt` (no `/`: any directory), to `PROTECTED_PATTERNS`, beside `.claude/state/**` and `sensitive-approvals.json*`. A protected hit is appended last (no `!` line unmarks it), skips the predicted-path check and gets no approval key.
+**Why**: an agent writes a guide's predicted-files table and one approval-once would let it empty the list, which is the root of every other protection. **Traps**: the hook matches tokens, so a folder-level call (`rm -rf .claude`, `git checkout HEAD~1 -- .claude`, `git restore .`) or a shell-built name (`{a,b}` braces, `${f}…`) still skips it — the same for `.env` since T146; a Bash `cat` of the list now asks.
+**Files**: .claude/hooks/pre_tool_sensitive_path.py, .claude/sensitive-paths.txt, docs/claude-md/tracks.md
+
 ### 2026-11-25 — T353: agent-ws is an opt-in installer choice (Linux only, default No)
 **Decision** ([admin], Debate of record D1: 2 Advocates for a narrow kit-owned rule, 1 for `settings.local.json`; settled by the guide's requirement that a later kit update can still manage the entries): Install/Reinstall ask `Turn on parallel builds (agent-ws)? [y/N]` after the project type (Reinstall pre-selects the current answer). A yes copies `scripts/agent_ws.py` (a kit file outside MANIFEST, hashed in the lock, refreshed edit-safely on Update) and sets lock key `"agent_ws": "on"`; the merge gets `lib/agent-ws-hooks.json` as an overlay and owns entries naming exactly `"$CLAUDE_PROJECT_DIR"/scripts/agent_ws.py`, so Update keeps them, Reinstall + `n` drops them, a missing script drops them. The kit's `.claude/settings.json` and `hooks/hooks.json` stay at 15 hooks. Users read `site/docs.html#parallel-builds`.
 **Why**: the user asked for the option at reinstall and a how-to on the site. **Accepted risks**: a teammate on macOS gets the hooks (degrades: no tmpfs, no process check; tested with `/proc` hidden); native Windows is not supported; a No project that hand-wrote the exact owned form in `settings.json` loses it.
