@@ -23,7 +23,8 @@ non-kit project. Inside one, input it cannot read is a block: it cannot tell the
 T284: while the session's latest user request carries `[auto]` or `[admin]`, a merge, push or pull
 is blocked, unless `[admin]` allows that one command (see `auto_mode_blocker`). T317: the same holds
 while a session tag (`[admin]`, `[ticket]`) is in force; `[ticket]` allows only a plain push of its
-task branch to `origin` (docs/claude-md/tracks.md `### Session tags`).
+task branch to `origin`, or to the remote `EASY_KIT_ADMIN_REMOTE` names (T321)
+(docs/claude-md/tracks.md `### Session tags`).
 
 T296: in that mode a git word or git verb that is not a plain literal word is a block too
 (`hidden_git_verb`); a `git merge` option's value is never read as the branch (`_merge_sources`);
@@ -1469,7 +1470,10 @@ def session_owned_in_progress(rows, command, cwd, transcript_path):
 # request is known: the rule does not apply and the gate is exactly as before T284.
 AUTO_MODE_PATTERNS = [p for p in BLOCKED_PATTERNS if not p.endswith(r"rebase\b")]
 ADMIN_MAIN_BRANCH = "main"  # AC 8: the one branch `[admin]` may push besides the task branch
-ADMIN_REMOTE = "origin"     # P2: the one remote `[admin]` may push to
+ADMIN_REMOTE_DEFAULT = "origin"  # P2: the one remote `[admin]` may push to, unless set (T321)
+ADMIN_REMOTE_ENV = "EASY_KIT_ADMIN_REMOTE"  # T321: `.claude/settings.json` `"env"`; the user's choice
+ADMIN_REMOTE_HINT = (f"the one remote is `{ADMIN_REMOTE_ENV}` in `.claude/settings.json` `\"env\"`, "
+                     f"default `{ADMIN_REMOTE_DEFAULT}`")
 # P1: a task ID in the request counts only when no negation stands before it in its clause.
 NEGATION = re.compile(r"\b(?:not|never|no|without|except|skip|leave|don't|dont|hold|wait|later|"
                       r"postpone)\b|n't\b", re.I)
@@ -1497,7 +1501,7 @@ ADMIN_ALLOWED_CONFIG = {
     ("remote", True, "url"): ("the address of a remote; checked below: no helper or option form, one "
                               "URL per remote, and for a push no local target whose hooks could run"),
     ("remote", True, "fetch"): "a refspec that only maps ref names",
-    ("branch", True, "remote"): "a remote name; a bare push checks that it is origin",
+    ("branch", True, "remote"): "a remote name; a bare push checks that it is the admin remote",
     ("branch", True, "merge"): "a ref name; it names no program",
     ("branch", True, "vscode-merge-base"): "a ref name that only an editor reads",
     ("pull", False, "rebase"): "a boolean here (checked below); `git pull` is blocked anyway",
@@ -1580,7 +1584,28 @@ AUTO_MODE_LIMIT = ("With `[auto]`, merge and push stay the user's. `[admin]` all
                    "verify passed (docs/claude-md/tracks.md `### Admin tag`), in the request that "
                    "holds it or, as a session tag, for the task of the session's loop "
                    "(`### Session tags`). `[ticket]` allows only a plain push "
-                   "of its task branch to `origin`, after that same pass (`### Session tags`).")
+                   "of its task branch to `origin`, after that same pass (`### Session tags`). "
+                   "Both push to one remote only: `EASY_KIT_ADMIN_REMOTE` in `.claude/settings.json` "
+                   "`\"env\"` names it, default `origin`.")
+
+
+def _admin_remote():
+    """T321: the one remote `[admin]` and `[ticket]` may push to, read at call time: the setting
+    `EASY_KIT_ADMIN_REMOTE`, or `origin` when it is unset or blank. None for any other value that is
+    not a plain remote name (a URL, a path, an option, a space, `.`): every push is then refused."""
+    value = os.environ.get(ADMIN_REMOTE_ENV, "").strip()
+    if not value:
+        return ADMIN_REMOTE_DEFAULT
+    return value if REMOTE_NAME_PATTERN.fullmatch(value) and value[0] not in "-." else None
+
+
+def _admin_remote_refusal():
+    """T321: why no `[admin]`/`[ticket]` push may run under the current setting, or None."""
+    if _admin_remote() is not None:
+        return None
+    shown = _shown(os.environ.get(ADMIN_REMOTE_ENV, "").strip(), ADMIN_SHOWN_CHARS)
+    return (f"`{ADMIN_REMOTE_ENV}` is {shown}, not a plain remote name: `[admin]` and `[ticket]` "
+            f"push nowhere until it names one remote (or is unset, for `{ADMIN_REMOTE_DEFAULT}`)")
 
 
 def _config_value(directory, key):
@@ -1595,8 +1620,12 @@ def _config_value(directory, key):
 
 def _admin_push_branch(args, directory):
     """The one branch a `git push <args>` run in `directory` sends to the same branch name on
-    `origin`, or None (a force, an unknown option, another remote or a URL, more than one refspec,
-    another destination; for a bare push, `pushRemote`/`pushDefault`/the branch remote not origin)."""
+    the admin remote (`_admin_remote`), or None (a force, an unknown option, another remote or a URL,
+    more than one refspec, another destination; for a bare push, `pushRemote`/`pushDefault`/the
+    branch remote not that remote, or git's own fallback `origin` when it is not that remote)."""
+    remote = _admin_remote()
+    if remote is None:
+        return None
     positionals = []
     for arg in args:
         if arg.startswith("-"):
@@ -1609,18 +1638,22 @@ def _admin_push_branch(args, directory):
     current = _current_branch(directory)
     if current is None or not _push_config_is_plain(directory, ADMIN_PUSH_CONFIG_KEYS):
         return None
-    fetch_url = _git(directory, "remote", "get-url", ADMIN_REMOTE)
-    push_url = _git(directory, "remote", "get-url", "--push", ADMIN_REMOTE)
+    fetch_url = _git(directory, "remote", "get-url", remote)
+    push_url = _git(directory, "remote", "get-url", "--push", remote)
     if (fetch_url is None or push_url is None or fetch_url.returncode != 0
             or push_url.returncode != 0 or fetch_url.stdout.strip() != push_url.stdout.strip()):
         return None
     if positionals:
-        if positionals[0] != ADMIN_REMOTE:
+        if positionals[0] != remote:
             return None
     else:
-        for key in (f"branch.{current}.pushRemote", "remote.pushDefault", f"branch.{current}.remote"):
-            if _config_value(directory, key) not in ("", ADMIN_REMOTE):
-                return None
+        # git sends a bare push to the first of these that is set, else to `origin` (T321)
+        values = [_config_value(directory, key) for key in
+                  (f"branch.{current}.pushRemote", "remote.pushDefault", f"branch.{current}.remote")]
+        if any(value not in ("", remote) for value in values):
+            return None
+        if next((value for value in values if value), "origin") != remote:
+            return None
     spec = positionals[1] if len(positionals) == 2 else "HEAD"
     if spec.startswith("+"):
         return None
@@ -1633,11 +1666,12 @@ def _admin_push_branch(args, directory):
 
 
 def _origin_url(directory):
-    """The URL of `origin` in `directory`, or None. A local path (absolute, or relative to the
-    repository) is resolved first, so a symlink or `../origin.git` to the same bare repository is the
-    same remote."""
-    done = _git(directory, "remote", "get-url", ADMIN_REMOTE)
-    if done is None or done.returncode != 0:
+    """The URL of the admin remote (`_admin_remote`, `origin` by default) in `directory`, or None. A
+    local path (absolute, or relative to the repository) is resolved first, so a symlink or
+    `../origin.git` to the same bare repository is the same remote."""
+    remote = _admin_remote()
+    done = remote and _git(directory, "remote", "get-url", remote)
+    if not done or done.returncode != 0:
         return None
     url = done.stdout.strip()
     if url and "://" not in url and not re.match(r"^[\w.-]+@[\w.-]+:", url):
@@ -1652,6 +1686,9 @@ def _own_origin_refusal(where, cwd):
     in (`cwd`) or the project's (`ROOT`), or when its `origin` has the URL of either one's `origin`.
     Otherwise why: `cd <clone> && git push origin <branch>` in a clone whose `origin` is another remote
     would send the branch there (the `main` push has had the same-repository rule since T284)."""
+    remote = _admin_remote()
+    if remote is None:
+        return _admin_remote_refusal()
     mine, url = _common_dir(where), _origin_url(where)
     for base in (cwd, ROOT):
         if not isinstance(base, str) or not os.path.isdir(base):
@@ -1661,8 +1698,8 @@ def _own_origin_refusal(where, cwd):
         known = _origin_url(base)
         if url is not None and known is not None and url == known:
             return None
-    return (f"the `origin` of the repository at {where} is another remote than this repository's "
-            "`origin`: `[admin]` pushes only to this repository's own remote")
+    return (f"the `{remote}` of the repository at {where} is another remote than this repository's "
+            f"`{remote}`: `[admin]` pushes only to this repository's own remote")
 
 
 def _session_admin_merges(transcript_path, when, id_regex):
@@ -1913,15 +1950,20 @@ def _admin_push_target_refusal(where):
     target runs its own `pre-receive`, `update`, `post-receive`… hooks (from its `core.hooksPath`
     too), and `receive.denyCurrentBranch=updateInstead` makes a non-bare target check out the push
     with its own filters. A relative URL is resolved from the worktree top, as git does. The target
-    is only read (`rev-parse`, `config --get`), never run. A network URL is not checked."""
-    done = _git(where, "remote", "get-url", ADMIN_REMOTE)
+    is only read (`rev-parse`, `config --get`), never run. A network URL is not checked. T321: the
+    remote is `_admin_remote()`, `origin` by default."""
+    remote = _admin_remote()
+    if remote is None:
+        return _admin_remote_refusal()
+    done = _git(where, "remote", "get-url", remote)
     if done is None or done.returncode != 0:
-        return None  # `_admin_push_branch` refuses a push with no readable origin URL
+        return None  # `_admin_push_branch` refuses a push with no readable remote URL
     local = _local_push_path(done.stdout.strip())
     if local is None:
         return None
+    what = f"the push target of {remote}"
     if "%" in local:
-        return "the push target of origin is a `file://` URL with an escape the gate does not decode"
+        return f"{what} is a `file://` URL with an escape the gate does not decode"
     top = _git(where, "rev-parse", "--show-toplevel")
     base = top.stdout.strip() if top is not None and top.returncode == 0 else ""
     base = base or _common_dir(where) or ""
@@ -1932,15 +1974,15 @@ def _admin_push_target_refusal(where):
     hooks = found and _git(found, f"--git-dir={found}", "rev-parse", "--path-format=absolute",
                            "--git-path", "hooks")
     if not hooks or hooks.returncode != 0 or not hooks.stdout.strip():
-        return f"cannot read the push target of origin at {shown}"
-    refusal = _admin_hooks_refusal(hooks.stdout.strip(), "the push target of origin")
+        return f"cannot read {what} at {shown}"
+    refusal = _admin_hooks_refusal(hooks.stdout.strip(), what)
     if refusal:
         return refusal
     mode = _git(found, f"--git-dir={found}", "config", "--get", "receive.denyCurrentBranch")
     if mode is None or mode.returncode not in (0, 1):
-        return f"cannot read the config of the push target of origin at {shown}"
+        return f"cannot read the config of {what} at {shown}"
     if mode.stdout.strip().lower() == "updateinstead":
-        return ("the push target of origin sets `receive.denyCurrentBranch=updateInstead`: the push "
+        return (f"{what} sets `receive.denyCurrentBranch=updateInstead`: the push "
                 "would check out files there, with that repository's own filters")
     return None
 
@@ -2213,14 +2255,17 @@ def hidden_git_verb(command, depth=0):
 def _remote_main(where):
     """Round 2: the remote's real `main` sha from `git ls-remote origin refs/heads/main` (argv, no
     shell, a 10 s timeout, no prompt), never the local `refs/remotes/origin/main` the model can move.
-    None on any failure, a timeout or no answer."""
+    None on any failure, a timeout or no answer. T321: the remote is `_admin_remote()`."""
+    remote = _admin_remote()
+    if remote is None:
+        return None
     try:
         done = subprocess.run(
             # Round 3 (N4): the gate's own call never runs a repo-set upload-pack (an explicit
             # `--upload-pack` wins over `remote.origin.uploadpack`; a `-c` override does not, tested)
             # nor a repo-set proxy. Repo-local `core.sshCommand` was already refused above.
-            ["git", "-c", "remote.origin.proxy=", "-C", where, "ls-remote",
-             "--upload-pack=git-upload-pack", ADMIN_REMOTE, f"refs/heads/{ADMIN_MAIN_BRANCH}"],
+            ["git", "-c", f"remote.{remote}.proxy=", "-C", where, "ls-remote",
+             "--upload-pack=git-upload-pack", remote, f"refs/heads/{ADMIN_MAIN_BRANCH}"],
             capture_output=True, text=True, timeout=LS_REMOTE_TIMEOUT_S,
             env={**os.environ, "GIT_TERMINAL_PROMPT": "0"})
     except Exception:
@@ -2291,8 +2336,8 @@ def _main_push_refusal(where, merged):
         return repo_refusal
     remote = _remote_main(where)
     if remote is None:
-        return ("cannot read the remote's real `main`: `git ls-remote origin refs/heads/main` "
-                "failed, timed out or returned nothing")
+        return (f"cannot read the remote's real `main`: `git ls-remote {_admin_remote()} "
+                "refs/heads/main` failed, timed out or returned nothing")
     # Round 3 (N8): always the branch, never a tag of the same name.
     merged = merged if merged.startswith("refs/") else f"refs/heads/{merged}"
     tip = _rev(where, f"{merged}^{{commit}}")
@@ -2601,26 +2646,30 @@ def admin_refusal(command, cwd, transcript_path, admin, tag=None):
             if repo_refusal:
                 return repo_refusal
             if args[0] == "merge" and tag == "ticket":
-                return "`[ticket]` allows no merge: only a plain push of the task branch to `origin`"
+                return ("`[ticket]` allows no merge: only a plain push of the task branch to "
+                        f"`{_admin_remote()}`")
             if args[0] == "merge":
                 names = [name for _, name in _merge_sources(args[1:], where)]
                 if len(names) != 1:
                     return "an `[admin]` merge names exactly one task branch"
                 branch = names[0]
             elif args[0] == "push":
+                remote_refusal = _admin_remote_refusal()  # T321: before every other push check
+                if remote_refusal:
+                    return remote_refusal
                 target_refusal = _admin_push_target_refusal(where)
                 if target_refusal:
                     return target_refusal
                 branch = _admin_push_branch(args[1:], where)
                 if branch is None:
                     return ("`[admin]` allows only a plain push of the task branch, or of `main` "
-                            "after the task's own merge, to the same branch: no force, no other "
-                            "destination")
+                            "after the task's own merge, to the same branch on "
+                            f"`{_admin_remote()}`: no force, no other destination ({ADMIN_REMOTE_HINT})")
                 own = _own_origin_refusal(where, cwd)
                 if own:
                     return own
                 if branch == ADMIN_MAIN_BRANCH and tag == "ticket":
-                    return "`[ticket]` never pushes `main`: only the task branch, to `origin`"
+                    return f"`[ticket]` never pushes `main`: only the task branch, to `{_admin_remote()}`"
                 if branch == ADMIN_MAIN_BRANCH:
                     # AC 8 / 7b: `main` only after this session's own merge of the task branch,
                     # and only when `main` really holds that branch's tip.
