@@ -99,7 +99,6 @@
 
 
 ### In Progress
-- [ ] **T354** — the `[admin]`/`[ticket]` loop binds its task after the hook's close-out moved the row to Done | common-infrastructure | C2 | Risk: High | P1 | Guide: `tasks/TASK_GUIDE_T354.md` | Registered 2026-11-25 [admin] from the T347 merge refusal, user: "yes, let fix this" | Started 2026-11-25 [admin]: branch `fix/t354-loop-binds-closed-out-row`, worktree `../wt-t354` | Track: extended
 - [ ] **T353** — Ship agent-ws (T345) as an opt-in installer choice, and say so on the site's index page | common-infrastructure | C3 | Risk: High | P1 | Registered 2026-11-25 [admin], user: "for the update in another repos, we should add the option when reinstall the kit, right, by the way, let update the index page also" | Guide: `tasks/TASK_GUIDE_T353.md` | Depends on: T345 | Track: extended | Started 2026-11-25 [admin], worktree `../wt-t353`, branch `feat/t353-agent-ws-installer`
 
 
@@ -114,6 +113,7 @@
 
 
 ### Ready for Review
+- [ ] **T354** — the `[admin]`/`[ticket]` loop binds its task after the hook's close-out moved the row to Done | common-infrastructure | C2 | Risk: High | P1 | Guide: `tasks/TASK_GUIDE_T354.md` | Registered 2026-11-25 [admin] from the T347 merge refusal, user: "yes, let fix this" | Started 2026-11-25 [admin]: branch `fix/t354-loop-binds-closed-out-row`, worktree `../wt-t354` | Track: extended | Ready for Review 2026-11-25
 - [ ] **T345** — Shared build base for multi-agent, multi-session work (`agent-ws`), Phase 0–1 with the 2026-11-24 review fixes | common-infrastructure | C3 | Risk: High | P1 | Guide: `tasks/TASK_GUIDE_T345.md` | Registered 2026-11-24, user: "create the ticket and note all to this" (review of the Claude Docs plan https://claude.ai/artifact/VjwpdBJSzeMLSdFYn3hyYc: 3 blocking + 5 smaller gaps, 13 experiments) | Track: extended | Merged into `main` f90c93f7 2026-11-25 [admin], not pushed (no `origin`), Done not moved by the hook (report slot), auto verify ☑ pass; Ready for Review 2026-11-25 [admin] (Reviewer: T345 round 2 pass, `a9861d08`), started 2026-11-25, worktree `../wt-t345`, branch `feat/t345-agent-ws` | Before start: D1–D3 answered 2026-11-24 (Python, this board, tmpfs `target/` default, slot queue opt-in); experiments R1–R10 recorded in the guide; intent and Acceptance Criteria confirmed by the user 2026-11-25; Gate has two bookkeeping boxes left (glossary rows, PRD FR) = step 1 of the guide's `## Run plan`; the user runs it later | Phases 2–4 = follow-up tickets, not registered
 
 
