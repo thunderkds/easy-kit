@@ -19,9 +19,11 @@ Mode: auto
 - Suite: `python3 -m pytest -q -p no:cacheprovider -rf tests .claude/hooks/tests` — `57 failed, 7734 passed, 24 skipped, 126 subtests passed`; the same command on clean `main` (`76b76bfc`): `57 failed, 7731 passed` — the two failure lists are identical (none new). They fail in this Claude Code session's environment (25 `test_stop_attribution_t287.py`, 19 `test_slot2b_brace_glob.py`, 4 `test_heredoc_quoted_marker.py`, 4 `test_memory_channel_and_budget.py`, 2 `test_parse_ts_single.py`, 1 each `test_gate_hidden_verbs.py`, `test_merge_gate_companion_rows.py`, `test_token_audit_format.py`)
 - Real run: `sh tests/test_readme_current.sh` (the CI step, `.github/workflows/ci.yml:69`) — printed `test_readme_current: ALL PASS`, with `PASS: AC2 (reverse): README-listed skill 'bugfix' is still over the derived cap` and the same for `craft-spawn-prompt`, `diagnose`, `write-better-skill`; a bullet-form README sample still parses (`bugfix`, `diagnose`)
 - Simplify: skipped: under 20 lines
+- verify: ☑ pass — auto-run by hook, session b2a15d6c-24f4-4c2c-8461-d134833b57f2, commit c603ca4d03180d585ea9550cc8cc97f7a639b45a, log .claude/verify-runs/T347-c603ca4d0318.log
 **Memory:** nothing new
 **Files:** `tests/test_readme_current.sh`, `tests/test_t347_readme_codex_list.py` (new), `tasks/MINIMAL_LOG.md`, `PROJECT_KANBAN.md`
-**Not done:** merge (admin: after the auto verify pass); push (the merge gate pushes to `origin` only and this repo's remote is `github`: T321); auto verify: running (T182)
+**Not done:** merge (admin: after the auto verify pass); push (the merge gate pushes to `origin` only and this repo's remote is `github`: T321); auto verify: ☑ pass (session b2a15d6c-24f4-4c2c-8461-d134833b57f2, commit c603ca4d03180d585ea9550cc8cc97f7a639b45a, log .claude/verify-runs/T347-c603ca4d0318.log)
+Closed: row moved to Done 2026-11-25 — auto verify pass (session b2a15d6c-24f4-4c2c-8461-d134833b57f2, commit c603ca4d03180d585ea9550cc8cc97f7a639b45a); Gates 5 and 6 checked
 
 ## T350 — Keep `experiments/` on disk but out of the git repo · minimal
 **Asked:** "we should not remove it, just keep it out of the git repos only I think" — then: "yes, go ahead. But let think about the install the kit solution also"
