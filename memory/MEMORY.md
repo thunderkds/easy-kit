@@ -26,6 +26,7 @@
 
 ### Decisions
 - [T320: the GitHub CLI and merge API are merges for the gate](decisions.md) — `GH_MERGE_PATTERNS` + `gh_merge_hit`; limits in the guide cut list; heredoc false positive to fix
+- [T321: `[admin]`/`[ticket]` push remote is `EASY_KIT_ADMIN_REMOTE` (default `origin`)](decisions.md) — set it in `.claude/settings.json` `"env"`; a bare push must resolve to it; bad value refuses every push
 - [T316: `sensitive-paths.txt` is a protected pattern — always asks, never predicted or approved](decisions.md) — folder-level and shell-built names still skip the token match
 - [T344: docs.html Change log, every release, titles only](decisions.md) — floor of 263 pinned; later tasks add their own line
 - [T341: Supervisor writes extended-track code; merge gate needs a `ReviewerDone` from a `SubagentStop` hook](decisions.md) — DDR-0011 supersedes DDR-0004; merge with `--no-ff`
