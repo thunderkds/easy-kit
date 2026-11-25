@@ -474,3 +474,20 @@ Mode: auto
 **Files:** `.claude/hooks/stop_auto_mode_check.py` (local `request_text` reader, `__main__` guard), `tasks/MINIMAL_LOG.md`
 **Not done:** merge (admin: after the auto verify pass); auto verify: ☑ pass (session a0ed916d-7cef-4cc6-9166-6260404cf354, commit 273e2d8cdc68d936933362d8498269662e90ac10, log .claude/verify-runs/T247-273e2d8cdc68.log)
 Closed: row moved to Done 2026-11-25 — auto verify pass (session a0ed916d-7cef-4cc6-9166-6260404cf354, commit 273e2d8cdc68d936933362d8498269662e90ac10); Gates 5 and 6 checked
+
+## T367 — CI fails on `main`: the pack catalog suite gives no answer to the agent-ws question · minimal
+Mode: auto
+**Asked:** "seem like the Ci is fail also"
+**Decisions:**
+1. Track minimal — RULE: docs/claude-md/tracks.md § Track rule (C0, Risk Low: one test file, no kit code)
+2. Fix the test, not the installer: the agent-ws question is T353's intended behaviour — FACT: tasks/TASK_GUIDE_T353.md:1 "Ship agent-ws (T345) as an opt-in installer choice"
+3. Answer it only on Linux, where `setup.sh` asks it — FACT: setup.sh:337 "agent_ws_linux() { [ "$(uname -s 2>/dev/null)" = "Linux" ]; }"
+4. ID T367, not T363: another session registered T363–T366 first — FACT: PROJECT_KANBAN.md:11 "**T363** — The sensitive-path hook matches tokens only"
+**Checked:**
+- Cause: CI run 45570715182 (`d733a6a7`, v2.3.0) step "Pack catalog test suite (T116)" `10 passed, 6 failed`; every other CI step passes locally on `main` (`shellcheck` rc 0, `sh scripts/validate.sh` PASS, every `tests/*.sh` step in `.github/workflows/ci.yml`, `tests/test_ci_wires_shell_suites.py` 5 passed)
+- BEFORE: `date -u` 2026-11-25T08:51:26Z — `bash tests/test_pack_catalog.sh` → `10 passed, 6 failed`
+- AFTER: `bash tests/test_pack_catalog.sh` → `16 passed, 0 failed`; with `uname` faked to `Darwin` (no agent-ws question) → `16 passed, 0 failed`
+- Neighbours: `tests/test_agent_ws_installer_t353.sh` `33 passed, 0 failed`; `tests/test_one_command_menu.sh` `22 passed, 0 failed`; `shellcheck -x tests/test_pack_catalog.sh` rc 0
+**Memory:** `memory/learnings.md` — the T353 entry gains: a new installer question shifts every pty answer string; grep `run_in_pty` in `tests/*.sh` and run every CI shell step, not only the menu tests
+**Files:** `tests/test_pack_catalog.sh` (`install_both` sends an Enter for the agent-ws question on Linux), `tasks/MINIMAL_LOG.md`, `memory/learnings.md`
+**Not done:** merge (admin: after the auto verify pass); push (yours: `git push github main`, then CI reruns); auto verify: running (T182)
