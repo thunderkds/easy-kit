@@ -100,6 +100,11 @@ if sys.argv[1:2] != ["--start"]:
     exit_outside_kit_project()
 # `--start` runs in a `Bash` tool call, where $CLAUDE_PROJECT_DIR is empty (T234 D5): it finds the
 # project from the cwd. The Stop hook gets the variable from the harness.
+# T206: `--start` takes exactly one task ID. A bare or extra-arg `--start` is a usage error: it exits 2
+# here, before any project lookup or `stop_hook()`, so it can never start a run for every due task.
+if sys.argv[1:2] == ["--start"] and len(sys.argv) != 3:
+    print("usage: stop_auto_verify.py --start <TASK_ID>", file=sys.stderr)
+    sys.exit(2)
 ROOT = script_project_root() if sys.argv[1:2] == ["--start"] else project_root()
 if ROOT is None:  # T234 D7: `--start` from a plugin, in no project: never read the plugin's board
     print(f"{sys.argv[2] if len(sys.argv) > 2 else '--start'}: {NO_PROJECT} — nothing started")
