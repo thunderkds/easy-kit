@@ -646,6 +646,15 @@ While a process runs there it refuses and removes nothing: the Supervisor report
 It refuses unmerged or dirty work and then removes nothing; the Supervisor reports the refusal and goes on.
 When the hook left `Paused: done not moved`, the row is not in Done and the command refuses: that is expected.
 
+**Sensitive paths (T371).** Under `[admin]`, `pre_tool_sensitive_path.py` approves a sensitive-path
+call instead of asking you. A call that only reads (`ls`, `cat`, `head`, `tail`, `grep`/`rg`, `wc`,
+`stat`, `file`, `find` with no `-delete`/`-exec`, `git show|diff|log|status`, with no redirect) passes
+with no log. Any other call passes only after the hook appends one line (time, session, agent, task,
+tool, target, paths, patterns) to `<anchors base>/<repo slug>/sensitive-admin-<session>.jsonl`, the
+folder agents may not write to; the task's final report gets one line per approval. A write to the
+guard's own files (`.claude/state/**`, the approval file, `.claude/sensitive-paths.txt`) still asks,
+and so does a call whose log line cannot be written. Outside `[admin]` every sensitive call asks.
+
 **The remote (T321).** `origin` unless `EASY_KIT_ADMIN_REMOTE` in `.claude/settings.json` `"env"` names
 another one (set it by hand, then start a new session); every `origin` in the list below then reads as that
 one name, `origin` is refused, and a value that is not a plain remote name (a URL, a path, an option,
