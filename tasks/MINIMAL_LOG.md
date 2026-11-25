@@ -5,6 +5,29 @@
 > this template and deletes the example comment. The same block is the Supervisor's final chat message.
 
 
+## T366 — CLAUDE_LEGACY.md places general-agent-template.md in templates/ · minimal
+Mode: auto
+**Asked:** "continue your work on the pending tasks, [admin]"
+**Decisions:**
+1. Took T366 first of the pending T363–T366 follow-ups, one at a time — RULE: docs/claude-md/tracks.md `### Session tags` (a session runs no two tickets at once); smallest first.
+2. Track minimal — RULE: docs/claude-md/tracks.md § Track rule (C0, Risk Low, one doc file and two tests, no user data).
+3. The Supervisor wrote the change itself, no spawn — RULE: AGENTS.md § Hard-Stop Gates (Gate 1).
+4. `RUNBOOK.md` unchanged — FACT: `RUNBOOK.md:250` is the Vercel preview step; the only RUNBOOK hit (`:290`) checks the retired `.claude/agents/` clause on purpose.
+5. `memory/codebase-map.md` unchanged — FACT: it is a dated snapshot (`Generated: 2026-08-28 | Commit: 7060c13`), and its tree is right for that commit; `/map-codebase` regenerates it.
+6. `tests/test_agents_md_primary.py` `CLAUDE_LEGACY_REF` moves to the T366 edit commit `1ca76763` — RULE: the pin's own comment ("Repoint `CLAUDE_LEGACY.md`'s pin when a later task edits it"), as T200/T228/T239/T245/T341 did.
+**Checked:**
+- New test `tests/test_agent_frontmatter.py::test_legacy_doctrine_places_template_in_templates_dir` — 1 failed before the fix (CLAUDE_LEGACY.md placed the base template in agents/), passed after the fix
+- BEFORE (2026-11-25T08:47:46Z, `python3 -m pytest -q -p no:cacheprovider tests/test_agent_frontmatter.py`): `1 failed, 34 passed` — `CLAUDE_LEGACY.md places the base template in agents/`
+- AFTER (same command plus `tests/test_agents_md_primary.py`): `46 passed`
+- Suite: `python3 -m pytest -q -p no:cacheprovider -rf tests .claude/hooks/tests` — `61 failed, 7943 passed, 24 skipped`; the same command on `main` (`b90f112e`, clean worktree) — `60 failed, 7943 passed, 24 skipped`, the same 60. The one extra, `tests/test_auto_verify.py::test_t189_ac3_a_minimal_record_with_no_new_test_line_keeps_the_row`, passed on its own (`7 passed` for `-k t189_ac3`): load from two suites running at once
+- Real run: `bash scripts/validate.sh` — printed `validate.sh: PASS`; `grep -n 'templates/general' CLAUDE_LEGACY.md` — lines 216 and 355
+- Real run (install): `bash tests/test_setup.sh` — `21 passed, 0 failed`, with `PASS: test5: legacy CLAUDE.md is CLAUDE_LEGACY.md byte-for-byte` (an existing / legacy project install writes this file as its `CLAUDE.md`, so `CLAUDE_LEGACY.md` has a runtime surface)
+- verify: ☑ pass — auto-run by hook, session 2278b303-03e0-4da8-be2b-a8deb28c1d14, commit 9827c1cab402f071e2180e31202327ed6b17121a, log .claude/verify-runs/T366-9827c1cab402.log
+**Memory:** nothing new
+**Files:** `CLAUDE_LEGACY.md` (lines 216, 355), `tests/test_agent_frontmatter.py` (new test), `tests/test_agents_md_primary.py` (pin moves to `1ca76763`), `tasks/MINIMAL_LOG.md`, `PROJECT_KANBAN.md`
+**Not done:** merge (admin: after the auto verify pass); auto verify: ☑ pass (session 2278b303-03e0-4da8-be2b-a8deb28c1d14, commit 9827c1cab402f071e2180e31202327ed6b17121a, log .claude/verify-runs/T366-9827c1cab402.log), retry 1 after a `blocked` SKIP; `main` has 60 failing tests before this change (not from T366)
+Closed: row moved to Done 2026-11-25 — auto verify pass (session 2278b303-03e0-4da8-be2b-a8deb28c1d14, commit 9827c1cab402f071e2180e31202327ed6b17121a); Gates 5 and 6 checked
+
 ## T253 — the Update summary says what was and was not replaced when a backup fails · minimal
 Mode: auto
 **Asked:** "start the task as parallel [admin]"

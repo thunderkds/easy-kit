@@ -136,3 +136,16 @@ def test_template_lives_outside_agents_dir():
         "it belongs at templates/general-agent-template.md"
     )
     assert TEMPLATE.is_file(), "templates/general-agent-template.md is missing"
+
+
+def test_legacy_doctrine_places_template_in_templates_dir():
+    """T366: `CLAUDE_LEGACY.md` names the base template where it lives, not in `agents/`."""
+    text = (ROOT / "CLAUDE_LEGACY.md").read_text(encoding="utf-8")
+    stale = [
+        line for line in text.splitlines()
+        if "agents/general-agent-template.md" in line or "`agents/` (general-agent-template.md" in line
+    ]
+    assert not stale, f"CLAUDE_LEGACY.md places the base template in agents/: {stale}"
+    assert "`templates/general-agent-template.md`" in text, (
+        "CLAUDE_LEGACY.md no longer names templates/general-agent-template.md"
+    )

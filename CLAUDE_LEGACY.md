@@ -213,7 +213,7 @@ Run these **one by one**. After each session, summarize findings, ask for user c
 ---
 
 **Mandatory Folder Structure**:
-- `agents/` (general-agent-template.md, backend-implementer.md, frontend-implementer.md, common-infrastructure.md, qa-automation.md)
+- `agents/` (backend-implementer.md, frontend-implementer.md, common-infrastructure.md, qa-automation.md); the shared base template is `templates/general-agent-template.md`
 - `skills/` — custom project skills (auto-discovered by Claude Code):
   - `brainstorming/SKILL.md` — divergent exploration; now includes scope tiers, one-question-per-turn, visual probe gate, claim verification
   - `wake/SKILL.md` — mandatory cold-start session briefing (reads git/KANBAN/MEMORY/LRs)
@@ -352,7 +352,7 @@ Reason: [...]
 
 ## Appendix B: Agent Templates
 
-### General Agent Template (`agents/general-agent-template.md`)
+### General Agent Template (`templates/general-agent-template.md`)
 
 Every agent prompt **must** include these sections:
 
