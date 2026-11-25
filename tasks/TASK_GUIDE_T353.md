@@ -88,7 +88,7 @@ The installer question text follows the draft: `Turn on parallel builds (agent-w
 
 **Depends on**: T345 — `scripts/agent_ws.py` (merged into local `main` `f90c93f7`)
 
-**Entry point**: `offer_agent_ws`
+**Entry point**: `prompt_agent_ws`
 
 ---
 
@@ -96,7 +96,7 @@ The installer question text follows the draft: `Turn on parallel builds (agent-w
 
 | # | Criterion (testable) | Traces to requirement |
 |---|----------------------|-----------------------|
-| 1 | Install and Reinstall ask the agent-ws question once, after the project-type question and before `Proceed?`; Enter, `n`, anything but `y`/`yes`, or no terminal means No | "add the option when reinstall the kit" |
+| 1 | Install and Reinstall ask the agent-ws question once, after the project-type question and before `Proceed?`; on Install, Enter, `n`, anything but `y`/`yes`, or no terminal means No; on Reinstall, Enter or no terminal keeps the project's current answer (D2, `TASK_REVIEW_T353.md` decision 7) | "add the option when reinstall the kit" |
 | 2 | With No, the project's files, `.claude/settings.json` and lock are byte-identical to an install of the same kit commit today (no `agent_ws` key, no script) | opt-in |
 | 3 | With Yes, `scripts/agent_ws.py` is a real file in the project, recorded in the lock with its hash, and the three hook entries are registered per D1 | ships the tool |
 | 4 | The lock remembers the answer; Update asks no agent-ws question and keeps the choice; with Yes, Update refreshes `scripts/agent_ws.py` by the edit-safe rules of other kit files | "for the update in another repos" |
@@ -125,7 +125,7 @@ The installer question text follows the draft: `Turn on parallel builds (agent-w
 ### Verification Command (exact, runnable)
 
 ```bash
-bash tests/test_agent_ws_installer_t353.sh && python3 -m pytest tests/test_site_story.py tests/test_site_content.py tests/test_site_visual_first.py tests/test_docs_match_installer.py tests/test_plugin_package.py -q && bash tests/test_one_command_menu.sh && bash tests/test_cli_and_project_menus.sh && bash tests/test_settings_merge.sh
+bash tests/test_agent_ws_installer_t353.sh && python3 -m pytest tests/test_merge_settings_agent_ws_t353.py tests/test_site_story.py tests/test_site_content.py tests/test_site_visual_first.py tests/test_docs_match_installer.py tests/test_plugin_package.py -q && bash tests/test_one_command_menu.sh && bash tests/test_cli_and_project_menus.sh && bash tests/test_settings_merge.sh
 ```
 
 ### Evidence (filled by reviewer at Stage 4/5)
@@ -212,3 +212,5 @@ A pty shell test (`tests/test_agent_ws_installer_t353.sh`, modelled on `tests/te
 ---
 
 ## Questions Log
+
+- 2026-11-25 DEBATE (`resolve-question task=T353 risk=High`) D1: who owns the three hook entries in an opted-in project? → kit-owned without wrappers: `lib/merge-settings.py` also owns the exact `"$CLAUDE_PROJECT_DIR"/scripts/agent_ws.py` form, and the installer passes `lib/agent-ws-hooks.json` as an overlay only when the lock says `agent_ws` on (Advocate 1: same — Reinstall `n` turns it off free, `drop_dangling` guards a missing script; Advocate 2: same — anchored rule, overlay outside the 15-hook settings; Advocate 3: (b) `.claude/settings.local.json`, add-only, gitignored — a tracked entry reaches teammates on non-Linux). Settled by a written line, not a stop (`docs/claude-md/tracks.md:568`): `tasks/TASK_GUIDE_T353.md:38` "the three hook entries are written so a later kit update can still manage them" and AC 5 (entries survive Update exactly once): the merge never reads `settings.local.json`, so (b) cannot meet them (Decide rule 1). Advocate 3's teammate risk is guarded in code: the question is asked only on Linux, and agent-ws falls back to an on-disk build folder on macOS ⚠ decided for you — please review

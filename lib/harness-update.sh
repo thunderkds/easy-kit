@@ -42,9 +42,50 @@ update_settings() {
     [ -d ./.claude ] || mkdir -p ./.claude
     cp "$_src" "$_dst"
     log_info "Installed $_dst (none existed). Restart Claude Code to activate hooks."
+    [ -z "$(agent_ws_overlay)" ] || merge_settings "$_src" "$_dst" "$(agent_ws_overlay)"
     return
   fi
-  merge_settings "$_src" "$_dst"
+  merge_settings "$_src" "$_dst" "$(agent_ws_overlay)"
+}
+
+# ── agent-ws opt-in (T353) ───────────────────────────────────────────────────
+# AGENT_WS is on or off: asked on Install/Reinstall (setup.sh prompt_agent_ws),
+# read from the lock's "agent_ws" key on Update. When on, scripts/agent_ws.py is
+# a kit file outside MANIFEST (copied, hashed in the lock, refreshed edit-safely
+# on Update), and lib/agent-ws-hooks.json is passed to the settings merge as an
+# overlay, so its 3 entries are kept on every run. When off, no overlay is passed
+# and the merge drops them; a script copied earlier stays in place.
+lock_agent_ws() {
+  if [ -f "$1" ] && [ "$(lookup_lock_field "$1" agent_ws)" = on ]; then echo on; else echo off; fi
+}
+agent_ws_overlay() {
+  [ "${AGENT_WS:-off}" = on ] && [ -f "$HARNESS_TEMP_DIR/lib/agent-ws-hooks.json" ] \
+    && printf '%s' "$HARNESS_TEMP_DIR/lib/agent-ws-hooks.json"
+  return 0
+}
+plan_agent_ws_line() {
+  if [ "${AGENT_WS:-off}" = on ]; then
+    printf '  - agent-ws: on (scripts/agent_ws.py and its 3 hooks: WorktreeCreate, WorktreeRemove, SessionStart)\n'
+  else
+    printf '  - agent-ws: off\n'
+  fi
+}
+warn_hand_wired_agent_ws() {
+  [ "${AGENT_WS:-off}" = on ] || return 0
+  if [ -f ./.claude/settings.local.json ] && grep -q 'agent_ws\.py' ./.claude/settings.local.json 2>/dev/null; then
+    log_warn ".claude/settings.local.json already wires agent_ws.py hooks by hand; remove those entries there, or each hook runs twice."
+  fi
+}
+# Install/Reinstall: copy the kit's script; a different file already there is
+# backed up first, as for any kit path (T112).
+install_agent_ws_script() {
+  [ "${AGENT_WS:-off}" = on ] || return 0
+  _aw_src="$HARNESS_TEMP_DIR/scripts/agent_ws.py"
+  [ -f "$_aw_src" ] || { log_warn "the fetched Easy Kit has no scripts/agent_ws.py - agent-ws not installed."; AGENT_WS=off; return 0; }
+  harness_backup_path "$_aw_src" ./scripts/agent_ws.py || exit 1
+  install_file "$_aw_src" ./scripts/agent_ws.py
+  log_info "agent-ws: scripts/agent_ws.py installed; its 3 hooks are added to .claude/settings.json. See docs.html#parallel-builds."
+  warn_hand_wired_agent_ws
 }
 
 # ── Symlink refusal (all-or-nothing, before any compare/overwrite) ───────────
@@ -531,6 +572,7 @@ write_new_lock() {
     if [ -n "${HARNESS_KIT_COMMIT:-}" ]; then
       printf '  "kit_commit": "%s",\n' "$HARNESS_KIT_COMMIT"
     fi
+    [ "${AGENT_WS:-off}" = on ] && printf '  "agent_ws": "on",\n'
     printf '  "files": {\n'
     _first=1
     while IFS='	' read -r _k _h; do
@@ -721,6 +763,7 @@ plan_update() {
     printf '  - Backed up: nothing. Update keeps your edits in place instead.\n'
   fi
   printf '  - Hooks: Easy Kit entries are merged into .claude/settings.json (your own entries are kept).\n'
+  plan_agent_ws_line
 }
 
 # ── Plan: Reinstall ──────────────────────────────────────────────────────────
@@ -753,6 +796,7 @@ plan_reinstall() {
   plan_print_removals "$_p_rm" "$_p_keep"
   printf '  - Your own files that the kit does not ship are left alone.\n'
   printf '  - Hooks: Easy Kit entries are merged into .claude/settings.json (your own entries are kept).\n'
+  plan_agent_ws_line
 }
 
 # ── Re-project every selected/already-present harness (shared by both actions)
@@ -874,6 +918,10 @@ run_update() {
 
   process_files "$_lock" "$_fresh_list" "$decisions" "$processed"
   process_claude_md "$_lock" "$decisions" "$processed"
+  if [ "${AGENT_WS:-off}" = on ] && [ -f "$HARNESS_TEMP_DIR/scripts/agent_ws.py" ]; then
+    process_one_file "$HARNESS_TEMP_DIR/scripts/agent_ws.py" ./scripts/agent_ws.py scripts/agent_ws.py \
+      "$_lock" "$decisions" "$processed"
+  fi
   carry_over_unprocessed "$_lock" "$_manifest" "$decisions" "$processed" "$_fresh_list"
   write_new_lock "$decisions" "$_lock" "$FINAL_CLAUDE_MD_SOURCE"
   write_update_log
@@ -919,6 +967,17 @@ run_reinstall() {
   : > "$_decisions"
 
   { cat "$_fresh_list"; printf '%s\n' "CLAUDE.md"; } > "$HARNESS_TEMP_DIR/.reinstall-list"
+  if [ "${AGENT_WS:-off}" = on ] && [ -f "$HARNESS_TEMP_DIR/scripts/agent_ws.py" ]; then
+    printf '%s\n' "scripts/agent_ws.py" >> "$HARNESS_TEMP_DIR/.reinstall-list"
+    # Back it up only when the user edited it (the lock hash says so), as for every kit file.
+    if reinstall_needs_backup "$HARNESS_TEMP_DIR/scripts/agent_ws.py" ./scripts/agent_ws.py \
+        scripts/agent_ws.py "$_lock"; then
+      harness_backup_path "$HARNESS_TEMP_DIR/scripts/agent_ws.py" ./scripts/agent_ws.py || exit 1
+    fi
+    warn_hand_wired_agent_ws
+  elif [ "$(lock_agent_ws "$_lock")" = on ]; then
+    log_info "agent-ws: turned off. Its hooks are removed from .claude/settings.json; scripts/agent_ws.py is left in place."
+  fi
   while IFS= read -r _rel <&3; do
     [ -n "$_rel" ] || continue
     _src="$HARNESS_TEMP_DIR/$_rel"

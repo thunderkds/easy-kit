@@ -54,8 +54,8 @@ project so the deployed hooks in `.claude/settings.json` are picked up.
 
 The command takes no options. It asks from numbered lists: what to do (**Install**, or **Update** /
 **Reinstall** where Easy Kit is already installed), **which CLIs** to set up (`1) Claude Code  2) Codex`;
-those found on your `PATH` are pre-selected), and whether this is a **new or an existing / legacy
-project**. It shows a plan and asks `Proceed? [Y/n]` before it changes anything. At Stage 1 your Supervisor shows the optional companion MCP servers (`companion-setup`): skip is the default, and the kit never installs one.
+those found on your `PATH` are pre-selected), whether this is a **new or an existing / legacy
+project**, and on Linux whether to turn on **parallel builds** (agent-ws; off by default). It shows a plan and asks `Proceed? [Y/n]` before it changes anything. At Stage 1 your Supervisor shows the optional companion MCP servers (`companion-setup`): skip is the default, and the kit never installs one.
 
 Codex caps a skill body at 8 KB. A skill whose body currently exceeds that cap is **skipped**
 entirely on a Codex install — never truncated — with a named, loud warning. Skills currently
