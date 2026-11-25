@@ -66,6 +66,7 @@
 - [A handoff warning is a measurement, and editing the block around it does not refresh it](learnings.md) — re-run the check before re-asserting, don't re-read the sentence
 - [Build queue: `flock` fd leaks to daemons; subagent worktrees outlive the subagent](learnings.md) — T345: `flock -o` + `setsid`; `WorktreeRemove` not run for subagents
 - [Splitting a skill: pins in both test trees; reviewer spawn needs the guide on main](learnings.md) — T355: read references in at the pointer line; chain the board guard and commit
+- [Board writes beside a live session; gate-safe commit messages; gate edits need sign-off first](learnings.md) — T364–T366: patch your own board line; `git commit -F`; ask for the `AUTHORISED_TASKS` sign-off in Stage 2
 - [T112: install is backup-then-overwrite; `harness_backup_path` is public for T114](decisions.md) — differing dest → `<path>.bak[.N]`; identical content left alone
 - [An identical-content short-circuit is what separates backup-on-install from backup-breeding](learnings.md) — judge a backup feature on run two
 - [An error message's scope claim outlives the path it was written for](learnings.md) — check the caller's loop before trusting an abort's scope
