@@ -1,0 +1,703 @@
+#!/usr/bin/env python3
+"""T345 - agent-ws: worktrees and build folders for many agents and sessions on one repo.
+
+    python3 scripts/agent_ws.py new <name> [--branch B] [--owner-pid PID]
+    python3 scripts/agent_ws.py rm <name|path>
+    python3 scripts/agent_ws.py gc [--dry-run]
+    python3 scripts/agent_ws.py run [--] <command> [args...]
+    python3 scripts/agent_ws.py hook-create | hook-remove | hook-env   (Claude Code hooks, JSON on stdin)
+
+`new` makes `../wt-<name>` beside the main checkout on branch `agent-ws/<name>`, from the main
+checkout's current branch, and writes a lease (`<git common dir>/agent-ws/leases/<name>.json`). It
+prints the absolute path as the only stdout line; every other line goes to stderr. A Rust worktree
+(`Cargo.toml` at its root) builds into a private tmpfs build folder: the first tmpfs of
+`/dev/shm`, `/tmp` with 4 GB free, at `<mount>/agent-ws-<uid>/<repo id>/<name>-<token>/`; the
+`agent-ws-<uid>` folder is 0700, owned by the user, never a symlink. The worktree's untracked
+`.cargo/config.toml` holds only `[build] target-dir` (cargo merges it with ~/.cargo/config.toml).
+With no fit tmpfs, the worktree keeps an on-disk `target/`. A full tmpfs mid-build fails with
+cargo's own error: the free-space check at `new` is the only guard.
+
+`rm` and `gc` reuse the removal rules of `scripts/cleanup_task.py`: they refuse, and remove
+nothing, on an unmerged branch, uncommitted or untracked files, or a live process inside. They
+never force a removal and never delete an unmerged branch. The tmpfs folder goes last. `gc` removes
+only worktrees whose lease owner is dead (PID gone, or reused: start time differs); a worktree with
+no lease is never stale.
+
+`run` runs the command under `nice -n 19` (never `ionice`: no effect on `mq-deadline`). The build
+slot queue is off unless `AGENT_BUILD_SLOTS` is a positive number.
+
+Exit 0: done. Exit 1: refused or failed. Linux only (`/proc`, `flock`).
+"""
+import fcntl
+import hashlib
+import json
+import os
+import re
+import secrets
+import shlex
+import shutil
+import signal
+import stat
+import subprocess
+import sys
+import tempfile
+import time
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import cleanup_task as ct  # noqa: E402  (removal rules: T327; not edited)
+
+NAME_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}")
+POINTER = ".cargo/config.toml"
+LEASE_KEYS = ("name", "path", "branch", "base")
+SHELLS = {"sh", "bash", "zsh", "dash", "fish", "python3", "python", "env", "timeout", "nice", "flock"}
+
+
+class Refused(Exception):
+    pass
+
+
+def err(text):
+    print(f"agent-ws: {text}", file=sys.stderr, flush=True)
+
+
+def git(cwd, *args):
+    return subprocess.run(["git", "-C", str(cwd), *args], capture_output=True, text=True)
+
+
+def sha256(path):
+    with open(path, "rb") as f:
+        return hashlib.sha256(f.read()).hexdigest()
+
+
+def write_atomic(path, text, mode=0o600):
+    fd, tmp = tempfile.mkstemp(dir=os.path.dirname(path), prefix=".tmp-")
+    with os.fdopen(fd, "w") as f:
+        f.write(text)
+    os.chmod(tmp, mode)
+    os.replace(tmp, path)
+
+
+# ── repo and lease ───────────────────────────────────────────────────────────────────────────
+
+
+class Repo:
+    def __init__(self, cwd):
+        out = git(cwd, "rev-parse", "--path-format=absolute", "--git-common-dir")
+        if out.returncode != 0:
+            raise Refused("not inside a git repository")
+        self.common = os.path.realpath(out.stdout.strip())
+        if os.path.basename(self.common) != ".git":
+            raise Refused(f"no main checkout for {self.common} (bare repository?)")
+        self.main = os.path.dirname(self.common)
+        self.state = os.path.join(self.common, "agent-ws")
+        self.leases = os.path.join(self.state, "leases")
+        slug = re.sub(r"[^A-Za-z0-9._-]", "_", os.path.basename(self.main))[:40] or "repo"
+        self.id = f"{slug}-{hashlib.sha256(self.common.encode()).hexdigest()[:8]}"
+
+    def lease_path(self, name):
+        return os.path.join(self.leases, f"{name}.json")
+
+    def all_leases(self):
+        if not os.path.isdir(self.leases):
+            return []
+        out = []
+        for n in sorted(os.listdir(self.leases)):
+            if n.endswith(".json"):
+                try:
+                    with open(os.path.join(self.leases, n)) as f:
+                        lease = json.load(f)
+                except (OSError, ValueError):
+                    err(f"unreadable lease {n}: skipped")
+                    continue
+                missing = [k for k in LEASE_KEYS if not isinstance(lease, dict) or not lease.get(k)]
+                if missing:
+                    err(f"lease {n} lacks {', '.join(missing)}: skipped")
+                    continue
+                out.append(lease)
+        return out
+
+    def find(self, key):
+        """Lease by name, or by worktree path."""
+        real = os.path.realpath(key) if os.sep in key else None
+        for lease in self.all_leases():
+            if lease.get("name") == key or (real and os.path.realpath(lease["path"]) == real):
+                return lease
+        return None
+
+
+def proc_start(pid):
+    try:
+        with open(f"/proc/{pid}/stat") as f:
+            return f.read().rsplit(")", 1)[1].split()[19]
+    except (OSError, IndexError):
+        return None
+
+
+def proc_comm(pid):
+    try:
+        with open(f"/proc/{pid}/comm") as f:
+            return f.read().strip()
+    except OSError:
+        return ""
+
+
+def proc_parent(pid):
+    try:
+        with open(f"/proc/{pid}/stat") as f:
+            return int(f.read().rsplit(")", 1)[1].split()[1])
+    except (OSError, IndexError, ValueError):
+        return 0
+
+
+def owner_pid():
+    """The nearest ancestor that is not a shell or wrapper: the Claude Code process (or the
+    user's terminal program) that lives as long as the session using the worktree."""
+    pid = os.getppid()
+    while pid > 1 and proc_comm(pid) in SHELLS:
+        pid = proc_parent(pid)
+    return pid if pid > 1 else os.getppid()
+
+
+def owner_alive(lease):
+    start = proc_start(lease.get("owner_pid", 0))
+    return start is not None and start == lease.get("owner_start")
+
+
+# ── tmpfs build folder (D4) ──────────────────────────────────────────────────────────────────
+
+
+def fstype(path):
+    real, best, kind = os.path.realpath(path), "", None
+    try:
+        with open("/proc/self/mounts") as f:
+            for line in f:
+                parts = line.split()
+                if len(parts) < 3:
+                    continue
+                mnt = parts[1].replace("\\040", " ")
+                if (real == mnt or real.startswith(mnt.rstrip("/") + "/")) and len(mnt) >= len(best):
+                    best, kind = mnt, parts[2]
+    except OSError:
+        return None
+    return kind
+
+
+def private_dir(path):
+    """Create or check a folder only this user can enter. Returns a refusal reason, or None."""
+    try:
+        os.mkdir(path, 0o700)
+    except FileExistsError:
+        pass
+    st = os.lstat(path)
+    if stat.S_ISLNK(st.st_mode):
+        return f"{path} is a symlink"
+    if not stat.S_ISDIR(st.st_mode):
+        return f"{path} is not a folder"
+    if st.st_uid != os.getuid():
+        return f"{path} belongs to another user"
+    if stat.S_IMODE(st.st_mode) != 0o700:
+        os.chmod(path, 0o700)
+    return None
+
+
+def tmpfs_candidates():
+    raw = os.environ.get("AGENT_WS_TMPFS_CANDIDATES")
+    if raw is None:
+        return ["/dev/shm", "/tmp"]
+    return [c for c in raw.split(os.pathsep) if c]
+
+
+def pick_tmpfs(repo):
+    """(private repo folder on tmpfs, None) or (None, reason)."""
+    need = float(os.environ.get("AGENT_WS_MIN_FREE_GB", "4")) * 1024 ** 3
+    reasons = []
+    for cand in tmpfs_candidates():
+        if not os.path.isdir(cand) or fstype(cand) != "tmpfs":
+            reasons.append(f"{cand}: not tmpfs")
+            continue
+        sv = os.statvfs(cand)
+        if sv.f_bavail * sv.f_frsize < need:
+            reasons.append(f"{cand}: under {need / 1024 ** 3:g} GB free")
+            continue
+        base = os.path.join(cand, f"agent-ws-{os.getuid()}")
+        why = private_dir(base)
+        if why:
+            reasons.append(why)
+            continue
+        mine = os.path.join(base, repo.id)
+        why = private_dir(mine)
+        if why:
+            reasons.append(why)
+            continue
+        return mine, None
+    return None, "; ".join(reasons) or "no tmpfs candidate"
+
+
+def setup_build_dir(repo, path, name):
+    """(build folder or None, {relpath: sha256} of files written)."""
+    if not os.path.isfile(os.path.join(path, "Cargo.toml")):
+        err("no Cargo.toml at the worktree root: build folder not moved")
+        return None, {}
+    for rel in (POINTER, ".cargo/config"):
+        if os.path.lexists(os.path.join(path, rel)):
+            err(f"the repo already has {rel}: on-disk target/ kept (agent-ws never edits it)")
+            return None, {}
+    mine, why = pick_tmpfs(repo)
+    if not mine:
+        err(f"no usable tmpfs ({why}): on-disk target/ in the worktree")
+        return None, {}
+    build = os.path.join(mine, f"{name}-{secrets.token_hex(3)}")
+    os.mkdir(build, 0o700)
+    os.makedirs(os.path.join(path, ".cargo"), exist_ok=True)
+    cfg = os.path.join(path, POINTER)
+    write_atomic(cfg, "# Written by agent-ws (T345): this worktree builds into a private tmpfs folder.\n"
+                      "# `agent-ws rm` deletes this file; edit it and `rm` refuses.\n"
+                      f"[build]\ntarget-dir = {json.dumps(build)}\n", 0o644)
+    err(f"build folder on tmpfs: {build} (lost on reboot)")
+    return build, {POINTER: sha256(cfg)}
+
+
+def reflink_probe(folder):
+    src = tempfile.NamedTemporaryFile(dir=folder, prefix=".agent-ws-probe-", delete=False)
+    src.close()
+    dst = src.name + ".copy"
+    ok = subprocess.run(["cp", "--reflink=always", src.name, dst], capture_output=True).returncode == 0
+    for p in (src.name, dst):
+        if os.path.exists(p):
+            os.unlink(p)
+    if ok:
+        err("copy-on-write works here, but seeding is not built yet: nothing seeded")
+    else:
+        err(f"no copy-on-write on {folder} (reflink probe failed): nothing seeded")
+
+
+def cache_warnings(parent):
+    """AC 19: a uv cache or pnpm store on another filesystem than the worktrees gets no hard links."""
+    home = os.path.expanduser("~")
+    xdg_cache = os.environ.get("XDG_CACHE_HOME") or os.path.join(home, ".cache")
+    xdg_data = os.environ.get("XDG_DATA_HOME") or os.path.join(home, ".local", "share")
+    dev = os.stat(parent).st_dev
+    for label, path in (("uv cache", os.environ.get("UV_CACHE_DIR") or os.path.join(xdg_cache, "uv")),
+                        ("pnpm store", os.environ.get("PNPM_STORE_DIR") or os.path.join(xdg_data, "pnpm"))):
+        if os.path.isdir(path) and os.stat(path).st_dev != dev:
+            err(f"{label} {path} is on another filesystem than {parent}: no hard-link sharing")
+
+
+# ── new ──────────────────────────────────────────────────────────────────────────────────────
+
+
+def cmd_new(args):
+    name, branch, pid = None, None, None
+    it = iter(args)
+    for a in it:
+        if a == "--branch":
+            branch = next(it, None)
+        elif a == "--owner-pid":
+            raw = next(it, "")
+            if not raw.isdigit():
+                raise Refused(f"--owner-pid needs a process number, not {raw!r}")
+            pid = int(raw)
+        elif name is None:
+            name = a
+        else:
+            raise Refused(f"unexpected argument {a!r}")
+    if name is None or not NAME_RE.fullmatch(name) or ".." in name:
+        raise Refused("usage: new <name> (letters, digits, . _ -; up to 64; not starting with . or -)")
+    branch = branch or f"agent-ws/{name}"
+    if git(".", "check-ref-format", f"refs/heads/{branch}").returncode != 0:
+        raise Refused(f"bad branch name {branch!r}")
+    repo = Repo(os.getcwd())
+    path = os.path.join(os.path.dirname(repo.main), f"wt-{name}")
+    base = git(repo.main, "symbolic-ref", "-q", "--short", "HEAD").stdout.strip() \
+        or git(repo.main, "rev-parse", "HEAD").stdout.strip()
+    pid = pid or owner_pid()
+    os.makedirs(repo.leases, exist_ok=True)
+    with open(os.path.join(repo.state, "new.lock"), "w") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)  # G3c: one `git worktree add` at a time per repo
+        if os.path.lexists(path) or os.path.exists(repo.lease_path(name)):
+            raise Refused(f"{path} or its lease already exists")
+        done = git(repo.main, "worktree", "add", "-q", "-b", branch, path, base)
+        if done.returncode != 0:
+            raise Refused(f"git worktree add failed: {done.stderr.strip()}")
+        lease = {"version": 1, "name": name, "path": path, "branch": branch, "base": base,
+                 "created_at": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
+                 "session_id": os.environ.get("CLAUDE_SESSION_ID", ""),
+                 "owner_pid": pid, "owner_start": proc_start(pid), "build_dir": None, "files": {}}
+        write_atomic(repo.lease_path(name), json.dumps(lease, indent=2) + "\n")
+    build, files = setup_build_dir(repo, path, name)
+    reflink_probe(os.path.dirname(path))
+    cache_warnings(os.path.dirname(path))
+    if os.environ.get("CARGO_TARGET_DIR"):
+        err("CARGO_TARGET_DIR is set in this environment: it overrides the worktree's build folder "
+            "for plain cargo; `agent-ws run` sets its own")
+    lease.update(build_dir=build, files=files)
+    write_atomic(repo.lease_path(name), json.dumps(lease, indent=2) + "\n")
+    print(path, flush=True)
+    return 0
+
+
+# ── rm and gc ────────────────────────────────────────────────────────────────────────────────
+
+
+def branch_exists(repo, branch):
+    return git(repo.main, "rev-parse", "-q", "--verify", f"refs/heads/{branch}").returncode == 0
+
+
+def blockers(repo, lease):
+    """Every reason not to remove this worktree (AC 9). Empty list: safe to remove."""
+    out, path = [], lease["path"]
+    branch, base = lease["branch"], lease["base"]
+    if branch_exists(repo, branch) and \
+            git(repo.main, "merge-base", "--is-ancestor", branch, base).returncode != 0:
+        out.append(f"branch {branch} is not merged into {base}")
+    if not os.path.isdir(path):
+        return out
+    head = git(path, "rev-parse", "-q", "--verify", "HEAD").stdout.strip()
+    if head and git(repo.main, "merge-base", "--is-ancestor", head, base).returncode != 0 \
+            and not (branch_exists(repo, branch) and
+                     git(repo.main, "rev-parse", branch).stdout.strip() == head):
+        out.append(f"the worktree's HEAD {head[:12]} is not merged into {base}")
+    done = git(path, "status", "--porcelain", "-z", "--untracked-files=all")
+    if done.returncode != 0:
+        return out + [f"git status failed in {path}: {done.stderr.strip()}"]
+    toks, i = done.stdout.split("\0"), 0
+    while i < len(toks):
+        tok = toks[i]
+        i += 1
+        if not tok:
+            continue
+        xy, rel = tok[:2], tok[3:]
+        if xy[0] in "RC":
+            i += 1  # -z puts a rename's old path in the next field
+        own = lease.get("files", {}).get(rel)
+        if xy == "??" and own and sha256(os.path.join(path, rel)) == own:
+            continue  # agent-ws's own untouched pointer file
+        out.append(f"uncommitted or untracked: {xy} {rel}")
+    found = ct.processes_in(path)
+    for pid, cmd in (found[0] if found else []):
+        out.append(f"process {pid} runs inside: {cmd}")
+    return out
+
+
+def remove_build_dir(build):
+    if not build:
+        return
+    if not os.path.lexists(build):
+        print(f"build folder {build}: already gone (reboot?)", flush=True)
+        return
+    st = os.lstat(build)
+    base = os.path.dirname(os.path.dirname(build))
+    if os.path.realpath(build) != os.path.join(os.path.realpath(os.path.dirname(build)),
+                                               os.path.basename(build)) or stat.S_ISLNK(st.st_mode) or st.st_uid != os.getuid() \
+            or os.path.basename(base) != f"agent-ws-{os.getuid()}" or fstype(build) != "tmpfs":
+        raise Refused(f"build folder {build} is not agent-ws's own private folder: left in place")
+    shutil.rmtree(build)
+    print(f"removed build folder {build}", flush=True)
+
+
+def remove(repo, lease):
+    path = lease["path"]
+    listed = {os.path.realpath(p) for p, _ in ct.worktrees(repo.main)}
+    if os.path.isdir(path):
+        saved = {}
+        for rel in lease.get("files", {}):
+            full = os.path.join(path, rel)
+            if not os.path.isfile(full):
+                continue  # the user deleted it: nothing to put back
+            with open(full, "rb") as f:
+                saved[rel] = f.read()
+            os.unlink(full)
+            try:
+                os.rmdir(os.path.dirname(full))  # only when agent-ws left it empty
+            except OSError:
+                pass
+        done = git(repo.main, "worktree", "remove", path)
+        if done.returncode != 0:
+            for rel, data in saved.items():
+                os.makedirs(os.path.dirname(os.path.join(path, rel)), exist_ok=True)
+                with open(os.path.join(path, rel), "wb") as f:
+                    f.write(data)
+            raise Refused(f"git worktree remove failed: {done.stderr.strip()}")
+        print(f"removed worktree {path}", flush=True)
+    elif os.path.realpath(path) in listed:
+        raise Refused(f"worktree folder {path} is missing; run `git worktree prune`, then run again")
+    branch = lease["branch"]
+    if branch_exists(repo, branch):
+        done = git(repo.main, "branch", "-d", branch)
+        if done.returncode != 0:
+            raise Refused(f"git branch -d failed: {done.stderr.strip()}")
+        print(f"deleted branch {branch}", flush=True)
+    remove_build_dir(lease.get("build_dir"))
+    os.unlink(repo.lease_path(lease["name"]))
+
+
+def cmd_rm(args):
+    if len(args) != 1:
+        raise Refused("usage: rm <name|path>")
+    repo = Repo(os.getcwd())
+    lease = repo.find(args[0])
+    if lease is None:
+        raise Refused(f"no agent-ws lease for {args[0]} (agent-ws removes only worktrees it made)")
+    why = blockers(repo, lease)
+    if why:
+        raise Refused(f"{lease['name']}: nothing removed:\n  " + "\n  ".join(why))
+    remove(repo, lease)
+    return 0
+
+
+def cmd_gc(args):
+    if args not in ([], ["--dry-run"]):
+        raise Refused("usage: gc [--dry-run]")
+    dry, rc = bool(args), 0
+    repo = Repo(os.getcwd())
+    leased, used = set(), 0
+    for lease in repo.all_leases():
+        name = lease.get("name", "?")
+        leased.add(os.path.realpath(lease.get("path", "")))
+        build = lease.get("build_dir")
+        if dry and build and os.path.isdir(build):
+            for d, _, fs in os.walk(build):
+                for f in fs:
+                    try:  # a running cargo build adds and deletes files while we count
+                        if not os.path.islink(os.path.join(d, f)):
+                            used += os.path.getsize(os.path.join(d, f))
+                    except OSError:
+                        pass
+        if owner_alive(lease):
+            print(f"kept {name}: owner {lease['owner_pid']} alive", flush=True)
+            continue
+        why = blockers(repo, lease)
+        if why:
+            print(f"refused {name}: owner gone, but nothing removed:\n  " + "\n  ".join(why), flush=True)
+            rc = 1
+            continue
+        if dry:
+            print(f"would remove {name}: owner gone, merged and clean", flush=True)
+            continue
+        try:
+            remove(repo, lease)
+        except Refused as exc:
+            print(f"refused {name}: {exc}", flush=True)
+            rc = 1
+    for path, branch in ct.worktrees(repo.main):
+        if os.path.realpath(path) not in leased:
+            print(f"skipped {path}: no lease (not made by agent-ws)", flush=True)
+    if dry:
+        print(f"tmpfs build folders of this repo hold {used / 1024 ** 2:.0f} MB", flush=True)
+    return rc
+
+
+# ── run ──────────────────────────────────────────────────────────────────────────────────────
+
+
+def state_dir():
+    return os.environ.get("AGENT_WS_STATE_DIR") or os.path.join(
+        os.environ.get("XDG_STATE_HOME") or os.path.join(os.path.expanduser("~"), ".local", "state"),
+        "agent-ws")
+
+
+def lease_for_cwd():
+    try:
+        repo = Repo(os.getcwd())
+    except Refused:
+        return None
+    here = os.path.realpath(os.getcwd())
+    for lease in repo.all_leases():
+        p = os.path.realpath(lease.get("path", ""))
+        if here == p or here.startswith(p + os.sep):
+            return lease
+    return None
+
+
+def ensure_build_dir(build):
+    """After a reboot the tmpfs folder is gone: re-create the private chain (0700, not a symlink,
+    owned by the user) before cargo makes it with open permissions."""
+    base = os.path.dirname(os.path.dirname(build))
+    for d in (base, os.path.dirname(build), build):
+        why = private_dir(d)
+        if why:
+            raise Refused(f"build folder not safe: {why}")
+
+
+def build_env(lease):
+    env = dict(os.environ)
+    if lease:  # AC 18: each worktree its own target, whatever CARGO_TARGET_DIR the caller had
+        build = lease.get("build_dir")
+        if build:
+            ensure_build_dir(build)
+        env["CARGO_TARGET_DIR"] = build or os.path.join(lease["path"], "target")
+    return env
+
+
+def slots():
+    try:
+        return max(0, int(os.environ.get("AGENT_BUILD_SLOTS", "") or 0))
+    except ValueError:
+        err("AGENT_BUILD_SLOTS is not a number: queue off")
+        return 0
+
+
+def take_slot(n):
+    folder = os.path.join(state_dir(), "slots")
+    os.makedirs(folder, mode=0o700, exist_ok=True)
+    waited = False
+    while True:
+        for i in range(n):
+            fd = os.open(os.path.join(folder, f"slot.{i}"), os.O_RDWR | os.O_CREAT | os.O_CLOEXEC, 0o600)
+            try:
+                fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError:
+                os.close(fd)
+                continue
+            if waited:
+                err(f"got build slot {i}")
+            return i, fd
+        if not waited:
+            err(f"waiting for build slot (all {n} busy)")
+            waited = True
+        time.sleep(0.2)
+
+
+def cmd_run(args):
+    if args[:1] == ["--"]:
+        args = args[1:]
+    if not args:
+        raise Refused("usage: run [--] <command> [args...]")
+    env = build_env(lease_for_cwd())
+    n = slots()
+    if n == 0 or "AGENT_WS_SLOT" in os.environ:  # queue off, or nested inside a slot (G1a)
+        os.nice(19)
+        try:
+            os.execvpe(args[0], args, env)
+        except OSError as exc:
+            err(f"{args[0]}: not found or not runnable ({exc.strerror})")
+            return 127
+    i, fd = take_slot(n)
+    env["AGENT_WS_SLOT"] = str(i)
+    try:
+        # G1b: the lock fd is O_CLOEXEC and close_fds is on, so no child holds the slot.
+        # G1c: the command leads its own process group; a watcher kills the group if this
+        # wrapper dies without saying "done" (kill -9 included).
+        child = subprocess.Popen(args, env=env, start_new_session=True, preexec_fn=lambda: os.nice(19))
+    except OSError as exc:
+        err(f"{args[0]}: not found or not runnable ({exc.strerror})")
+        return 127
+    rd, wr = os.pipe()
+    subprocess.Popen([sys.executable, "-I", os.path.abspath(__file__), "_watch", str(child.pid)],
+                     stdin=rd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                     start_new_session=True)
+    os.close(rd)
+
+    def forward(signum, _frame):
+        try:
+            os.killpg(child.pid, signum)
+        except ProcessLookupError:
+            pass
+    for sig in (signal.SIGINT, signal.SIGTERM, signal.SIGHUP):
+        signal.signal(sig, forward)
+    rc = child.wait()
+    try:
+        os.write(wr, b"done")
+    except BrokenPipeError:
+        pass  # the watcher is gone already; nothing left to stop
+    os.close(wr)
+    os.close(fd)
+    return rc if rc >= 0 else 128 - rc
+
+
+def cmd_watch(args):
+    """Internal: block until the wrapper's pipe closes; without "done", kill the build's group."""
+    pgid = int(args[0])
+    if sys.stdin.buffer.read() == b"done":
+        return 0
+    for sig in (signal.SIGTERM, signal.SIGKILL):
+        try:
+            os.killpg(pgid, sig)
+        except ProcessLookupError:
+            return 0
+        time.sleep(0.3)
+    return 0
+
+
+# ── Claude Code hooks (registered in a project's .claude/settings.local.json: docs/agent-ws.md) ──
+
+
+def read_event():
+    try:
+        event = json.load(sys.stdin)
+    except ValueError:
+        raise Refused("hook input is not JSON")
+    if not isinstance(event, dict):
+        raise Refused("hook input is not a JSON object")
+    if event.get("cwd"):
+        os.chdir(event["cwd"])
+    if event.get("session_id"):
+        os.environ["CLAUDE_SESSION_ID"] = str(event["session_id"])
+    return event
+
+
+def cmd_hook_create(_args):
+    """WorktreeCreate: the absolute path is the last stdout line; all else goes to stderr;
+    exit 1 fails the creation."""
+    event = read_event()
+    name = re.sub(r"[^A-Za-z0-9._-]+", "-", str(event.get("name") or "")).strip(".-")[:64]
+    repo = Repo(os.getcwd())
+    lease = repo.find(name) if name else None
+    if lease and os.path.isdir(lease["path"]):
+        err(f"reusing worktree {lease['path']}")
+        print(lease["path"], flush=True)
+        return 0
+    return cmd_new([name])
+
+
+def cmd_hook_remove(_args):
+    """WorktreeRemove: the same refusal rules as rm; a refusal leaves the worktree, exit 1."""
+    event = read_event()
+    path = event.get("worktree_path")
+    if not path:
+        raise Refused("hook input has no worktree_path")
+    return cmd_rm([os.path.abspath(path)])
+
+
+def cmd_hook_env(_args):
+    """SessionStart: export the profile through $CLAUDE_ENV_FILE (it reaches subagents too, C1).
+    It never exports CARGO_TARGET_DIR: subagents share it, and two worktrees must never share a
+    target (R5). It also re-creates this repo's private tmpfs folders after a reboot. Always
+    exit 0, no stdout."""
+    try:
+        read_event()
+    except Refused:
+        pass
+    env_file = os.environ.get("CLAUDE_ENV_FILE")
+    if env_file:
+        with open(env_file, "a") as f:
+            f.write(f"export AGENT_WS_BIN={shlex.quote(os.path.abspath(__file__))}\n")
+    try:
+        for lease in Repo(os.getcwd()).all_leases():
+            if lease.get("build_dir"):
+                try:
+                    ensure_build_dir(lease["build_dir"])
+                except (Refused, OSError) as exc:
+                    err(f"{lease.get('name')}: {exc}")
+    except Refused:
+        pass
+    return 0
+
+
+COMMANDS = {"new": cmd_new, "rm": cmd_rm, "gc": cmd_gc, "run": cmd_run, "_watch": cmd_watch,
+            "hook-create": cmd_hook_create, "hook-remove": cmd_hook_remove, "hook-env": cmd_hook_env}
+
+
+def main(argv):
+    if len(argv) < 2 or argv[1] not in COMMANDS:
+        print(__doc__, file=sys.stderr)
+        return 1
+    try:
+        return COMMANDS[argv[1]](argv[2:])
+    except Refused as exc:
+        err(f"refused: {exc}")
+        return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv))

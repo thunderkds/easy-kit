@@ -85,14 +85,14 @@ User, 2026-11-24, on the Claude Docs plan "Shared Build Base for Multi-Agent Wor
 - Plan Phase 4 shims on `PATH` and `agent-ws stats` — follow-up ticket (`gc` is pulled INTO this ticket, see G2).
 - Native Windows (PowerShell). Linux first; WSL2 later.
 
-**Requirement Refs**: none in `PRD.md` yet — add an FR at Stage 2 sign-off.
+**Requirement Refs**: `docs/prd/PRD_agent-ws.md` FR-001 (the kit has no single `PRD.md`: `PROJECT_SPEC.md` `## Readiness` "the kit has per-feature PRDs in `docs/prd/`").
 
 ### Requirement Fidelity Gate (sign off BEFORE implementation)
 
 - [x] Restated intent confirmed to match the user's request (user, 2026-11-25: "yes, confirmed")
-- [ ] Domain terms align with `PROJECT_SPEC.md` glossary — **open, do first on the run**: add rows for *lease*, *build slot*, *build folder (tmpfs)* and *base worktree*; `grill-with-docs` only if the wording is disputed
+- [x] Domain terms align with `PROJECT_SPEC.md` glossary — rows *Lease*, *Build slot*, *Build folder (tmpfs)*, *Base worktree* added 2026-11-25 (auto (Supervisor), run step 1)
 - [x] Every Acceptance Criterion below traces to a line in the Requirement (Supervisor check 2026-11-25: each AC row names its source in the "Traces" column)
-- [ ] All Requirement Refs exist in `PRD.md` and are fully covered by the Acceptance Criteria above — **open, do first on the run**: the guide names none; add one FR to `PRD.md` (worktree + build-folder tooling) and put it in `Requirement Refs`
+- [x] All Requirement Refs exist and are fully covered by the Acceptance Criteria above — `docs/prd/PRD_agent-ws.md` FR-001 → AC 1–19 (auto (Supervisor), 2026-11-25)
 - [x] Decisions D1–D3 (below) answered by the user (2026-11-24)
 - [x] **Revised restated intent and the revised Acceptance Criteria confirmed by the user** (user, 2026-11-25: "yes, confirmed, let note all in the guide, I will run later")
 
@@ -360,7 +360,7 @@ Queue modes (R7, R8) wrap the command: 1 slot `flock -o $W/locks/slot.0 cargo �
 | 11 | On a filesystem where a reflink probe fails, `new` seeds nothing and says so on stderr | S1 |
 | 12 | With the queue on, `agent-ws run` prints `waiting for build slot` on stderr while queued | S4 |
 | 13 | A SessionStart hook exports the profile environment through `$CLAUDE_ENV_FILE` | C1 |
-| 14 | **tmpfs build folder by default**: after `agent-ws new`, a `cargo build` in the worktree writes `target/` under the tmpfs folder `<mount>/agent-ws-<uid>/<name>/` (checked with `stat -f -c %T` = `tmpfs`), not into the worktree. The folder is `0700`, owned by the user, never a symlink (D4) | R9, R10, D3, D4 |
+| 14 | **tmpfs build folder by default**: after `agent-ws new`, a `cargo build` in the worktree writes `target/` under the tmpfs folder `<mount>/agent-ws-<uid>/<repo id>/<name>-<token>/` (path widened 2026-11-25 by the Edge Case rows "two repos with the same worktree name" and the R5 no-reuse rule: `TASK_REVIEW_T345.md` decision 6; checked with `stat -f -c %T` = `tmpfs`), not into the worktree. The folder is `0700`, owned by the user, never a symlink (D4) | R9, R10, D3, D4 |
 | 15 | **tmpfs fallback**: when no tmpfs exists or free space is under 4 GB, `new` uses an on-disk `target/` and says so on stderr; it never fails creation for this reason | R10 cost list |
 | 16 | `rm` and `gc` remove the worktree's tmpfs folder only after AC 9's checks pass; after a reboot (tmpfs gone) a `cargo build` recreates it and `gc` raises no error | R10, G2b |
 | 17 | `agent-ws run` runs the command under `nice -n 19` and never under `ionice` (no effect on `mq-deadline`) | R9 |
@@ -381,7 +381,7 @@ Queue modes (R7, R8) wrap the command: 1 slot `flock -o $W/locks/slot.0 cargo �
 | 4 | 8 parallel `agent-ws new` | 8 worktrees, exit 0 each | automated test |
 | 5 | worktree with unmerged commit, dead lease PID; `agent-ws gc` | worktree and branch still there, exit 1, reason printed | automated test |
 | 6 | merged, clean worktree, dead lease PID; `agent-ws gc` | worktree and branch gone | automated test |
-| 7 | worktree from `agent-ws new` with a tmpfs available; `cargo build` of a 1-file crate with no dependencies | `target/` is under `<mount>/agent-ws-<uid>/<name>/`, `stat -f -c %T` prints `tmpfs`, worktree has no `target/` | automated test |
+| 7 | worktree from `agent-ws new` with a tmpfs available; `cargo build` of a 1-file crate with no dependencies | `target/` is under `<mount>/agent-ws-<uid>/<repo id>/<name>-<token>/`, `stat -f -c %T` prints `tmpfs`, worktree has no `target/` | automated test |
 | 8 | same, but the tmpfs candidates are forced absent (test seam) | stderr says on-disk `target/`; creation exit 0 | automated test |
 | 9 | merged, clean worktree with a tmpfs folder; `agent-ws rm` | worktree, branch and tmpfs folder gone; same call on an unmerged branch leaves all three | automated test |
 | 10 | two worktrees, one with a marker string in `src/lib.rs`; build both with `agent-ws` env | each artifact holds only its own source (the shared-target stale build of R5 cannot happen) | automated test |
@@ -418,6 +418,7 @@ python3 -m pytest .claude/hooks/tests/test_agent_ws_t345.py -q
 - tmpfs for non-Rust build folders (`node_modules`, `.venv`, Maven `target/`) — not measured; follow-up.
 - tmpfs plus an on-disk sccache to win back cold-build time; `vm.dirty_*` tuning; BFQ — not tested (R10).
 - A shared `CARGO_TARGET_DIR` for dependencies — unsafe across different code (R5); the safe form (shared dependency cache only) needs its own experiment.
+- Shipping the hooks to installed projects (`.claude/settings.json`, `hooks/hooks.json` with its 15-hook parity test, `MANIFEST`, a `.claude/hooks/` wrapper so `merge-settings.py` owns the entry, a non-Linux and no-tmpfs fallback, the plugin's guarded double registration) — follow-up ticket (Debate 2026-11-25).
 - Pruning old accumulated `target/` folders of existing worktrees (the 80 GB): `gc` covers worktrees `agent-ws` made; the existing `easy-note-mcp-*` folders are not touched by this ticket.
 
 Build folder (D3, D4): `new` picks the tmpfs folder by the D4 rule, creates `<mount>/agent-ws-<uid>/<name>/` and points the worktree's build tool at it. For Rust the pointer is the worktree's untracked `.cargo/config.toml` (`[build] target-dir`), so it works without a wrapper; `agent-ws run` also sets `CARGO_TARGET_DIR` for the command. The mechanism is decided at implementation; AC 14 and Success Criterion 7 fix the observable result. Node, Maven and Python build folders are not moved (cut list).
@@ -451,12 +452,12 @@ Queue (opt-in): one lock file per slot under the shared cache folder; acquire wi
 | File | Change |
 |------|--------|
 | `scripts/agent_ws.py` (new; Python 3, D1) | `new`, `run`, `rm`, `gc`; tmpfs build folder (D4) |
-| `.claude/hooks/worktree_create.py` (new) | `WorktreeCreate` → `agent-ws new` |
-| `.claude/hooks/worktree_remove.py` (new) | `WorktreeRemove` → `agent-ws rm` |
-| `.claude/settings.json` | register the two hooks; SessionStart env export |
+| ~~`.claude/hooks/worktree_create.py`, `worktree_remove.py`, `.claude/settings.json`~~ | **Changed by the 2026-11-25 Debate (`## Questions Log`)**: the hook handlers are `agent_ws.py hook-create`, `hook-remove`, `hook-env`; they are registered only in a project's untracked `.claude/settings.local.json` (snippet in `docs/agent-ws.md`). Nothing under `.claude/hooks/`, `.claude/settings.json`, `hooks/hooks.json` or `MANIFEST` changes, so nothing ships to installed projects |
+| `docs/agent-ws.md` (new) | usage, the settings snippet, limits |
+| `docs/prd/PRD_agent-ws.md` (new), `PROJECT_SPEC.md` glossary | run step 1 (gate bookkeeping) |
 | `.claude/hooks/tests/test_agent_ws_t345.py` (new) | Success Criteria 1–6 |
 | `docs/claude-md/pipeline-stages.md` | worktree creation and cleanup step names `agent-ws` |
-| Pre-existing pin tests | To fill before work: grep `.claude/hooks/tests/` and `tests/` for `settings.json` hook lists and `pipeline-stages.md` text; check `test_agent_guide_dedup.py`, `test_vital_slice.py` and the memory budget tests. |
+| Pre-existing pin tests | Filled 2026-11-25. `tests/test_plugin_package.py:21,44-45` pins `settings.json` = `hooks/hooks.json`, 15 hooks, each a `/.claude/hooks/<x>.py` path; `tests/test_plugin_source.py:73-76` needs a plugin copy of every `.claude/hooks/*.py`; `.claude/hooks/tests/test_memory_hook_note_truthfulness.py:78` and `test_t317_session_tags.py:553` scan every `.claude/hooks/*.py`; `lib/merge-settings.py:13-17` owns only `.claude/hooks/` entries. The Debate's option C touches none of these. `pipeline-stages.md` is read by 25 tests (`grep -rln pipeline-stages.md tests/ .claude/hooks/tests/`): run the full suite after its edit. |
 
 ## Files Must NOT Touch
 
@@ -483,3 +484,12 @@ Unit tests for the queue (Success Criteria 1–3) and lifecycle (4–6) in a tem
 - [ ] `Skill({ skill: "verify" })` run — feature confirmed working in running app
 - [ ] `memory/MEMORY.md` updated (if new patterns or feedback learned)
 - [ ] Supervisor notified: task ready for Stage 4 review
+
+---
+
+## Questions Log
+
+- 2026-11-25 DEBATE where do the `WorktreeCreate` / `WorktreeRemove` / SessionStart registrations go: shipped `.claude/settings.json` + `hooks/hooks.json` + `MANIFEST` (A), shipped behind an opt-in (B), or this repo only, untracked `.claude/settings.local.json` (C)? → C, handlers as `agent_ws.py` subcommands, no file under `.claude/hooks/` (Advocate 1: C — merge-settings would own a `scripts/` entry as the user's and never update it, `lib/merge-settings.py:13-17`; Advocate 2: C narrowest — `tests/test_plugin_package.py:21,44-45`, `MANIFEST:46` ships `.claude/hooks` whole; Advocate 3: C — a registered `WorktreeCreate` hook cannot pass through to git's default, so B is new code on every project) ⚠ decided for you — please review
+  - Not credited: this first run had no `resolve-question` Skill call and came before the task's first file change, so the Stop hook counts none of its Advocates (`.claude/hooks/stop_auto_mode_check.py` docstring, T287/T293). Rerun below as the Debate of record (same question, same prompts).
+- 2026-11-25 DEBATE (rerun, `resolve-question task=T345 risk=High`) same question → C (Advocate 1: C — also `tests/test_plugin_source.py:73` needs a plugin link for every `.claude/hooks/*.py`; Advocate 2: option 3, ship `agent_ws.py` and `.claude/hooks/` wrappers as dormant files in `MANIFEST`, register nothing — T125 rule `tests/test_memory_slice.py:3-6` "the script ships with the skill that runs it"; Advocate 3: C, as its HOW 1). Disagreement settled by written rules, not a stop (`docs/claude-md/tracks.md:568`): T125's rule binds only when something that calls the script ships, and under C nothing does; `tasks/TASK_GUIDE_T345.md:106` "D2 — board scope: this board"; `AGENTS.md` § Karpathy Engineering Principles, Surgical Changes "Touch only code required by the task" (no AC needs a `MANIFEST` change: target repos call the script by absolute path, `docs/agent-ws.md`) ⚠ decided for you — please review (reports/question_T345_20261125T110444.html)
+
