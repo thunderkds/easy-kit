@@ -412,6 +412,8 @@ Mode: auto
 - AFTER: `python3 -m pytest -q -p no:cacheprovider .claude/hooks/tests/test_t247_auto_span_entries.py .claude/hooks/tests/test_stop_auto_mode_check.py` → `107 passed in 9.10s`
 - Neighbours (after): `test_stop_auto_mode_check.py` `87 passed`; `test_t310_admin_unsure_stop.py` `18 passed`; `test_t317_fix_round.py` `28 passed`; `test_t317_loop_binding.py` `5 passed`; `test_t317_session_tags.py` `137 passed`; `test_stop_attribution_t287.py` `25 failed, 112 passed` — the same 25 fail at HEAD (`25 failed, 112 passed`), so not from this change. No `test_t229*` file exists in `.claude/hooks/tests/`
 - Other callers of `request_text` in `stop_auto_mode_check.py`: only `auto_windows` (line 182); its reading is the one that changes
+- verify: ☑ pass — auto-run by hook, session a0ed916d-7cef-4cc6-9166-6260404cf354, commit 273e2d8cdc68d936933362d8498269662e90ac10, log .claude/verify-runs/T247-273e2d8cdc68.log
 **Memory:** nothing new
 **Files:** `.claude/hooks/stop_auto_mode_check.py` (local `request_text` reader, `__main__` guard), `tasks/MINIMAL_LOG.md`
-**Not done:** merge (admin: after the auto verify pass); auto verify: running (T182)
+**Not done:** merge (admin: after the auto verify pass); auto verify: ☑ pass (session a0ed916d-7cef-4cc6-9166-6260404cf354, commit 273e2d8cdc68d936933362d8498269662e90ac10, log .claude/verify-runs/T247-273e2d8cdc68.log)
+Closed: row moved to Done 2026-11-25 — auto verify pass (session a0ed916d-7cef-4cc6-9166-6260404cf354, commit 273e2d8cdc68d936933362d8498269662e90ac10); Gates 5 and 6 checked
