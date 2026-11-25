@@ -615,14 +615,15 @@ def folder_hits(command, cwd, roots, patterns):
     for segment in SEGMENT_BOUNDARY_PATTERN.split(text):
         words = [re.split(r"\d*[<>]", w, 1)[0].strip("\"'()") for w in segment.split()]
         words = [w for w in words if w and not w.startswith(("<", ">", "2>", "&>"))]
-        verb, args = _segment_command(words)
-        if verb in DIR_CHANGE_COMMANDS:
-            target = next((a for a in args if not a.startswith("-")), None)
+        if words and words[0] in DIR_CHANGE_COMMANDS:
+            # Only a bare `cd`/`pushd` moves the shell's folder: a wrapped one (`sudo cd`,
+            # `nice -n 5 cd`) runs in a child and changes nothing (T374 round 2).
+            target = next((a for a in words[1:] if not a.startswith("-")), None)
             where = os.path.normpath(os.path.join(where, os.path.expanduser(target))) if target else where
             continue
-        readings = [(verb, args)]
+        readings = [_segment_command(words)]
         plain = _segment_command(words, skip_values=False)
-        if plain != (verb, args):
+        if plain != readings[0]:
             readings.append(plain)
         targets = [a for v, rest in readings if v in FOLDER_VERBS for a in _folder_arguments(v, rest)]
         for arg in dict.fromkeys(targets):  # each folder once: both readings share the walk budget

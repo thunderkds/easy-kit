@@ -58,3 +58,49 @@ Checked, no finding:
 | `test_n1_header_names_xargs_and_find_exec_sh` | deleting `xargs` or `find -exec sh -c` from the header's Recorded limitations |
 | `test_n2_the_budget_is_shared_by_every_folder_of_the_call` | a fresh budget per folder (`[_walk_cap()]` at the `held_sensitive_path` call) |
 | `test_n2_folders_count_against_the_budget` | `budget[0] -= len(files)` (folders not counted) |
+
+---
+
+## Round 2 (Reviewer: T374, commit 1bbbf065)
+
+Verdict: **PASS with one P2 to fix** (G1). Round-1 F1-F4 are fixed. Confidence >= 75 for G1.
+
+### Round-1 findings, checked with the real hook as a subprocess
+
+Scratch kit project (`config/.env`, `cd/.env`, `build/`), the T363-branch hook against the 1bbbf065 hook, 718 commands: every `PREFIX_VALUE_OPTIONS` wrapper and option (and `env -S/--split-string`, `command`, `nohup`) with a value, with the command right after the option, `--opt=VAL`, and unknown `-x`, each over `rm -rf config`, `rm -rf cd`, `ls config`, `rm -rf build`, `cat config/.env`.
+
+| Round-1 | Result |
+|---|---|
+| F1 `env -S rm -rf config` / `--split-string` | fixed: asks (old asked too) |
+| F2 `sudo -h rm -rf config` | fixed: asks |
+| F3 `timeout --signal KILL 5 rm -rf config` | fixed: asks, now in the test tuple |
+| F4 `sudo -R/-T`, `env -P/-a`, `time -o/-f`, `exec -a` | fixed: ask with a value and with the command right after the option |
+| New ask on an ordinary command | none: `ls config`, `rm -rf build` stay silent for every form; the only new asks are the `OPT VALUE rm -rf config` forms the task wants |
+| Old ask, now silent | **38 commands, all one cause (G1)** |
+
+### Findings
+
+| ID | Sev | Where | Finding | One-line fix |
+|----|-----|-------|---------|--------------|
+| G1 | P2 | `.claude/hooks/pre_tool_sensitive_path.py` `folder_hits`: the `if verb in DIR_CHANGE_COMMANDS: ... continue` runs on the skipping reading only, before the plain reading is built | The "no command the T363 hook asked on is now silent" claim is false for `cd`/`pushd`. When the skipping reading lands on `cd`, the segment is taken as a directory change and the plain reading is never judged. (a) `sudo -u rm -rf cd`, and the same for every table option of sudo/env/nice/time/exec (`env -C rm -rf cd`, `nice -n rm -rf cd`, ...): old ask, now silent, for a folder named `cd` or `pushd` that holds a sensitive path. (b) `nice -n 5 cd x && rm -rf config` and `sudo -u root cd cd; rm -rf config`: old ask, now silent, because the later segment is resolved against a moved `where` (`cd` under a wrapper does not change the shell's folder). Contrived (a folder named `cd`; `cd` behind a wrapper) but a fail-open in a High-risk hook, and the round-1 fix exists to rule it out. No test covers it. | Build `readings` first and apply the `cd` shift only when the plain reading is also a `cd` (else judge both readings and leave `where` alone); add `sudo -u rm -rf cd` and `nice -n 5 cd x && rm -rf config` to `test_r1_...` |
+| G2 | P3 | `test_t374_folder_rule_followups.py` `test_r1_...` | Weak pin: dropping the plain reading turns only the `sudo -h rm -rf config` subtest red (every other row is also caught by the table). Putting `-S` back in the `env` table stays green (the plain reading catches it), so the `-S` removal itself is not pinned. Fine as a safety net. | Add one row whose option is in no table (`sudo --nonsense-opt rm -rf config`) |
+
+Checked, no finding: the exception path and `i += 2` past the end (loop just ends); both readings share one walk budget and one folder list (`dict.fromkeys`), so a wrapper form never spends the budget twice; the hook still only reads the string and runs nothing from it; the header names `xargs`, `find -exec sh -c`, `env -S "..."`.
+
+### Test-to-mutation map for `test_r1_a_wrong_or_missing_table_entry_never_hides_the_command` (scratch copy only, worktree untouched)
+
+| Change | Result |
+|---|---|
+| Delete the `if plain != (verb, args): readings.append(plain)` lines (the second reading) | RED: 1 subtest, `sudo -h rm -rf config` (the other 8 rows are caught by the table) |
+| Read every segment without the skips (`skip_values=False` on the first read) | RED: 12 failed in the file |
+| Start `readings` empty (plain reading only) | RED: 19 failed |
+| `-S` back into the `env` table, second reading kept | green (the second reading covers it; not pinned) |
+
+### Evidence
+
+Verification Command in the worktree (the five guide files, no full suite):
+
+```
+$ python3 -m pytest -q -p no:cacheprovider .claude/hooks/tests/test_t374_folder_rule_followups.py .claude/hooks/tests/test_t363_folder_level.py .claude/hooks/tests/test_pre_tool_sensitive_path.py .claude/hooks/tests/test_t316_list_self_protect.py .claude/hooks/tests/test_t314_fix_round.py
+80 passed, 114 subtests passed in 8.17s
+```

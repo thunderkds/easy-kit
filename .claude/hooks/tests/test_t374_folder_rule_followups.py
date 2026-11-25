@@ -62,6 +62,17 @@ class FollowUps(FixRoundTest):
             with self.subTest(command=cmd):
                 self.assert_ask(self.pre("Bash", cmd))
 
+    def test_r2_a_cd_behind_a_wrapper_neither_hides_nor_moves(self):
+        """Round 2 (G1, G2): only a bare `cd`/`pushd` moves the folder later segments resolve
+        against (a wrapped `cd` does not change the shell's folder), and a reading that lands on
+        `cd` does not stop the other reading from being judged."""
+        self.write("cd/.env", "KEY=1\n")
+        for cmd in ("sudo -u rm -rf cd", "env -C rm -rf cd", "nice -n 5 cd x && rm -rf config",
+                    "sudo -u root cd cd; rm -rf config", "sudo --nonsense-opt rm -rf config"):
+            with self.subTest(command=cmd):
+                self.assert_ask(self.pre("Bash", cmd))
+        self.assert_ask(self.pre("Bash", "cd config && rm -rf ."))  # a bare cd still moves
+
     def test_n1_timeout_on_a_reading_command_stays_silent(self):
         self.assert_silent(self.pre("Bash", "timeout -s KILL 5 ls config"))
 
