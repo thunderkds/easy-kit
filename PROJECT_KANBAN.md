@@ -103,6 +103,7 @@
 
 
 ### In Progress
+- [ ] **T367** — CI fails on `main` (v2.3.0, run 45570715182): `tests/test_pack_catalog.sh` `install_both` sends no answer to T353's Linux-only agent-ws question, so `Proceed?` gets none (`10 passed, 6 failed`) | common-infrastructure | C0 | Risk: Low | P0 | Registered 2026-11-25, user: "seem like the Ci is fail also" | Guide: `tasks/TASK_GUIDE_T367.md` | Track: minimal | Record: tasks/MINIMAL_LOG.md | Depends on: T353 | Started 2026-11-25 [admin], worktree `../wt-t367`, branch `fix/t367-pack-catalog-agent-ws`
 
 
 
