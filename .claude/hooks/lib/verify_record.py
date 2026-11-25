@@ -86,6 +86,7 @@ TEST_FILE = re.compile(r"test_[A-Za-z0-9_.-]*\.py")
 TEST_FIXTURES = ("tests/fixtures/",)
 TEST_EXCEPT_NAMES = ("conftest.py", "merge_gate_guard.py")
 TEST_EXCEPT_DIRS = ("tests/lib/",)
+SHELL_SUITE = re.compile(r"test_[A-Za-z0-9_.-]*\.sh")  # T368: a suite `/verify` is asked to run
 SAFE_PATH = re.compile(r"[A-Za-z0-9._/-]+")  # used with fullmatch: `$` would let a trailing newline in
 MAX_PATH_BYTES = 200
 BASE_REF = "refs/heads/main"  # the branch a task branch is judged against: `main`, as the admin push rule
@@ -204,6 +205,47 @@ def _raw_diff(checkout, base, tip):
             return None
         paths.append(path)
     return sorted(set(paths))
+
+
+def _safe_path(path):
+    """The name checks `docs_only_path` starts with: a plain relative path of safe characters."""
+    return (isinstance(path, str) and 0 < len(path) <= MAX_PATH_BYTES and bool(SAFE_PATH.fullmatch(path))
+            and not path.startswith("/") and not any(part in ("", ".", "..") for part in path.split("/")))
+
+
+def shell_suites_changed(checkout, tip):
+    """T368: the sorted `test_*.sh` suites under `tests/` or `.claude/hooks/tests/` (never `tests/lib/`)
+    that the branch at `tip` adds or modifies since it left `main`, as regular files with safe names,
+    so the `/verify` request can ask for a real run of each (a `.sh` file is never docs-only, T289).
+    [] on any doubt (a bad sha, no `main`, two merge-bases, an unreadable range). Never raises."""
+    try:
+        if not isinstance(tip, str) or not SHA_PATTERN.match(tip):
+            return []
+        bases = _git(checkout, "merge-base", "--all", BASE_REF, tip).split()
+        if len(bases) != 1 or not SHA_PATTERN.match(bases[0]):
+            return []
+        out = _git(checkout, "diff", "--raw", "-z", "--no-abbrev", "--no-renames", "--no-ext-diff",
+                   "--no-textconv", "--ignore-submodules=none", bases[0], tip)
+        tokens = out.split("\0")
+        if tokens and tokens[-1] == "":
+            tokens.pop()
+        if len(tokens) % 2:
+            return []
+        found = []
+        for meta, path in zip(tokens[0::2], tokens[1::2]):
+            record = RAW_RECORD.match(meta)
+            if not record:
+                continue
+            _old_mode, new_mode, status = record.groups()
+            if status not in ("A", "M") or new_mode not in REGULAR_MODES or not _safe_path(path):
+                continue
+            if not path.startswith(TEST_DIRS) or path.lower().startswith(TEST_EXCEPT_DIRS):
+                continue
+            if SHELL_SUITE.fullmatch(path.rsplit("/", 1)[-1]):
+                found.append(path)
+        return sorted(found)
+    except Exception:
+        return []
 
 
 def docs_only_change(checkout, tip):
