@@ -3,7 +3,10 @@
 .claude/settings.json without disturbing anything the user added (T111, ADR-0002).
 
 Usage:
-    python3 lib/merge-settings.py <upstream-settings.json> <project-settings.json> <project-root>
+    python3 lib/merge-settings.py <upstream-settings.json> <project-settings.json> <project-root> [<overlay.json>]
+
+    <overlay.json> (T353): extra kit hook entries merged as if upstream shipped them. The
+    installer passes lib/agent-ws-hooks.json only when the project opted in to agent-ws.
 
 Exit codes:
     0  merged (the file was rewritten, or was already correct and left alone)
@@ -25,6 +28,12 @@ Ownership rule (Supervisor decision, TASK_GUIDE_T111 "Approach"):
 
     Every other entry belongs to the user: never modified, never reordered,
     never removed.
+
+    T353: an entry whose command names exactly `"$CLAUDE_PROJECT_DIR"/scripts/agent_ws.py`
+    (the form lib/agent-ws-hooks.json writes) is the kit's too, with path
+    `scripts/agent_ws.py`. So an opted-in project keeps it on every run, a run without the
+    overlay (the project answered No) drops it, and a missing script drops it. Any other
+    form, such as a hand-wired absolute path, stays the user's.
 
 Permissions (T148): the kit's `permissions.deny` entries are unioned into the
 project's `permissions.deny`, add-only — every project entry and every other
@@ -54,6 +63,7 @@ import sys
 import tempfile
 
 HOOK_PATH_RE = re.compile(r"\.claude/hooks/[^\s\"']+")
+AGENT_WS_RE = re.compile(r'"\$CLAUDE_PROJECT_DIR"/(scripts/agent_ws\.py)(?![^\s"\'])')
 
 
 def die(reason):
@@ -67,9 +77,13 @@ def hook_paths(group):
     for hook in group.get("hooks") or []:
         if not isinstance(hook, dict):
             continue
-        found = HOOK_PATH_RE.search(hook.get("command") or "")
+        command = hook.get("command") or ""
+        found = HOOK_PATH_RE.search(command)
         if found:
             paths.append(found.group(0))
+        found = AGENT_WS_RE.search(command)
+        if found:
+            paths.append(found.group(1))
     return paths
 
 
@@ -158,6 +172,21 @@ def merge_permission_denies(merged, upstream):
         merged["permissions"] = permissions
 
 
+def add_overlay(upstream, overlay):
+    """T353: the overlay's hook entries join upstream's, event by event."""
+    hooks = overlay.get("hooks")
+    if not isinstance(hooks, dict):
+        die('"hooks" in the overlay file is not an object')
+    combined = dict(upstream)
+    combined_hooks = dict(upstream.get("hooks") or {})
+    for event, groups in hooks.items():
+        if not isinstance(groups, list):
+            die('"hooks.%s" in the overlay file is not a list' % event)
+        combined_hooks[event] = list(combined_hooks.get(event) or []) + groups
+    combined["hooks"] = combined_hooks
+    return combined
+
+
 def merge(project, upstream, project_root):
     project_hooks = project.get("hooks")
     if project_hooks is None:
@@ -232,8 +261,8 @@ def write_atomic(path, content):
 
 
 def main(argv):
-    if len(argv) != 4:
-        die("usage: merge-settings.py <upstream> <project-settings> <project-root>")
+    if len(argv) not in (4, 5):
+        die("usage: merge-settings.py <upstream> <project-settings> <project-root> [<overlay>]")
     upstream_path, project_path, project_root = argv[1], argv[2], argv[3]
 
     if os.path.islink(project_path):
@@ -243,6 +272,8 @@ def main(argv):
         die("%s does not exist" % project_path)
 
     upstream, _ = load(upstream_path, "kit")
+    if len(argv) == 5:
+        upstream = add_overlay(upstream, load(argv[4], "overlay")[0])
     project, original = load(project_path, "project")
 
     merged = merge(project, upstream, project_root)
