@@ -475,3 +475,156 @@ def test_gc_cleans_lease_of_a_worktree_folder_deleted_by_hand(tmp_path, env):
     assert r.returncode == 0, r.stdout + r.stderr
     assert not os.path.exists(os.path.join(repo, ".git", "agent-ws", "leases", "g6.json"))
     assert "agent-ws/g6" not in branches(repo)  # merged (no commits): branch -d
+
+
+# ── Slice 3: run ─────────────────────────────────────────────────────────────────────────────
+
+
+def procs_matching(text):
+    out = []
+    for name in os.listdir("/proc"):
+        if name.isdigit():
+            try:
+                with open(f"/proc/{name}/cmdline", "rb") as f:
+                    if text in f.read().replace(b"\0", b" ").decode("utf-8", "replace"):
+                        out.append(int(name))
+            except OSError:
+                pass
+    return out
+
+
+def slot_free(env, i=0):
+    import fcntl
+    path = os.path.join(env["AGENT_WS_STATE_DIR"], "slots", f"slot.{i}")
+    if not os.path.exists(path):
+        return True
+    with open(path, "a") as f:
+        try:
+            fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            return True
+        except BlockingIOError:
+            return False
+
+
+def wait_for(cond, timeout):
+    end = time.time() + timeout
+    while time.time() < end:
+        if cond():
+            return True
+        time.sleep(0.05)
+    return cond()
+
+
+def test_queue_off_by_default_three_runs_overlap(tmp_path, env):  # SC 11, AC 8
+    t = time.time()
+    procs = [subprocess.Popen([sys.executable, SCRIPT, "run", "--", "sleep", "1"], cwd=tmp_path,
+                              env=env) for _ in range(3)]
+    assert [p.wait(timeout=10) for p in procs] == [0, 0, 0]
+    assert time.time() - t < 2
+
+
+def test_nested_run_inside_a_slot_does_not_deadlock(tmp_path, env):  # SC 1, AC 5
+    e = {**env, "AGENT_BUILD_SLOTS": "1"}
+    r = ws(tmp_path, e, "run", "--", sys.executable, SCRIPT, "run", "--", "echo", "ok", timeout=2)
+    assert r.returncode == 0 and r.stdout.strip() == "ok"
+
+
+def test_daemon_left_by_a_build_does_not_keep_the_slot(tmp_path, env):  # SC 2, AC 6
+    e = {**env, "AGENT_BUILD_SLOTS": "1"}
+    mark = f"sleep 30.{os.getpid()}1"
+    try:
+        r = ws(tmp_path, e, "run", "--", "bash", "-c", f"nohup {mark} >/dev/null 2>&1 &", timeout=5)
+        assert r.returncode == 0
+        assert procs_matching(mark)  # the daemon still runs
+        r = ws(tmp_path, e, "run", "--", "true", timeout=2)
+        assert r.returncode == 0
+    finally:
+        for pid in procs_matching(mark):
+            os.kill(pid, signal.SIGKILL)
+
+
+def test_kill_9_of_the_wrapper_frees_the_slot_and_kills_the_build(tmp_path, env):  # SC 3, AC 7
+    e = {**env, "AGENT_BUILD_SLOTS": "1"}
+    mark = f"sleep 30.{os.getpid()}2"
+    p = subprocess.Popen([sys.executable, SCRIPT, "run", "--", "bash", "-c", f"{mark}; true"],
+                         cwd=tmp_path, env=e)
+    try:
+        assert wait_for(lambda: not slot_free(e), 5)  # the wrapper holds the slot
+        assert wait_for(lambda: len(procs_matching(mark)) >= 3, 5)  # wrapper, bash, sleep
+        p.kill()
+        p.wait()
+        assert wait_for(lambda: slot_free(e), 1)
+        assert wait_for(lambda: not procs_matching(mark), 2)
+    finally:
+        for pid in procs_matching(mark):
+            os.kill(pid, signal.SIGKILL)
+
+
+def test_waiting_for_slot_is_announced(tmp_path, env):  # AC 12
+    e = {**env, "AGENT_BUILD_SLOTS": "1"}
+    first = subprocess.Popen([sys.executable, SCRIPT, "run", "--", "sleep", "1"], cwd=tmp_path, env=e)
+    try:
+        assert wait_for(lambda: not slot_free(e), 5)
+        r = ws(tmp_path, e, "run", "--", "true", timeout=10)
+        assert r.returncode == 0 and "waiting for build slot" in r.stderr
+    finally:
+        first.wait(timeout=10)
+
+
+def test_n_slots_cap_overlap_across_sessions(tmp_path, env):  # AC 8
+    e = {**env, "AGENT_BUILD_SLOTS": "2"}
+    log = tmp_path / "log"
+    job = f'echo "+ $(date +%s.%N)" >> {log}; sleep 0.6; echo "- $(date +%s.%N)" >> {log}'
+    procs = [subprocess.Popen([sys.executable, SCRIPT, "run", "--", "bash", "-c", job],
+                              cwd=tmp_path, env=e) for _ in range(3)]
+    assert [p.wait(timeout=20) for p in procs] == [0, 0, 0]
+    events = sorted((float(t), 1 if s == "+" else -1) for s, t in
+                    (line.split() for line in log.read_text().splitlines()))
+    level = peak = 0
+    for _, d in sorted(events, key=lambda x: (x[0], x[1])):
+        level += d
+        peak = max(peak, level)
+    assert peak == 2
+
+
+@pytest.mark.parametrize("slots", ["", "1"])
+def test_run_uses_nice_19_and_leaves_io_class_alone(tmp_path, env, slots):  # AC 17
+    e = {**env, "AGENT_BUILD_SLOTS": slots}
+    r = ws(tmp_path, e, "run", "--", sys.executable, "-c", "import os; print(os.nice(0))")
+    assert r.returncode == 0 and r.stdout.strip() == "19"
+    if shutil.which("ionice"):
+        outside = subprocess.run(["ionice"], capture_output=True, text=True).stdout
+        inside = ws(tmp_path, e, "run", "--", "ionice").stdout
+        assert inside == outside
+    assert "ionice" not in open(SCRIPT).read().split('"""', 2)[2]  # no ionice call in the code
+
+
+def test_run_passes_exit_code_and_reports_missing_command(tmp_path, env):
+    assert ws(tmp_path, env, "run", "--", "bash", "-c", "exit 7").returncode == 7
+    assert ws(tmp_path, {**env, "AGENT_BUILD_SLOTS": "1"}, "run", "--", "bash", "-c",
+              "exit 7").returncode == 7
+    r = ws(tmp_path, env, "run", "--", "no-such-command-t345")
+    assert r.returncode == 127 and "not found" in r.stderr
+
+
+@pytest.mark.skipif(not HAS_CARGO, reason="cargo not installed")
+@pytest.mark.parametrize("tmpfs", [True, False])
+def test_two_worktrees_never_share_a_target_dir(tmp_path, env, shm, tmpfs):  # SC 10, AC 18 (R5)
+    repo = make_repo(tmp_path, rust=True)
+    e = {**env, "AGENT_WS_TMPFS_CANDIDATES": shm if tmpfs else "",
+         "CARGO_TARGET_DIR": str(tmp_path / "shared-target")}  # a shared target set by the user
+    ws(repo, e, "new", "k1")
+    ws(repo, e, "new", "k2")
+    (tmp_path / "wt-k2" / "src" / "lib.rs").write_text('pub const MARK: &str = "k2-only-mark";\n')
+    cenv, _ = cargo_env(e, tmp_path)
+    for name in ("k2", "k1"):  # R5 order: the changed worktree builds first
+        r = ws(tmp_path / f"wt-{name}", cenv, "run", "--", "cargo", "build", "-q", timeout=300)
+        assert r.returncode == 0, r.stderr
+    found = {}
+    for name in ("k1", "k2"):
+        build = lease_of(repo, name)["build_dir"] or str(tmp_path / f"wt-{name}" / "target")
+        rlib = os.path.join(build, "debug", "libt345crate.rlib")
+        found[name] = open(rlib, "rb").read()
+    assert b"k2-only-mark" in found["k2"] and b"k2-only-mark" not in found["k1"]
+    assert b"base-mark" in found["k1"]
+    assert not (tmp_path / "shared-target").exists()

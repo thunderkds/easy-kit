@@ -463,7 +463,136 @@ def cmd_gc(args):
     return rc
 
 
-COMMANDS = {"new": cmd_new, "rm": cmd_rm, "gc": cmd_gc}
+# ── run ──────────────────────────────────────────────────────────────────────────────────────
+
+
+def state_dir():
+    return os.environ.get("AGENT_WS_STATE_DIR") or os.path.join(
+        os.environ.get("XDG_STATE_HOME") or os.path.join(os.path.expanduser("~"), ".local", "state"),
+        "agent-ws")
+
+
+def lease_for_cwd():
+    try:
+        repo = Repo(os.getcwd())
+    except Refused:
+        return None
+    here = os.path.realpath(os.getcwd())
+    for lease in repo.all_leases():
+        p = os.path.realpath(lease.get("path", ""))
+        if here == p or here.startswith(p + os.sep):
+            return lease
+    return None
+
+
+def ensure_build_dir(build):
+    """After a reboot the tmpfs folder is gone: re-create the private chain (0700, not a symlink,
+    owned by the user) before cargo makes it with open permissions."""
+    base = os.path.dirname(os.path.dirname(build))
+    for d in (base, os.path.dirname(build), build):
+        why = private_dir(d)
+        if why:
+            raise Refused(f"build folder not safe: {why}")
+
+
+def build_env(lease):
+    env = dict(os.environ)
+    if lease:  # AC 18: each worktree its own target, whatever CARGO_TARGET_DIR the caller had
+        build = lease.get("build_dir")
+        if build:
+            ensure_build_dir(build)
+        env["CARGO_TARGET_DIR"] = build or os.path.join(lease["path"], "target")
+    return env
+
+
+def slots():
+    try:
+        return max(0, int(os.environ.get("AGENT_BUILD_SLOTS", "") or 0))
+    except ValueError:
+        err("AGENT_BUILD_SLOTS is not a number: queue off")
+        return 0
+
+
+def take_slot(n):
+    folder = os.path.join(state_dir(), "slots")
+    os.makedirs(folder, mode=0o700, exist_ok=True)
+    waited = False
+    while True:
+        for i in range(n):
+            fd = os.open(os.path.join(folder, f"slot.{i}"), os.O_RDWR | os.O_CREAT | os.O_CLOEXEC, 0o600)
+            try:
+                fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError:
+                os.close(fd)
+                continue
+            if waited:
+                err(f"got build slot {i}")
+            return i, fd
+        if not waited:
+            err(f"waiting for build slot (all {n} busy)")
+            waited = True
+        time.sleep(0.2)
+
+
+def cmd_run(args):
+    if args[:1] == ["--"]:
+        args = args[1:]
+    if not args:
+        raise Refused("usage: run [--] <command> [args...]")
+    env = build_env(lease_for_cwd())
+    n = slots()
+    if n == 0 or "AGENT_WS_SLOT" in os.environ:  # queue off, or nested inside a slot (G1a)
+        os.nice(19)
+        try:
+            os.execvpe(args[0], args, env)
+        except OSError as exc:
+            err(f"{args[0]}: not found or not runnable ({exc.strerror})")
+            return 127
+    i, fd = take_slot(n)
+    env["AGENT_WS_SLOT"] = str(i)
+    try:
+        # G1b: the lock fd is O_CLOEXEC and close_fds is on, so no child holds the slot.
+        # G1c: the command leads its own process group; a watcher kills the group if this
+        # wrapper dies without saying "done" (kill -9 included).
+        child = subprocess.Popen(args, env=env, start_new_session=True, preexec_fn=lambda: os.nice(19))
+    except OSError as exc:
+        err(f"{args[0]}: not found or not runnable ({exc.strerror})")
+        return 127
+    rd, wr = os.pipe()
+    subprocess.Popen([sys.executable, "-I", os.path.abspath(__file__), "_watch", str(child.pid)],
+                     stdin=rd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                     start_new_session=True)
+    os.close(rd)
+
+    def forward(signum, _frame):
+        try:
+            os.killpg(child.pid, signum)
+        except ProcessLookupError:
+            pass
+    for sig in (signal.SIGINT, signal.SIGTERM, signal.SIGHUP):
+        signal.signal(sig, forward)
+    rc = child.wait()
+    os.write(wr, b"done")
+    os.close(wr)
+    os.close(fd)
+    return rc if rc >= 0 else 128 - rc
+
+
+def cmd_watch(args):
+    """Internal: block until the wrapper's pipe closes; without "done", kill the build's group."""
+    pgid = int(args[0])
+    if sys.stdin.buffer.read() == b"done":
+        return 0
+    for sig in (signal.SIGTERM, signal.SIGKILL):
+        try:
+            os.killpg(pgid, sig)
+        except ProcessLookupError:
+            return 0
+        time.sleep(0.3)
+    return 0
+
+
+COMMANDS = {"new": cmd_new, "rm": cmd_rm, "gc": cmd_gc, "run": cmd_run, "_watch": cmd_watch}
 
 
 def main(argv):
