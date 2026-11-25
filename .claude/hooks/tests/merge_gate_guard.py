@@ -120,9 +120,14 @@ GATE_REL = ".claude/hooks/pre_bash_block_unsafe_merge.py"
 #          (`.claude/settings.json` `"env"`, default `origin`; a bad value refuses every push;
 #          `tasks/TASK_GUIDE_T321.md`, AC 1-6). Supervisor sign-off under session `[admin]`: the
 #          user's "T321 [admin]" (2026-11-25).
+#   T365 — the T321 refusal texts: a set remote that does not exist is named
+#          (`_missing_remote_refusal`), and no refusal prints `None` under a bad setting
+#          (`_admin_remote_text`, `_main_push_refusal`); texts only, no allow or refusal changes
+#          (`tasks/TASK_GUIDE_T365.md`, AC 1-4). Authorised by the user, 2026-11-25 (gate sign-off
+#          question under session `[admin]`).
 AUTHORISED_TASKS = ("T182", "T188", "T190", "T197", "T196", "T210", "T211", "T232", "T250", "T284",
                     "T289", "T291", "T296", "T295", "T308", "T309", "T317", "T323", "T326", "T341",
-                    "T320", "T354", "T321")
+                    "T320", "T354", "T321", "T365")
 
 
 def _git(root, *args):
