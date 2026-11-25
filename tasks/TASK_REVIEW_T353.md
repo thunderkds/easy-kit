@@ -16,9 +16,11 @@ Mode: auto
 7. D2: Reinstall pre-selects the project's current answer (`[Y/n]` when on), as it does for CLIs; no terminal keeps it — RULE: setup.sh:225 "Reinstall pre-selects what the project already has instead,"
 8. D3: a user's edit of `scripts/agent_ws.py` survives Update by the same edit-safe path as every kit file (`process_one_file`), with no new prompt — RULE: tasks/TASK_GUIDE_T353.md § Acceptance Criteria, AC 4 ("refreshes `scripts/agent_ws.py` by the edit-safe rules of other kit files")
 9. The `#parallel-builds` id is left out of the index page's redirect list, as `#changelog` was: no old story-page link targeted it — RULE: tests/test_site_story.py:625 "T344: #changelog is new on docs.html; no old link on the story page ever targeted it"
-Checks: (filled at the end)
-Memory: (filled at the end)
-Not done: merge (admin: after the auto verify pass); auto verify: (filled at the end)
+10. `tests/test_agent_ws_installer_t353.sh` gets its own CI step — RULE: tests/test_ci_wires_shell_suites.py:5 "every tests/*.sh file must be either wired as its own `run:` step in"
+11. Reviewer round 1 (`492c5efb`, PASS, 0 P0/P1): P2 answered with a test, not a code change (`tests/test_agent_ws_no_proc_t353.py`: with `/proc` hidden, `hook-create` still makes the worktree and prints its path; builds on disk); P3s fixed: AC 1 names the Reinstall default, turning off says the script stays as the user's file; P3 "exact-form hand entries in a No project are dropped" accepted (documented); a second Reviewer round on `864415b7` — RULE: `docs/claude-md/pipeline-stages.md` § Stage 4: Review ("A later code fix needs a new reviewer spawn on the new commit")
+Checks: tests `bash tests/test_agent_ws_installer_t353.sh` — 33 passed, 0 failed; `python3 -m pytest tests/test_merge_settings_agent_ws_t353.py tests/test_agent_ws_no_proc_t353.py` — 9 passed; installer suites `test_one_command_menu.sh` 22/0, `test_cli_and_project_menus.sh` 25/0, `test_settings_merge.sh` 49/0, `test_setup.sh` 21/0, `test_update.sh` 38/0, `test_install_update_smoke.sh` 9/0, `test_install_backups.sh` 18/0, `test_update_removals.sh` 34/0, `test_harness_projection.sh` 41/0, `test_t098_harness_presence.sh` 20/0, `test_update_claude_md.sh` 52/0; site tests 238 passed; `shellcheck -x setup.sh update.sh lib/harness-update.sh …` rc=0; full suite 60 failed / 7795 passed, every failure also fails on `main` or passes alone (3 checked, see Evidence); reviews: Supervisor `code-review` 0 P0/P1, 3 P2 fixed (`4b7cc9cc`); security review inline (built-in needs `origin/HEAD`): 0 findings above P3; Reviewer: T353 round 1 PASS (1 P2, 4 P3); real run: Reinstall with `y` into a `git clone --local` of `easy-note-mcp`, then `claude -p --worktree live353` (haiku, `--setting-sources project`) printed `/home/thunderkds/workspace/pets/t353-live/wt-live353`, `AGENT_WS_BIN=…/wt-live353/scripts/agent_ws.py` and `target-dir = "/dev/shm/agent-ws-1000/repo-09b2a9e9/live353-4cc61d"`; `agent_ws.py gc` then refused it (`M memory/event-trace/_untagged.jsonl`, tracked in that repo) (auto-checked, not /verify)
+Memory: `memory/decisions.md` — 2026-11-25 T353: agent-ws is an opt-in installer choice; `memory/learnings.md` — 2026-11-25 T353 traps (a write that empties the file first; gate-safe loops; pty.sh hides claude; easy-note-mcp's tracked event-trace blocks gc; staging only your board row). `memory/MEMORY.md` not touched: over its budget, a `/compact-memory` job
+Not done: merge (admin: after the auto verify pass); push (yours: no `origin` remote, `git push github main`); T345 to Done (yours); `easy-note-mcp`: untrack `memory/event-trace/` so `gc` can clean its worktrees (yours, another repo); auto verify: running (T182)
 Paused: auto-mode check failed — no test run in memory/event-trace/T353.jsonl — write /home/thunderkds/workspace/pets/hungnguyen111/easy-kit/.claude/hooks/.state/active_task.d/$CLAUDE_CODE_SESSION_ID with the task ID (minimal-track step 1): `mkdir -p /home/thunderkds/workspace/pets/hungnguyen111/easy-kit/.claude/hooks/.state/active_task.d && printf '%s\n%s\n' "T353" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > /home/thunderkds/workspace/pets/hungnguyen111/easy-kit/.claude/hooks/.state/active_task.d/$CLAUDE_CODE_SESSION_ID`, then rerun the task's tests so the trace records them under the task, then stop; Risk High, but no decision was DEBATED with 3 Advocates; extended track, but the trace has no `code-review` Skill call (Stage 4 runs in auto mode); Risk High, but the trace has no `security-review` Skill call [report ea28300862ce]
 Paused: auto-mode check failed — extended track, but the trace has no `code-review` Skill call (Stage 4 runs in auto mode); Risk High, but the trace has no `security-review` Skill call [report 0ad4148d9826]
 
@@ -26,28 +28,28 @@ Paused: auto-mode check failed — extended track, but the trace has no `code-re
 
 | Check | Result | Notes / output snippet |
 |-------|--------|------------------------|
-| **New test(s) cover Acceptance Criteria (file paths pasted)** | ☐ pass / ☐ fail | |
-| Verification command run | ☐ pass / ☐ fail | |
-| Negative cases hold | ☐ pass / ☐ fail | |
+| **New test(s) cover Acceptance Criteria (file paths pasted)** | ☑ pass | `tests/test_agent_ws_installer_t353.sh` (33 checks: SC 1–9: no terminal, Enter = No byte-identical, y, Update keeps + refreshes, user edit kept, Reinstall default/off/no spurious backup, plan line, not Linux, hand-wired warning) — `--- 33 passed, 0 failed ---`; `tests/test_merge_settings_agent_ws_t353.py` (8: overlay once, idempotent, off drops, kit SessionStart kept, hand-wired kept, `.bak` path not taken, missing script dropped, 3/4-arg and bad overlay) + `tests/test_agent_ws_no_proc_t353.py` (1) — `9 passed` |
+| Verification command run | ☑ pass | guide `### Verification Command`: installer `33 passed, 0 failed`; pytest set `236 passed` (Reviewer run); `test_one_command_menu.sh` `22 passed, 0 failed`; `test_cli_and_project_menus.sh` `25 passed, 0 failed`; `test_settings_merge.sh` `49 passed, 0 failed` |
+| Negative cases hold | ☑ pass | red first: merge tests `5 failed, 3 passed` before `acaa5ebf` (the 3 are the stay-the-user's guards); installer test `16 passed, 15 failed` before `9814e0af`; SC6 backup check `32 passed, 1 failed` before `4b7cc9cc`. Vacuous pass found and noted: SC5 "edit is kept" passed before the script existed (`printf >>` created the file); meaningful after `9814e0af` |
 | verify | ☐ pass / ☐ fail / ☐ N/A | [leave it: the auto verify hook writes this row, with its run record. If you ran /verify yourself, tick pass and make the whole Notes cell "/verify by the user, session <id>, commit <sha>" (the full 40-character commit). The merge gate counts no other row, even with the word "pass" in it] |
-| Review scope bounded to the change's blast radius (affected set, not whole repo) | ☐ pass / ☐ fail | |
-| Full smoke suite still green (no regression) | ☐ pass / ☐ fail | |
+| Review scope bounded to the change's blast radius (affected set, not whole repo) | ☑ pass | `git diff --stat main...HEAD`: installer (`setup.sh`, `lib/harness-update.sh`, `lib/merge-settings.py`, `lib/agent-ws-hooks.json`), their tests, 2 pinned menu/site tests, `site/`, `docs/`, `README.md` (1 line, still 75), `ci.yml` (1 step). Callers: `update.sh` (thin alias, `EASYKIT_ACTION=update`), every installer suite run. `lane_check.py`: `lane: C3, 14 files, 519 lines, FITS` |
+| Full smoke suite still green (no regression) | ☑ pass | Not green, no regression. `python3 -m pytest tests/ .claude/hooks/tests/ -q`: `60 failed, 7795 passed, 24 skipped`. Against the `main` run of the same session: only-in-T353 = 3: `test_ci_wires_shell_suites.py` (real: fixed in `492c5efb`), `test_auto_verify_skip_pass.py::test_ac5_a_missing_base_ref_is_not_a_skip_pass` and `test_auto_verify.py::test_ac4_blocked_row_never_says_pass[bypass-subtype]` (pass alone: `10 passed` three times). The other 57 fail on `main` too (`test_stop_attribution_t287.py` 25, `test_slot2b_brace_glob.py` 19, …). `test_readme_current.sh` fails on this branch and passes on `main` after T347 (`da038f57`), which this branch predates |
 | **Companion score (easy-verifier)** | ☑ N/A | easy-verifier not run for this task |
-| **UI: Visual regression (diff or verdict pasted)** | ☐ pass / ☐ fail / ☐ N/A | |
-| **UI: Design-system compliance (tokens/colors/typography verified)** | ☐ pass / ☐ fail / ☐ N/A | |
-| **UI: Responsiveness at target viewports** | ☐ pass / ☐ fail / ☐ N/A | |
+| **UI: Visual regression (diff or verdict pasted)** | ☑ N/A | text only: one new docs section built from existing elements (`h2`, `p.lead`, `ol.lead`, `details.more`), one index note reworded, same classes |
+| **UI: Design-system compliance (tokens/colors/typography verified)** | ☑ N/A | no new class, style or token; `tests/test_site_content.py` + `tests/test_site_story.py` + `tests/test_site_visual_first.py` pass (238) |
+| **UI: Responsiveness at target viewports** | ☑ N/A | no layout change; index stays at its 300-word cap |
 
 ---
 
 ## Demonstration
 
-**BEFORE**:
+**BEFORE** (2026-11-25T04:44:02Z, `setup.sh` from this branch before any implementation commit, in a pty on a fresh repo, Enter at every prompt): prompts `Choose [1]` (action), `Which CLIs…`, `Is this a new or an existing project?`, `Proceed? [Y/n]`, `Use an online board (Linear) for tasks? [y/N]`; `scripts/agent_ws.py: absent`; `lock agent_ws key: 0`.
 
-**AFTER**:
+**AFTER**: the same prompts plus `Turn on parallel builds (agent-ws)? [y/N]` after the project type and the plan line `- agent-ws: on (scripts/agent_ws.py and its 3 hooks: …)`; with `y`: `scripts/agent_ws.py` present, `"agent_ws": "on"`, 3 entries. Live: Reinstall + `y` in an `easy-note-mcp` clone, then `claude -p --worktree live353` printed `/home/thunderkds/workspace/pets/t353-live/wt-live353` with `target-dir = "/dev/shm/agent-ws-1000/repo-09b2a9e9/live353-4cc61d"`.
 
-**DELTA**:
+**DELTA**: any Easy Kit project on Linux turns on agent-ws with one `y` at Install or Reinstall, keeps it through Update, and turns it off with `n`; `docs.html#parallel-builds` tells users how to use it.
 
-**WITNESS**:
+**WITNESS**: Supervisor session 7b4187fe, 2026-11-25 (BEFORE, red runs, live run); `Reviewer: T353` (fresh context) round 1 confirmed the verification command at `492c5efb`
 
 ## Stage 4 review (Reviewer: T353, fresh context)
 
