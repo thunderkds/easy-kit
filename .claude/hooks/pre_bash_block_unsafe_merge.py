@@ -2548,6 +2548,37 @@ def _own_start_since(transcript_path, when, task_id):
     return min(starts) if starts else None
 
 
+def _stamped_start_since(transcript_path, when, task_id, branch, where):
+    """T372: the earliest `started_at` of a hook run record for `task_id` whose start stamp names
+    this session (`started_by` = the transcript's session id), dated at or after `when` (the tag's
+    onset), for a commit `branch` holds; None when there is none. `--start` writes the stamp from
+    `$CLAUDE_CODE_SESSION_ID` whatever shell form ran it (a redirect, `$VAR`, a script), so this
+    finds the start `_own_start_since` cannot read. An echo or a prompt runs no `--start` and leaves
+    no stamp. A stamp dated later than its pass record binds nothing: `_pass_recorded_since` needs
+    the record written at or after the start. Any doubt is None."""
+    try:
+        session = os.path.splitext(os.path.basename(transcript_path))[0]
+        if not auto_mode.SESSION_ID.fullmatch(session):
+            return None
+        normalized = normalize_task_id(task_id, ROOT)
+        empty = "0" * 40
+        prefix = record_path(ROOT, normalized, empty)[:-len(empty + ".json")]
+        starts = []
+        for path in glob.glob(glob.escape(prefix) + "*.json"):
+            sha = os.path.basename(path)[len(os.path.basename(prefix)):-len(".json")]
+            record = read_record(ROOT, normalized, sha) if SHA_PATTERN.match(sha) else None
+            at = auto_mode.parse_ts(record.get("started_at")) if record else None
+            if (at is None or record.get("commit") != sha or record.get("started_by") != session
+                    or at < when):
+                continue
+            held = _git(where, "merge-base", "--is-ancestor", sha, f"refs/heads/{branch}^{{commit}}")
+            if held is not None and held.returncode == 0:
+                starts.append(at)
+        return min(starts) if starts else None
+    except Exception:
+        return None
+
+
 def _ready_for_review(task_id):
     """T317 R4: True when the board shows `task_id`'s own row in Ready for Review; False on any
     doubt. (An In Progress row is blocked before any tag rule, by the pipeline gate.)"""
@@ -2723,12 +2754,19 @@ def admin_refusal(command, cwd, transcript_path, admin, tag=None):
             # branch push the task's own row is in Ready for Review (the `main` push after the
             # merge may follow the close-out, so its row may be Done). T354: or in Done by the
             # hook's close-out of that same run, which moves a `Mode: auto` row at once.
+            # T372: the window starts at the tag's onset (a repeated same tag keeps it), and the
+            # own start is the transcript's `--start` call or the run record's start stamp.
             _, branch, where = sorted(targets)[0]
-            started = _own_start_since(transcript_path, when, task_id)
+            onset = auto_mode.session_onset(transcript_path)
+            since = onset[1] if onset is not None and onset[0] == tag and onset[1] <= when else when
+            starts = [at for at in (_own_start_since(transcript_path, since, task_id),
+                                    _stamped_start_since(transcript_path, since, task_id, branch,
+                                                         where)) if at is not None]
+            started = min(starts) if starts else None
             bound = (started is not None
                      and (main_push or _ready_for_review(task_id)
                           or _closed_out_since(task_id, branch, where, started))
-                     and _session_holds(transcript_path, when, task_id)
+                     and _session_holds(transcript_path, since, task_id)
                      and _pass_recorded_since(task_id, branch, where, started))
         if not bound:
             loop = ("the task of this session's loop (its row in Ready for Review, or in Done by the "

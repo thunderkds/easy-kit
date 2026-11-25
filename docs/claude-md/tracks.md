@@ -967,10 +967,16 @@ request and runs no two tickets at once.
   record from that session, written after this session's `--start` call and held by the branch; a
   Done row with no note, or a note for other code, binds nothing. The `main` push after the merge may
   follow the close-out. This session changed it since the tag request, and holds no other task In Progress or
-  Ready for Review. This session ran `python3 .claude/hooks/stop_auto_verify.py --start <ID>` for it as
-  its own Bash call, after the tag request; an echoed or quoted mention, or one in a sub-agent's
-  prompt, does not count. The hook wrote its auto verify pass after that call. A run record's file
-  time alone never binds a task.
+  Ready for Review. This session ran `python3 .claude/hooks/stop_auto_verify.py --start <ID>` for it,
+  after the tag request; an echoed or quoted mention, or one in a sub-agent's prompt, does not count.
+  The gate sees that call in either of two ways: the transcript shows it as a Bash command of its own,
+  or the hook's run record carries its start stamp (T372). `--start` writes the stamp (`started_by`,
+  this session's `$CLAUDE_CODE_SESSION_ID`, and `started_at`), so a redirect, a `$VAR` or a script
+  around the call does not hide it. A Stop-hook run carries no stamp. The hook wrote its auto verify
+  pass after that call. A run record's file time alone never binds a task.
+  For the loop's task, "the tag request" is the request that turned the tag on. A later request with
+  the same tag (for example a reply that only mentions `[admin]`) does not move it; `[stop]`, another
+  tag or a resume do (T372). The other three bindings read the latest tag request.
 - `[ticket]`: only a plain push of the task branch to `origin`, to the same name, after a passed auto
   verify, for the loop's task only. The gate blocks a merge, a `main` push, a pull, a force push, a
   `+ref`, another destination, `--all`, `--tags`, `--no-verify`, another remote and a hidden git verb
