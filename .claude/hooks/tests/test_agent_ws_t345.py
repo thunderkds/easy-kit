@@ -728,3 +728,21 @@ def test_rm_survives_a_pointer_file_the_user_deleted(tmp_path, env, shm):
     r = ws(repo, e, "rm", "x2")
     assert r.returncode == 0, r.stderr
     assert not (tmp_path / "wt-x2").exists()
+
+
+def test_rm_never_deletes_a_build_folder_off_tmpfs_even_if_the_lease_says_so(tmp_path, env):
+    repo = make_repo(tmp_path)
+    ws(repo, env, "new", "x3")
+    fstype = subprocess.run(["stat", "-f", "-c", "%T", str(tmp_path)], capture_output=True,
+                            text=True).stdout.strip()
+    if fstype == "tmpfs":
+        pytest.skip("tmp_path is tmpfs on this machine")
+    victim = tmp_path / f"agent-ws-{os.getuid()}" / "r" / "keep"
+    victim.mkdir(parents=True)
+    (victim / "data").write_text("precious\n")
+    lp = os.path.join(repo, ".git", "agent-ws", "leases", "x3.json")
+    lease = json.load(open(lp))
+    lease["build_dir"] = str(victim)  # a tampered lease
+    open(lp, "w").write(json.dumps(lease))
+    r = ws(repo, env, "rm", "x3")
+    assert r.returncode == 1 and (victim / "data").read_text() == "precious\n"

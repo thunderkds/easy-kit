@@ -379,7 +379,7 @@ def remove_build_dir(build):
     base = os.path.dirname(os.path.dirname(build))
     if os.path.realpath(build) != os.path.join(os.path.realpath(os.path.dirname(build)),
                                                os.path.basename(build)) or stat.S_ISLNK(st.st_mode) or st.st_uid != os.getuid() \
-            or os.path.basename(base) != f"agent-ws-{os.getuid()}":
+            or os.path.basename(base) != f"agent-ws-{os.getuid()}" or fstype(build) != "tmpfs":
         raise Refused(f"build folder {build} is not agent-ws's own private folder: left in place")
     shutil.rmtree(build)
     print(f"removed build folder {build}", flush=True)
