@@ -130,6 +130,35 @@ def test_ac3_a_bad_setting_refuses_the_main_push(gate, tmp_path, monkeypatch):
 
 
 # ── AC 4 ──────────────────────────────────────────────────────────────────────────────────
+def docs_only_repo(tmp_path):
+    """A repo on `main` and a branch that changes one docs-only file: (checkout, base, tip)."""
+    repo = str(tmp_path / "repo")
+    os.makedirs(repo)
+    git(repo, "init", "-q", "-b", "main")
+    git(repo, "commit", "-q", "--allow-empty", "-m", "base")
+    base = git(repo, "rev-parse", "HEAD")
+    git(repo, "checkout", "-q", "-b", "feat/t900-x")
+    os.makedirs(os.path.join(repo, "docs"))
+    with open(os.path.join(repo, "docs", "note.md"), "w", encoding="utf-8") as f:
+        f.write("x\n")
+    git(repo, "add", "-A")
+    git(repo, "commit", "-q", "-m", "docs")
+    return repo, base, git(repo, "rev-parse", "HEAD")
+
+
+def test_ac4_a_bad_setting_fails_the_docs_only_verify_closed(tmp_path, monkeypatch):
+    """Reviewer P2-1: `_base()` raises inside the fail-closed `try`s, never falls back to `main`."""
+    repo, base, tip = docs_only_repo(tmp_path)
+    skip = {"verdict": verify_record.SKIP_PASS, "base": base, "commit": tip}
+    monkeypatch.delenv(ENV, raising=False)
+    assert verify_record.docs_only_change(repo, tip) == (base, ["docs/note.md"])
+    assert verify_record.record_confirms_pass(repo, skip) is True
+    monkeypatch.setenv(ENV, "a..b")
+    assert verify_record.docs_only_change(repo, tip) is None
+    assert verify_record.record_confirms_pass(repo, skip) is False
+    assert verify_record.shell_suites_changed(repo, tip) == []
+
+
 def test_ac4_the_verify_base_follows_the_setting(monkeypatch):
     monkeypatch.delenv(ENV, raising=False)
     assert verify_record.base_ref() == "refs/heads/main"
