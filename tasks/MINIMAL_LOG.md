@@ -22,9 +22,11 @@ Mode: auto
 - Suite: `python3 -m pytest -q -p no:cacheprovider -rf tests .claude/hooks/tests` — `61 failed, 7943 passed, 24 skipped`; the same command on `main` (`b90f112e`, clean worktree) — `60 failed, 7943 passed, 24 skipped`, the same 60. The one extra, `tests/test_auto_verify.py::test_t189_ac3_a_minimal_record_with_no_new_test_line_keeps_the_row`, passed on its own (`7 passed` for `-k t189_ac3`): load from two suites running at once
 - Real run: `bash scripts/validate.sh` — printed `validate.sh: PASS`; `grep -n 'templates/general' CLAUDE_LEGACY.md` — lines 216 and 355
 - Real run (install): `bash tests/test_setup.sh` — `21 passed, 0 failed`, with `PASS: test5: legacy CLAUDE.md is CLAUDE_LEGACY.md byte-for-byte` (an existing / legacy project install writes this file as its `CLAUDE.md`, so `CLAUDE_LEGACY.md` has a runtime surface)
+- verify: ☑ pass — auto-run by hook, session 2278b303-03e0-4da8-be2b-a8deb28c1d14, commit 9827c1cab402f071e2180e31202327ed6b17121a, log .claude/verify-runs/T366-9827c1cab402.log
 **Memory:** nothing new
 **Files:** `CLAUDE_LEGACY.md` (lines 216, 355), `tests/test_agent_frontmatter.py` (new test), `tests/test_agents_md_primary.py` (pin moves to `1ca76763`), `tasks/MINIMAL_LOG.md`, `PROJECT_KANBAN.md`
-**Not done:** merge (admin: after the auto verify pass); auto verify: running (T182), retry 1 after a `blocked` SKIP; `main` has 60 failing tests before this change (not from T366)
+**Not done:** merge (admin: after the auto verify pass); auto verify: ☑ pass (session 2278b303-03e0-4da8-be2b-a8deb28c1d14, commit 9827c1cab402f071e2180e31202327ed6b17121a, log .claude/verify-runs/T366-9827c1cab402.log), retry 1 after a `blocked` SKIP; `main` has 60 failing tests before this change (not from T366)
+Closed: row moved to Done 2026-11-25 — auto verify pass (session 2278b303-03e0-4da8-be2b-a8deb28c1d14, commit 9827c1cab402f071e2180e31202327ed6b17121a); Gates 5 and 6 checked
 
 ## T253 — the Update summary says what was and was not replaced when a backup fails · minimal
 Mode: auto
