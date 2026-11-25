@@ -39,11 +39,23 @@ Before writing any code:
 
 ## Design decision
 
-Set by the Debate in `tasks/TASK_REVIEW_T324.md` `## Auto decisions` (filled before the oracle is written).
+Debated (3 Advocates, 2026-11-16; `tasks/TASK_REVIEW_T324.md` `## Auto decisions` decision 1). Option D:
+
+- `.claude/hooks/lib/session_work.py`: `worked_on(calls, task_id, worktrees, *, test_runs_count=True)` and `work_start(entries, task_id, worktrees, *, test_runs_count=True)`, passed through `_works` and `_bash_works`. With `test_runs_count=False`, one simple command that is a **test run** is not work. A test run is: `pytest` / `py.test`, or `python` / `python3` [flags from `task_context.PYTHON_FLAGS`] `-m pytest|unittest`, optionally behind exactly one `timeout <n>` prefix (`\d+[smhd]?`), with no output redirect to a real file (the existing redirect guard of `_read_only` runs first). Reuse or mirror `lib/task_context.py` `_allowed_command` (lines 454-480); do not write a looser third parser.
+- The default stays `True`: `.claude/hooks/pre_bash_block_unsafe_merge.py` (T250 G2 at line 1374, T317 `_session_holds` at line 2282), `lib/auto_mode.py`, `lib/task_context.py` and every T250/T252/T293 test keep today's meaning. `pre_bash_block_unsafe_merge.py` is **not** changed (it is guarded by `.claude/hooks/tests/merge_gate_guard.py`).
+- `.claude/hooks/stop_auto_mode_check.py`: `session_owner` and `session_window` both pass `test_runs_count=False`, so ownership and the Debate window keep one test (`session_work.py:362` "Same test as `worked_on`, so the two never disagree").
+- Rejected: (A) the exemption for every caller — it changes the user-approved T250 G2 merge-gate meaning (`pre_bash_block_unsafe_merge.py:1290` "an edit, a writing `Bash` command or a spawn") and flips the pinned `test_t250_session_ownership.py:141`, `:146`; (B) skip by session tag — breaks T252 (a marked task is checked by ownership, not by tag; `stop_auto_mode_check.py:31`) and fails open on an unreadable transcript.
 
 ## Acceptance Criteria
 
-Filled after the Debate; each traces to the Mental Model above.
+| # | Criterion (testable) | Traces to |
+|---|----------------------|-----------|
+| 1 | With `test_runs_count=False`, `worked_on` is False for a test run inside the task's worktree: the incident command `cd <wt> && timeout 300 python3 -m pytest <file> -q --no-header -p no:cacheprovider -rf 2>&1 \| tail -40`, plus `python3 -m pytest -q` with cwd in the worktree, `pytest -q`, `py.test`, `python3 -B -m unittest`, `timeout 60 python -m pytest` | Expected |
+| 2 | With `test_runs_count=False`, these stay work (True): `timeout 300 rm -rf x` in the worktree; `python3 -m pytest -q > <wt>/out`; `python3 tool.py` in the worktree; `pytest -q && rm x` in the worktree; `timeout 5 timeout 5 python3 -m pytest`; a test run plus an `Edit` of the task's review file; every write/commit/spawn case of `test_t250_session_ownership.py` | no fail-open |
+| 3 | Without the keyword (default `True`), every case above returns exactly what it returns today (a test run in the worktree is work); `pre_bash_block_unsafe_merge.py` is byte-identical to `main` | merge gate unchanged |
+| 4 | `work_start(..., test_runs_count=False)` returns the time of the first call that `worked_on(..., test_runs_count=False)` counts (a test run before the first edit does not start the window); with the default it is unchanged | one test for both |
+| 5 | Stop hook end to end: a session transcript with no tag whose only call on a marked `Mode: auto`, Risk High task (in its own worktree, Debates/reviews missing) is the incident test run → the stop is not blocked, stderr names the task as "not checked", and the task's review file is byte-identical after a first and a second (`stop_hook_active`) fire. The same transcript plus an `Edit` of that review file → blocked as today | the incident |
+| 6 | `session_owner` and `session_window` in `stop_auto_mode_check.py` both pass `test_runs_count=False` | one test for both |
 
 ## UI / Design Acceptance Criteria
 
@@ -52,24 +64,32 @@ Not applicable — no UI. All three UI Evidence rows are ☐ N/A: hook-only chan
 ### Diagnosis Gates (Pillar 1 — must pass before any fix)
 - [x] Phase 1 feedback loop built and running (the `worked_on` repro above)
 - [x] Bug reproduces deterministically on the loop
-- [ ] 3–5 ranked falsifiable hypotheses listed (consistent with confirmed mental model)
-- [ ] Correct hypothesis identified via Phase 4 instrumentation
+- [x] 3–5 ranked falsifiable hypotheses listed (consistent with confirmed mental model)
+- [x] Correct hypothesis identified via Phase 4 instrumentation
 
 ### Attempts Log (filled live during diagnosis — required if >1 hypothesis tested)
 | # | Hypothesis | Predicted signal | Actual result | Verdict |
 |---|---|---|---|---|
+| 1 | `_read_only` is False for the test segment because its head (`timeout`, then `python3 -m pytest`) is not in `READ_ONLY_COMMANDS` | per-segment probe of the incident command: the test segment has `runs_in=True`, `read_only=False`; `_read_only(['timeout','300','python3','-m','pytest'])` is False | segment `['timeout','300','python3','-m','pytest',…,'2','>&','1']` → `read_only= False`; bare head probe → `False` | confirmed |
+| 2 | the `2>&1` redirect (tokens `2`, `>&`, `1`) trips the redirect guard | `_read_only(['tail','2','>&','1'])` is False | `True` (`1` matches `HARMLESS_TARGET`) | falsified |
+| 3 | the piped `tail -40` segment, run in the worktree, is counted as work | probe: `['tail','-40']` `read_only=False` | `read_only= True` | falsified |
+| 4 | the Stop hook decides ownership by another path than `worked_on` | `session_owner` does not call `session_work.worked_on` | `stop_auto_mode_check.py:455` calls `sw.worked_on(...)` | falsified |
 
 ### Fix Gates (Pillar 2)
-- [ ] Regression test written before the fix (or no-seam documented)
-- [ ] Fix applied; regression test passes
-- [ ] Phase 1 loop no longer reproduces the bug
-- [ ] Fix matches the "correct behaviour" definition from the mental model
+- [x] Regression test written before the fix (or no-seam documented)
+- [x] Fix applied; regression test passes
+- [x] Phase 1 loop no longer reproduces the bug
+- [x] Fix matches the "correct behaviour" definition from the mental model
 
 ### Cleanup Checklist (Pillar 3)
-- [ ] All [DEBUG-...] instrumentation removed (grep verified)
-- [ ] Throwaway prototypes deleted
-- [ ] Correct hypothesis stated in commit message
-- [ ] Post-mortem: what would have prevented this?
+- [x] All [DEBUG-...] instrumentation removed (grep verified)
+- [x] Throwaway prototypes deleted
+- [x] Correct hypothesis stated in commit message
+- [x] Post-mortem: what would have prevented this?
+  T250 asked one question ("did this session change the task?") for two callers with different
+  costs of a wrong yes: the merge gate (a wrong yes is safe: it blocks) and the Stop check (a wrong
+  yes blocks the stop and writes into another session's report). A test case for "the session only
+  ran the task's tests" in `test_t250_session_ownership.py`, pinned per caller, would have shown it.
 
 ### Evidence (filled by reviewer at Stage 4/5)
 
@@ -82,4 +102,25 @@ Not applicable — no UI. All three UI Evidence rows are ☐ N/A: hook-only chan
 ## Files to Change (Predicted)
 
 - `.claude/hooks/lib/session_work.py`
+- `.claude/hooks/stop_auto_mode_check.py`
 - `.claude/hooks/tests/test_t324_test_run_not_work.py` (new, qa-expert, locked)
+
+## Evaluation & Acceptance
+
+**Locked oracle**: written first by `qa-expert` in `.claude/hooks/tests/test_t324_test_run_not_work.py`. The implementer may not edit it.
+
+### Verification Command (exact, runnable)
+
+```bash
+python3 -m pytest .claude/hooks/tests/test_t324_test_run_not_work.py -q -p no:cacheprovider
+python3 -m pytest .claude/hooks/tests/ tests/ -q
+```
+
+## Approach
+
+**Pattern reference**: `_read_only` / `_bash_works` in `lib/session_work.py`; `_allowed_command` in `lib/task_context.py`; `session_owner` / `session_window` in `stop_auto_mode_check.py`; fixtures in `test_t250_session_ownership.py` and `test_t252_marked_ownership.py`.
+**Vital slice**: one `_test_run(tokens)` predicate and one keyword threaded through `_works` → `_bash_works`, used by the two Stop-hook readers.
+**Cut list**: removing the false `Paused:` line already written to `../wt-t321/tasks/TASK_REVIEW_T321.md` (another session's file; reported to the user); `sh -c`/`eval` test runs (stay work); conftest/plugin writes made by a test run (known limit, as `python3 -c`).
+
+## Questions Log
+- 2026-11-16 DEBATE how should the fix stop a read-only test run from making a session own another session's auto task? → D: a `test_runs_count` keyword in `session_work`, off only in the Stop hook (Advocate 1: D, flag for `worked_on` and `work_start`; Advocate 2: D, flag for `worked_on` only; Advocate 3: A, test runs are not work for every caller) ⚠ decided for you — please review (reports/question_T324_20261116T105659.html)

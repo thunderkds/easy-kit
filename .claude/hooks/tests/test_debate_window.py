@@ -302,7 +302,7 @@ def test_p3_1_a_transcript_that_cannot_be_read_keeps_the_whole_session_rule(tmp_
 def test_p3_1_a_window_reader_that_raises_keeps_the_whole_session_rule(tmp_path):
     s = _old_trace_session(tmp_path)
     lib = s.project / ".claude" / "hooks" / "lib" / "session_work.py"
-    lib.write_text(lib.read_text(encoding="utf-8") + "\n\ndef work_start(_entries, _task_id, _worktrees):\n"
+    lib.write_text(lib.read_text(encoding="utf-8") + "\n\ndef work_start(_entries, _task_id, _worktrees, **_kw):\n"
                    "    raise RuntimeError('window reader broke')\n", encoding="utf-8")
     reason, stderr = s.stop()
     assert reason is None, (reason, stderr)

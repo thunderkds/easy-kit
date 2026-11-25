@@ -461,7 +461,8 @@ def session_owner(transcript_path):
             if cache["calls"] is None:
                 return None
             sw = cache["sw"]
-            return sw.worked_on(cache["calls"], task.task_id, _task_worktrees(sw, task))
+            return sw.worked_on(cache["calls"], task.task_id, _task_worktrees(sw, task),
+                                test_runs_count=False)  # T324: a test run is not work
         except Exception as exc:
             warn(f"{task.task_id}: session ownership unknown ({type(exc).__name__}) — checked")
             return None
@@ -484,7 +485,8 @@ def session_window(transcript_path):
             if cache["entries"] is None:
                 return None
             sw = cache["sw"]
-            return sw.work_start(cache["entries"], task.task_id, _task_worktrees(sw, task))
+            return sw.work_start(cache["entries"], task.task_id, _task_worktrees(sw, task),
+                                 test_runs_count=False)  # T324: same test as session_owner
         except Exception as exc:
             warn(f"{task.task_id}: Debate window unknown ({type(exc).__name__}) — whole session counts")
             return None
