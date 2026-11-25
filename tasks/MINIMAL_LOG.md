@@ -397,3 +397,21 @@ Mode: auto
 **Files:** `.gitignore`, `tests/test_no_spawn_markers.py`, `.claude/markers/` (88 files removed)
 - Note: a first auto verify run at `e6a5e566` printed `verdict: pass` (log `.claude/verify-runs/T214-e6a5e566860b.log`) but could not write its line: the main checkout was switched to `main` mid-run, so this file was absent there.
 **Not done:** merge (yours); auto verify: running
+
+## T247 — an interrupt or slash-command entry does not close the Stop check's [auto] span · minimal
+Mode: auto
+**Asked:** "continue the tasks as parallel [admin]"
+**Decisions:**
+1. Ran T247 with T304 and T316 in parallel — RULE: the user's request "continue the tasks as parallel [admin]"
+2. Track minimal — RULE: docs/claude-md/tracks.md § Track rule (C0, Risk Low)
+3. One common-infrastructure implementer, haiku, effort low — RULE: AGENTS.md § Hard-Stop Gates (Gate 1), PROJECT_SPEC.md CLI Model/Effort Tables
+4. The Stop check only, `auto_mode.request_text` unchanged — RULE: tasks/TASK_GUIDE_T247.md § Requirement "Scope limit"
+**Checked:**
+- New test `.claude/hooks/tests/test_t247_auto_span_entries.py` (Supervisor-written locked oracle, commit 5358bc9b, 20 cases) — `8 failed, 12 passed` before the change (the 8 are the interrupt, `for tool use` and `<command-name>`/`<command-message>` close cases, plus the AC4 interrupt-then-request case), `20 passed` after
+- BEFORE: `date -u` 2026-11-25T07:32:38Z — `python3 -m pytest -q -p no:cacheprovider .claude/hooks/tests/test_t247_auto_span_entries.py` → `8 failed, 12 passed in 0.52s`. The BEFORE uses the HEAD reader with only the `__main__` guard added: the unguarded `main()` at the hook's module level made the oracle exit at import (`SystemExit: 0`, `no tests ran`)
+- AFTER: `python3 -m pytest -q -p no:cacheprovider .claude/hooks/tests/test_t247_auto_span_entries.py .claude/hooks/tests/test_stop_auto_mode_check.py` → `107 passed in 9.10s`
+- Neighbours (after): `test_stop_auto_mode_check.py` `87 passed`; `test_t310_admin_unsure_stop.py` `18 passed`; `test_t317_fix_round.py` `28 passed`; `test_t317_loop_binding.py` `5 passed`; `test_t317_session_tags.py` `137 passed`; `test_stop_attribution_t287.py` `25 failed, 112 passed` — the same 25 fail at HEAD (`25 failed, 112 passed`), so not from this change. No `test_t229*` file exists in `.claude/hooks/tests/`
+- Other callers of `request_text` in `stop_auto_mode_check.py`: only `auto_windows` (line 182); its reading is the one that changes
+**Memory:** nothing new
+**Files:** `.claude/hooks/stop_auto_mode_check.py` (local `request_text` reader, `__main__` guard), `tasks/MINIMAL_LOG.md`
+**Not done:** merge (admin: after the auto verify pass); auto verify: running (T182)

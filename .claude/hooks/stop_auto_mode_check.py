@@ -159,7 +159,16 @@ parse_ts = am.parse_ts  # T292: the one copy, in `lib/auto_mode.py`
 
 # T229: what a user request is, and T284: which tags it carries — read by `lib/auto_mode.py`, the
 # one reader the merge gate shares.
-request_text = am.request_text
+# T247: an interrupt or a slash-command entry is not a request for the Stop check: it neither opens
+# nor closes an `[auto]` span. Only this reader changes; the merge gate keeps `am.request_text`.
+STOP_CHECK_NOT_A_REQUEST = re.compile(r"\s*(\[Request interrupted by user|<command-name>|<command-message>)")
+
+
+def request_text(entry):
+    text = am.request_text(entry)
+    if text is None or STOP_CHECK_NOT_A_REQUEST.match(text):
+        return None
+    return text
 
 
 def auto_windows(transcript_path):
@@ -716,4 +725,5 @@ def main():
         "(docs/claude-md/tracks.md `## Auto mode`):\n  • " + "\n  • ".join(lines))}))
 
 
-main()
+if __name__ == "__main__":  # T247: importable by the unit tests; as a hook script it runs as before
+    main()
