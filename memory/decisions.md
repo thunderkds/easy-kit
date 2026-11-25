@@ -4,6 +4,11 @@
 
 ## Architecture
 
+### 2026-11-25 — T368: under `[admin]` a failed verify starts a fix round (max 2); a changed shell suite is named in the `/verify` request
+**Decision** ([admin], extended track; Debate 3/3 for option (A)): `verify_record.shell_suites_changed` lists the `tests/**/test_*.sh` suites a branch adds or modifies (regular files, safe names, not `tests/lib/`, [] on any git doubt) and `stop_auto_verify.verify_request` names them in the `-p` text with an ask for PASS or FAIL by exit code; with none the text stays `/verify <ID>`. `docs/claude-md/tracks.md` `### Admin tag`: a `fail` → fix on the branch, fresh `Reviewer: <ID>` on the new commit, new run; at most 2 fix rounds, then stop. Rejected: (B) `.sh` on the docs-only list (breaks T289, `tracks.md:491`; T367's red suite would have passed), (C) the hook runs suites itself (branch code outside the user's permission settings).
+**Why**: the user wants `[admin]` to finish every job ("when using [admin] tag, I assume you can do all the jobs"; the verify loop "like the debate agents"). T367, a shell-test-only CI fix, blocked twice on SKIP. **Unproven**: whether the bundled `/verify` follows the extra text — if it still answers SKIP the run stays `blocked` (fails closed). `[admin]` on a `master` repo is T370.
+**Files**: .claude/hooks/lib/verify_record.py, .claude/hooks/stop_auto_verify.py, docs/claude-md/tracks.md, tests/test_auto_verify_shell_suites_t368.py, tests/test_auto_verify.py
+
 ### 2026-11-25 — T316: the sensitive-path list is a protected pattern (always asks, never predicted or approved)
 **Decision** ([admin], extended track; Debate 3/3 for option (a)): `pre_tool_sensitive_path.py` adds the list's name, `sensitive-paths.txt` (no `/`: any directory), to `PROTECTED_PATTERNS`, beside `.claude/state/**` and `sensitive-approvals.json*`. A protected hit is appended last (no `!` line unmarks it), skips the predicted-path check and gets no approval key.
 **Why**: an agent writes a guide's predicted-files table and one approval-once would let it empty the list, which is the root of every other protection. **Traps**: the hook matches tokens, so a folder-level call (`rm -rf .claude`, `git checkout HEAD~1 -- .claude`, `git restore .`) or a shell-built name (`{a,b}` braces, `${f}…`) still skips it — the same for `.env` since T146; a Bash `cat` of the list now asks.
