@@ -119,6 +119,16 @@ class Dequote(FixRoundTest):
             with self.subTest(command=cmd):
                 self.assert_ask(self.pre("Bash", cmd))
 
+    def test_r5_p2_an_escaped_quote_in_a_spaced_span_does_not_hide_the_next_word(self):
+        for cmd in ('cat "a \\" b" .e"n"v', 'cat "a\\" b" .e"n"v', 'cat "a \\"b" .e"n"v "c d"'):
+            with self.subTest(command=cmd):
+                self.assert_ask(self.pre("Bash", cmd))
+
+    def test_r5_p2_a_dot_led_glob_after_a_dot_slash_is_a_name(self):
+        for cmd in ("cat ./.??''?", 'cat ./.?"?"?', "cat ./.*$x", "cat $PWD/.??''?"):
+            with self.subTest(command=cmd):
+                self.assert_ask(self.pre("Bash", cmd))
+
     def test_r4_p3_bang_is_a_built_part(self):
         for cmd in ("cat .env$!", "cat .claude/sens$!itive-paths.txt"):
             with self.subTest(command=cmd):

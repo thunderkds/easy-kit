@@ -80,7 +80,8 @@ Recorded limitations (cut list, TASK_GUIDE_T146; T363; T375):
   backtick is not read (`sens$(true)itive-paths.txt`), nor the default text in `${F:-.env}`.
   A short literal prefix next to a built part asks when it globs a sensitive file (`"se$x"` finds `server.pem`). The folder rule does not read a
   built part (`find config -d${E}elete`, `rm -r conf${x}ig`). A quoted value after `=` is read even
-  behind a data command (`grep --exclude=".env" KEY src` asks) (T375 review).
+  behind a data command (`grep --exclude=".env" KEY src` asks). An apostrophe in a `#` comment
+  can pair with a later quote and blank a span (`shell_data` has the same weakness) (T375 review).
 * The folder rule knows only the verbs above: `git reset --hard`, `git clean`, `git stash`,
   `cp -r`, `rsync --delete`, `tar -x`, `ln -sf`, a script or an alias acting on a folder do not
   ask (T363 option C). Nor does a destructive command inside quoted code (`bash -c "rm -rf x"`,
@@ -168,7 +169,7 @@ GLOB_CHARS = re.compile(r"[*?\[]")
 SHELL_WORD_PATTERN = re.compile(r"""(?:[^\s;&|<>()`'"\\]|\\[\s\S]|\$?'[^'\s]*'|\$?"[^"\s]*")+""")
 SHELL_WORD_MARKS = re.compile(r"""['"\\]|\$[{\w@*!]""")
 BUILT_PART_PATTERN = re.compile(r"\$\{[^}]*\}|\$\w+|\$[@*!]")
-DOT_GLOB_PATTERN = re.compile(r"\.[*?\[]")  # `.??` names dotfiles; `*-*` and `./*` name nothing
+DOT_GLOB_PATTERN = re.compile(r"(?:^|/)\.[*?\[]")  # `.??` names dotfiles; `*-*` and `./*` name nothing
 WHOLLY_QUOTED_PATTERN = re.compile(r"""\$?(["'])[^"']*\1""")
 # T342: a segment whose command neither globs its arguments nor runs a shell. Anchored at the
 # segment start like shell_data's DATA_COMMAND_PATTERN: only `VAR=value` and a path may come
@@ -421,8 +422,8 @@ def blank_spaced_spans(text):
             if i and text[i - 1] == "\\":
                 break
             close = text.find(text[i], i + 1)
-            if close == -1:
-                break
+            if close == -1 or "\\" in text[i:close + 1]:
+                break  # an escaped quote may pair the wrong way: read the tail unblanked (round 5)
             if re.search(r"\s", text[i:close + 1]):
                 out[i:close + 1] = " " * (close + 1 - i)
             i = close + 1
@@ -456,7 +457,7 @@ def dequoted_tokens(text, cwd):
             readings = [built.replace("\0", "$"), BUILT_PART_PATTERN.sub("", word).replace("\0", "$")]
         for reading in readings:
             for token in TOKEN_PATTERN.finditer(reading):
-                if not re.search(r"[A-Za-z0-9]", token.group()) and not DOT_GLOB_PATTERN.match(token.group()):
+                if not re.search(r"[A-Za-z0-9]", token.group()) and not DOT_GLOB_PATTERN.search(token.group()):
                     continue  # `TOKEN_PATTERN` splits at `=` and `:`: a piece of only `*`, `/`, `.`, `-`, `_` or `?` is no name (rounds 2-3)
                 found.append(token.group())
                 if BRACE_PATTERN.search(token.group()):
