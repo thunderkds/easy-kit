@@ -99,6 +99,7 @@
 
 
 ### In Progress
+- [ ] **T354** — the `[admin]`/`[ticket]` loop binds its task after the hook's close-out moved the row to Done | common-infrastructure | C2 | Risk: High | P1 | Guide: `tasks/TASK_GUIDE_T354.md` | Registered 2026-11-25 [admin] from the T347 merge refusal, user: "yes, let fix this" | Started 2026-11-25 [admin]: branch `fix/t354-loop-binds-closed-out-row`, worktree `../wt-t354` | Track: extended
 - [ ] **T353** — Ship agent-ws (T345) as an opt-in installer choice, and say so on the site's index page | common-infrastructure | C3 | Risk: High | P1 | Registered 2026-11-25 [admin], user: "for the update in another repos, we should add the option when reinstall the kit, right, by the way, let update the index page also" | Guide: `tasks/TASK_GUIDE_T353.md` | Depends on: T345 | Track: extended | Started 2026-11-25 [admin], worktree `../wt-t353`, branch `feat/t353-agent-ws-installer`
 
 
