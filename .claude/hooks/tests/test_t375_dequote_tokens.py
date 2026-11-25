@@ -137,6 +137,12 @@ class Dequote(FixRoundTest):
                 self.assert_ask(self.pre("Bash", cmd))
         self.assert_silent(self.pre("Bash", 'echo "today is $(date +%F) and $x.env"'.replace("$x.env", "ok")))
 
+    def test_r7_p2_a_spaced_span_behind_a_shell_is_code_not_a_message(self):
+        for cmd in ('bash -c "cat .e\'\'nv"', "sh -c 'cat .e\"\"nv'", "bash -c 'cat .claude/sens\"\"itive-paths.txt'",
+                    'eval "cat .e\'\'nv"', 'ssh h "cat .e\'\'nv"', 'xargs -I{} sh -c "cat .e\'\'nv"'):
+            with self.subTest(command=cmd):
+                self.assert_ask(self.pre("Bash", cmd))
+
     def test_r4_p3_bang_is_a_built_part(self):
         for cmd in ("cat .env$!", "cat .claude/sens$!itive-paths.txt"):
             with self.subTest(command=cmd):

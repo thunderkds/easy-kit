@@ -169,6 +169,10 @@ GLOB_CHARS = re.compile(r"[*?\[]")
 SHELL_WORD_PATTERN = re.compile(r"""(?:[^\s;&|<>()`'"\\]|\\[\s\S]|\$?'[^'\s]*'|\$?"[^"\s]*")+""")
 SHELL_WORD_MARKS = re.compile(r"""['"\\]|\$[{\w@*!]""")
 BUILT_PART_PATTERN = re.compile(r"\$\{[^}]*\}|\$\w+|\$[@*!]")
+# Round 7: a quoted span with a space is a message only behind these commands; behind `bash -c`,
+# `eval`, `ssh`, `xargs` or any other command it stays code. A command missing here over-asks.
+MESSAGE_COMMAND_PATTERN = re.compile(
+    r"\s*(?:[A-Za-z_]\w*=\S*\s+)*(?:[\w.\-/]*/)?(?:echo|printf|[ef]?grep|rg|ag)(?:\s|\Z)")
 DOT_GLOB_PATTERN = re.compile(r"(?:^|/)\.[*?\[]")  # `.??` names dotfiles; `*-*` and `./*` name nothing
 WHOLLY_QUOTED_PATTERN = re.compile(r"""\$?(["'])[^"']*\1""")
 # T342: a segment whose command neither globs its arguments nor runs a shell. Anchored at the
@@ -415,18 +419,25 @@ def shell_word(word):
 def blank_spaced_spans(text):
     """`text` with each quoted span that holds a space turned into spaces: it is a message, so a
     `$` in it is no word (`echo "see $x.env file"`, round 4). Quotes pair left to right; an
-    unterminated quote or a `\\"` ends the scan; a `$(` or a backtick anywhere turns it off."""
+    unterminated quote or a `\\"` ends the scan; a `$(` or a backtick anywhere turns it off; only a span behind `echo`, `printf`,
+    `grep`, `rg` or `ag` is a message (round 7)."""
     if "$(" in text or "`" in text:
         return text  # a quoted `$(…)` is code, and its inner quotes break the pairing (round 6)
-    out, i = list(text), 0
+    out, i, segment_start = list(text), 0, 0
     while i < len(text):
+        boundary = SEGMENT_BOUNDARY_PATTERN.match(text, i)
+        if boundary and text[i] not in "\"'":
+            segment_start = i = boundary.end()
+            continue
         if text[i] in "\"'":
             if i and text[i - 1] == "\\":
                 break
             close = text.find(text[i], i + 1)
             if close == -1 or "\\" in text[i:close + 1]:
                 break  # an escaped quote may pair the wrong way: read the tail unblanked (round 5)
-            if re.search(r"\s", text[i:close + 1]):
+            span = text[i:close + 1]
+            if (re.search(r"\s", span) and MESSAGE_COMMAND_PATTERN.match(text[segment_start:i])
+                    and not SPAN_EXECUTOR_PATTERN.search(span)):
                 out[i:close + 1] = " " * (close + 1 - i)
             i = close + 1
         else:
