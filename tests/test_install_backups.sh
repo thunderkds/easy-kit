@@ -247,11 +247,12 @@ else
   fail "edge: unwritable backup reported success: $RO_OUT"
 fi
 # T119: the abort names the one path it did not replace, and does not claim the
-# whole run replaced nothing (MANIFEST paths before it are already installed).
+# whole run replaced nothing. T253: it also makes no claim about which other
+# paths were installed, since Update continues after a failed backup.
 if [ "$(id -u)" -eq 0 ]; then
   pass "T119: abort wording — skipped (root ignores directory permissions)"
 elif printf '%s' "$RO_OUT" | grep -qF "'$T/p/templates' was not replaced" \
-   && printf '%s' "$RO_OUT" | grep -qF 'paths before it in this run, if any, were already installed' \
+   && ! printf '%s' "$RO_OUT" | grep -qF 'paths before it' \
    && ! printf '%s' "$RO_OUT" | grep -qF 'nothing was replaced'; then
   pass "T119: abort says which path was not replaced, not 'nothing was replaced'"
 else

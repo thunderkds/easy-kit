@@ -264,6 +264,9 @@ ok "SC8: logged as kept (backup failed: ...)" 'grep -Eq "^- agents/qa.md — kep
 ok "SC8: CLAUDE.md logged as overwrote" 'grep -Fxq -- "- CLAUDE.md — overwrote (your edits; backup CLAUDE.md.bak-$C1)" "$(LOG_OF)"'
 ok "SC8: names the backup failure accurately" 'grep -Fq "1 file(s) could not be backed up, so they were kept as they are — see .claude/update-log.md." "$OUT"'
 ok "SC8: no false 'no interactive input' reason" '! grep -Fq "no interactive input" "$OUT"'
+# T253: the Update run goes on after a failed backup, so its output must not say
+# that only the paths before the failure were installed.
+ok "T253 SC8: no 'paths before it' claim in an Update run that continues" '! grep -Fq "paths before it in this run" "$OUT"'
 dump SC8
 
 # SC8b — choice 1: o for agents/qa.md (its backup fails), then no input (EOF)
