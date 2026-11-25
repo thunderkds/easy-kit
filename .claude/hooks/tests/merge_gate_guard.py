@@ -111,9 +111,14 @@ GATE_REL = ".claude/hooks/pre_bash_block_unsafe_merge.py"
 #   T320 — `gh pr merge` and `gh api` calls to a merge endpoint are merges for the gate and the user's in
 #          auto mode: `GH_MERGE_PATTERNS` and `gh_merge_hit` (`tasks/TASK_GUIDE_T320.md`, AC 1-5). Supervisor
 #          sign-off: the user's "yes, let go" to starting T320, 2026-11-24.
+#   T354 — the session loop also binds its task when the hook's close-out moved the row to Done:
+#          `_closed_out_since` (the task's one Done row ends with the close-out note, whose commit has
+#          this run's own pass record from that session, after the own `--start`, held by the branch;
+#          `tasks/TASK_GUIDE_T354.md`, AC 1-5). Supervisor sign-off under session `[admin]`: the user's
+#          "yes, let fix this", 2026-11-25.
 AUTHORISED_TASKS = ("T182", "T188", "T190", "T197", "T196", "T210", "T211", "T232", "T250", "T284",
                     "T289", "T291", "T296", "T295", "T308", "T309", "T317", "T323", "T326", "T341",
-                    "T320")
+                    "T320", "T354")
 
 
 def _git(root, *args):

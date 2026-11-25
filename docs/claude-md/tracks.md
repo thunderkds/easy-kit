@@ -946,8 +946,13 @@ request and runs no two tickets at once.
   (`### Admin tag` item 3; the yes may carry no tag, and the row is in Ready for Review except for the
   `main` push), or it is the loop's task. When the Supervisor asks to merge, it names exactly one task
   and asks for `merge <ID> [admin]` or a yes. The loop's task is the branch's task when all of these hold. Its own row is in Ready
-  for Review (for the merge and the task branch push; the `main` push after the merge may follow the
-  close-out). This session changed it since the tag request, and holds no other task In Progress or
+  for Review, or in Done by the hook's close-out of that same pass (T354: the close-out moves a
+  `Mode: auto` row at once, so the merge and the task branch push come after it). A Done row binds only
+  when it is the task's one Done row and ends with the close-out's note
+  `Done <date>: auto verify pass (session <id>, commit <sha>)`, and that commit has the hook's pass
+  record from that session, written after this session's `--start` call and held by the branch; a
+  Done row with no note, or a note for other code, binds nothing. The `main` push after the merge may
+  follow the close-out. This session changed it since the tag request, and holds no other task In Progress or
   Ready for Review. This session ran `python3 .claude/hooks/stop_auto_verify.py --start <ID>` for it as
   its own Bash call, after the tag request; an echoed or quoted mention, or one in a sub-agent's
   prompt, does not count. The hook wrote its auto verify pass after that call. A run record's file
