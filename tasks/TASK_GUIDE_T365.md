@@ -31,15 +31,15 @@ Before writing any code:
 
 **Restated intent**: items 1, 3 and 4 are text fixes in `.claude/hooks/pre_bash_block_unsafe_merge.py`. A refusal says what is wrong: "this repository has no remote `<name>`", or the setting, never `None`. The docstrings name the admin remote. No refusal becomes an allow, and no allow becomes a refusal.
 
-**Item 2 is moved to a task of its own, T368.** `repo_slug` (`.claude/hooks/lib/trace_chain.py:61`) names the folder of every trace anchor as well as every verify run record. Any change to it moves all existing records and anchors for every installed project. Choosing a slug that does not depend on a remote, and a migration that keeps earlier passes and anchors readable, is a design decision on tamper-evidence state. It is not a text fix.
+**Item 2 is moved to a task of its own, T369.** `repo_slug` (`.claude/hooks/lib/trace_chain.py:61`) names the folder of every trace anchor as well as every verify run record. Any change to it moves all existing records and anchors for every installed project. Choosing a slug that does not depend on a remote, and a migration that keeps earlier passes and anchors readable, is a design decision on tamper-evidence state. It is not a text fix.
 
-**Out of scope**: item 2 (T368); the static `AUTO_MODE_LIMIT` text (T321 accepted it as it is).
+**Out of scope**: item 2 (T369); the static `AUTO_MODE_LIMIT` text (T321 accepted it as it is).
 
 **Requirement Refs**: T321 (`tasks/TASK_GUIDE_T321.md`, `.claude/hooks/tests/test_t321_admin_remote.py`); `docs/claude-md/tracks.md` `### Admin tag` "The remote (T321)".
 
 ### Requirement Fidelity Gate (sign off BEFORE implementation)
 
-- [x] Restated intent matches the user's request — auto (Supervisor), `[admin]`, 2026-11-25; item 2 split out to T368 (task breakdown, self-approved under `[admin]`)
+- [x] Restated intent matches the user's request — auto (Supervisor), `[admin]`, 2026-11-25; item 2 split out to T369 (task breakdown, self-approved under `[admin]`)
 - [x] Domain terms align with the `PROJECT_SPEC.md` glossary (merge gate, admin remote: no new term)
 - [x] Every Acceptance Criterion traces to a line of the Requirement
 
@@ -106,9 +106,9 @@ Options weighed (High risk):
 |---|---|---|---|
 | A. New refusal checks placed before the generic one; texts only | Low: one hook, new code paths only add a refusal where one already happened | none: every case they catch was already refused | **yes** |
 | B. Make `_admin_push_branch` return a reason, not None | Medium: changes a helper the tests call directly (`_admin_push_branch(...) is None`) | T321 AC 5 helper tests | no |
-| C. Do item 2 here too (slug from the admin remote) | High: re-slugs every anchor and record | earlier passes and trace anchors become unreadable | no: T368 |
+| C. Do item 2 here too (slug from the admin remote) | High: re-slugs every anchor and record | earlier passes and trace anchors become unreadable | no: T369 |
 
-**Cut list**: item 2 (T368). No change to which commands are allowed.
+**Cut list**: item 2 (T369). No change to which commands are allowed.
 
 ---
 
@@ -134,7 +134,7 @@ Options weighed (High risk):
 
 | File | Reason |
 |------|--------|
-| `.claude/hooks/lib/trace_chain.py`, `.claude/hooks/lib/verify_record.py` | item 2 is T368 |
+| `.claude/hooks/lib/trace_chain.py`, `.claude/hooks/lib/verify_record.py` | item 2 is T369 |
 | `.claude/settings.json` | the user sets `EASY_KIT_ADMIN_REMOTE` by hand |
 
 ---
