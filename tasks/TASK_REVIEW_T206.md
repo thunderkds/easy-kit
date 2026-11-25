@@ -23,6 +23,15 @@ Wed Nov 25 05:29:08 UTC 2026
 
 Failing assertion: `assert 0 == 2` (bare `--start` and extra-arg forms return 0 with no usage line; they fall through to `stop_hook()` when the child guard is absent).
 
-**AFTER**: [to be filled after the fix]
+**AFTER**: (captured 2026-11-25 05:29:29 UTC, after the fix)
 
-**DELTA**: [to be filled after the fix]
+```
+$ python3 -m pytest .claude/hooks/tests/test_t206_start_usage.py -q -p no:cacheprovider   (scratchpad venv)
+....                                                                     [100%]
+4 passed in 0.12s
+$ CLAUDE_AUTO_VERIFY_RUN=1 python3 .claude/hooks/stop_auto_verify.py --start T1 x
+usage: stop_auto_verify.py --start <TASK_ID>
+rc=2
+```
+
+**DELTA**: A bare or extra-arg `stop_auto_verify.py --start` now prints one usage line and exits 2 without reaching `stop_hook()`, so it can no longer start a paid run for every due task.
