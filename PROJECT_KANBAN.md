@@ -98,7 +98,6 @@
 
 
 ### In Progress
-- [ ] **T321** — the `[admin]`/`[ticket]` push remote is a setting (`EASY_KIT_ADMIN_REMOTE`), not the hard-coded `origin` | common-infrastructure | C2 | Risk: High | P1 | Started 2026-11-15 [admin]: branch `feat/t321-admin-remote`, worktree `../wt-t321` | Track: extended | Back to Todo 2026-11-18 (user: "Move both to Todo"): stale In Progress — no branch and no worktree existed | Started 2026-11-25 [admin]: branch `feat/t321-admin-remote`, worktree `../wt-t321`
 
 
 
@@ -112,6 +111,7 @@
 
 
 ### Ready for Review
+- [ ] **T321** — the `[admin]`/`[ticket]` push remote is a setting (`EASY_KIT_ADMIN_REMOTE`), not the hard-coded `origin` | common-infrastructure | C2 | Risk: High | P1 | Started 2026-11-15 [admin]: branch `feat/t321-admin-remote`, worktree `../wt-t321` | Track: extended | Back to Todo 2026-11-18 (user: "Move both to Todo"): stale In Progress — no branch and no worktree existed | Started 2026-11-25 [admin]: branch `feat/t321-admin-remote`, worktree `../wt-t321` | Ready for Review 2026-11-25 [admin]: Stage 4 passed (Reviewer PASS, P3 only; code-review and security-review no P0-P2), auto verify next
 - [ ] **T345** — Shared build base for multi-agent, multi-session work (`agent-ws`), Phase 0–1 with the 2026-11-24 review fixes | common-infrastructure | C3 | Risk: High | P1 | Guide: `tasks/TASK_GUIDE_T345.md` | Registered 2026-11-24, user: "create the ticket and note all to this" (review of the Claude Docs plan https://claude.ai/artifact/VjwpdBJSzeMLSdFYn3hyYc: 3 blocking + 5 smaller gaps, 13 experiments) | Track: extended | Merged into `main` f90c93f7 2026-11-25 [admin], not pushed (no `origin`), Done not moved by the hook (report slot), auto verify ☑ pass; Ready for Review 2026-11-25 [admin] (Reviewer: T345 round 2 pass, `a9861d08`), started 2026-11-25, worktree `../wt-t345`, branch `feat/t345-agent-ws` | Before start: D1–D3 answered 2026-11-24 (Python, this board, tmpfs `target/` default, slot queue opt-in); experiments R1–R10 recorded in the guide; intent and Acceptance Criteria confirmed by the user 2026-11-25; Gate has two bookkeeping boxes left (glossary rows, PRD FR) = step 1 of the guide's `## Run plan`; the user runs it later | Phases 2–4 = follow-up tickets, not registered
 
 
