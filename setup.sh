@@ -327,6 +327,31 @@ prompt_mode() {
   esac
 }
 
+# ── Question: agent-ws (T353) ────────────────────────────────────────────────
+# One y/N question, asked on Install and Reinstall right after the project type,
+# before the plan: a yes copies scripts/agent_ws.py and adds its 3 hooks (overlay
+# lib/agent-ws-hooks.json). Linux only (agent-ws needs /proc and flock), so any
+# other system is never asked. No terminal or EOF keeps the default: off on
+# Install, the project's current answer on Reinstall ($1, D2).
+AGENT_WS=off
+agent_ws_linux() { [ "$(uname -s 2>/dev/null)" = "Linux" ]; }
+prompt_agent_ws() {
+  _aw_default="${1:-off}"
+  if ! agent_ws_linux; then AGENT_WS=off; return 0; fi
+  AGENT_WS="$_aw_default"
+  [ "$TTY_OK" -eq 1 ] || return 0
+  if [ "$_aw_default" = on ]; then _aw_hint='[Y/n]'; else _aw_hint='[y/N]'; fi
+  printf '\nParallel agents: each gets its own copy of the repo and a build folder in memory.\n'
+  printf 'Turn on parallel builds (agent-ws)? %s ' "$_aw_hint"
+  tty_read || { printf '\n'; return 0; }
+  case "$TTY_ANSWER" in
+    y|Y|yes|YES|Yes) AGENT_WS=on ;;
+    n|N|no|NO|No)    AGENT_WS=off ;;
+    '') ;;
+    *)  AGENT_WS=off ;;
+  esac
+}
+
 # ── Install CLAUDE.md as a real copy (a differing existing one is backed up) ──
 install_claude() {
   src="$HARNESS_TEMP_DIR/$CLAUDE_SRC"
@@ -369,6 +394,7 @@ merge_settings() {
   _src="$1"
   _dst="$2"
   _merge="$HARNESS_TEMP_DIR/lib/merge-settings.py"
+  _overlay="${3:-}"
 
   if [ ! -f "$_merge" ]; then
     settings_merge_refused "the fetched Easy Kit has no lib/merge-settings.py" "$_src"
@@ -378,7 +404,7 @@ merge_settings() {
     settings_merge_refused "python3 is not on PATH (every kit hook runs as 'python3 …', so it is a hard prerequisite)" "$_src"
     return
   fi
-  if ! python3 "$_merge" "$_src" "$_dst" "."; then
+  if ! python3 "$_merge" "$_src" "$_dst" "." ${_overlay:+"$_overlay"}; then
     settings_merge_refused "the merge refused this file (reason above)" "$_src"
     return
   fi
@@ -399,12 +425,14 @@ install_settings() {
     return
   fi
   if [ -e "$dst" ] || [ -L "$dst" ]; then
-    merge_settings "$src" "$dst"
+    merge_settings "$src" "$dst" "$(agent_ws_overlay)"
     return
   fi
   [ -d ./.claude ] || mkdir -p ./.claude
   cp "$src" "$dst"
   log_info "Installed .claude/settings.json (copy). Restart Claude Code to activate hooks."
+  # T353: an opted-in project adds the agent-ws entries on top of the copy.
+  [ -z "$(agent_ws_overlay)" ] || merge_settings "$src" "$dst" "$(agent_ws_overlay)"
 }
 
 # ── Content hash of a single file (permission-independent: content only) ──────
@@ -451,6 +479,7 @@ write_harness_lock() {
       fi
     done < "$_manifest"
     [ -f ./CLAUDE.md ] && printf '%s\n' ./CLAUDE.md
+    [ "$AGENT_WS" = on ] && [ -f ./scripts/agent_ws.py ] && printf '%s\n' ./scripts/agent_ws.py
   } | sed 's|^\./||' | LC_ALL=C sort -u > "$_files_list"
 
   _count=$(wc -l < "$_files_list" | tr -d ' ')
@@ -462,6 +491,7 @@ write_harness_lock() {
     if [ -n "$HARNESS_KIT_COMMIT" ]; then
       printf '  "kit_commit": "%s",\n' "$HARNESS_KIT_COMMIT"
     fi
+    [ "$AGENT_WS" = on ] && printf '  "agent_ws": "on",\n'
     printf '  "files": {\n'
     _first=1
     while IFS= read -r _rel; do
@@ -757,6 +787,7 @@ plan_install() {
   printf '  - Existing paths that differ from the kit are moved aside first:\n'
   plan_list "$_p_bk" "(none)"
   printf '  - Hooks: .claude/settings.json is created, or Easy Kit entries are merged into yours.\n'
+  plan_agent_ws_line
 }
 
 # ── Install (the pre-T114 main body, after the fetch) ────────────────────────
@@ -779,6 +810,7 @@ run_install() {
   install_harness_projections "$manifest"
 
   install_claude
+  install_agent_ws_script
   install_settings
   scaffold_project
   write_harness_lock "$manifest"
@@ -847,16 +879,19 @@ main() {
     case "$ACTION" in
       cancel) cancel_run ;;
       update)
+        AGENT_WS=$(lock_agent_ws "$LOCK_FILE")
         plan_update "$LOCK_FILE" "$manifest" "$fresh_list"
         ;;
       install)
         prompt_clis "$manifest"
         prompt_mode
+        prompt_agent_ws off
         plan_install "$manifest"
         ;;
       reinstall)
         prompt_clis "$manifest"
         prompt_mode
+        prompt_agent_ws "$(lock_agent_ws "$LOCK_FILE")"
         plan_reinstall "$reinstall_backups" "$LOCK_FILE" "$fresh_list" "$manifest"
         ;;
     esac
