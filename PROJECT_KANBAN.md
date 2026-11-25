@@ -105,7 +105,6 @@
 
 
 ### In Progress
-- [ ] **T373** — The docs page tells users how to set the `[admin]` push remote (`EASY_KIT_ADMIN_REMOTE` in `.claude/settings.local.json` `"env"`) and says what T368 changed (a shell suite gets a real run; a fail starts a fix round) | common-infrastructure | C1 | Risk: Low | P2 | Registered 2026-11-25, user: "with this, do we need to add the guide for that" | Guide: `tasks/TASK_GUIDE_T373.md` | Track: minimal | Record: tasks/MINIMAL_LOG.md | Depends on: T321, T368 | Started 2026-11-25 [admin], worktree `../wt-t373`, branch `docs/t373-admin-remote-guide`
 
 
 
@@ -119,6 +118,7 @@
 
 
 ### Ready for Review
+- [ ] **T373** — The docs page tells users how to set the `[admin]` push remote (`EASY_KIT_ADMIN_REMOTE` in `.claude/settings.local.json` `"env"`) and says what T368 changed (a shell suite gets a real run; a fail starts a fix round) | common-infrastructure | C1 | Risk: Low | P2 | Registered 2026-11-25, user: "with this, do we need to add the guide for that" | Guide: `tasks/TASK_GUIDE_T373.md` | Track: minimal | Record: tasks/MINIMAL_LOG.md | Depends on: T321, T368 | Started 2026-11-25 [admin], worktree `../wt-t373`, branch `docs/t373-admin-remote-guide` | Ready for Review 2026-11-25 [admin]: Reviewer PASS (P3 only, commit `0ddcdac1`), record in `tasks/MINIMAL_LOG.md` on the branch
 
 
 
