@@ -77,6 +77,9 @@ jobs:
       - name: CLI and project-type menus test suite (T115)
         run: bash tests/test_cli_and_project_menus.sh
 
+      - name: agent-ws installer opt-in test suite (T353)
+        run: bash tests/test_agent_ws_installer_t353.sh
+
       - name: MANIFEST exclusions test suite (T122)
         run: bash tests/test_manifest_exclusions.sh
 
