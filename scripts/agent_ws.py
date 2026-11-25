@@ -34,6 +34,7 @@ import json
 import os
 import re
 import secrets
+import shlex
 import shutil
 import signal
 import stat
@@ -592,7 +593,73 @@ def cmd_watch(args):
     return 0
 
 
-COMMANDS = {"new": cmd_new, "rm": cmd_rm, "gc": cmd_gc, "run": cmd_run, "_watch": cmd_watch}
+# ── Claude Code hooks (registered in a project's .claude/settings.local.json: docs/agent-ws.md) ──
+
+
+def read_event():
+    try:
+        event = json.load(sys.stdin)
+    except ValueError:
+        raise Refused("hook input is not JSON")
+    if not isinstance(event, dict):
+        raise Refused("hook input is not a JSON object")
+    if event.get("cwd"):
+        os.chdir(event["cwd"])
+    if event.get("session_id"):
+        os.environ["CLAUDE_SESSION_ID"] = str(event["session_id"])
+    return event
+
+
+def cmd_hook_create(_args):
+    """WorktreeCreate: the absolute path is the last stdout line; all else goes to stderr;
+    exit 1 fails the creation."""
+    event = read_event()
+    name = re.sub(r"[^A-Za-z0-9._-]+", "-", str(event.get("name") or "")).strip(".-")[:64]
+    repo = Repo(os.getcwd())
+    lease = repo.find(name) if name else None
+    if lease and os.path.isdir(lease["path"]):
+        err(f"reusing worktree {lease['path']}")
+        print(lease["path"], flush=True)
+        return 0
+    return cmd_new([name])
+
+
+def cmd_hook_remove(_args):
+    """WorktreeRemove: the same refusal rules as rm; a refusal leaves the worktree, exit 1."""
+    event = read_event()
+    path = event.get("worktree_path")
+    if not path:
+        raise Refused("hook input has no worktree_path")
+    return cmd_rm([os.path.abspath(path)])
+
+
+def cmd_hook_env(_args):
+    """SessionStart: export the profile through $CLAUDE_ENV_FILE (it reaches subagents too, C1).
+    It never exports CARGO_TARGET_DIR: subagents share it, and two worktrees must never share a
+    target (R5). It also re-creates this repo's private tmpfs folders after a reboot. Always
+    exit 0, no stdout."""
+    try:
+        read_event()
+    except Refused:
+        pass
+    env_file = os.environ.get("CLAUDE_ENV_FILE")
+    if env_file:
+        with open(env_file, "a") as f:
+            f.write(f"export AGENT_WS_BIN={shlex.quote(os.path.abspath(__file__))}\n")
+    try:
+        for lease in Repo(os.getcwd()).all_leases():
+            if lease.get("build_dir"):
+                try:
+                    ensure_build_dir(lease["build_dir"])
+                except (Refused, OSError) as exc:
+                    err(f"{lease.get('name')}: {exc}")
+    except Refused:
+        pass
+    return 0
+
+
+COMMANDS = {"new": cmd_new, "rm": cmd_rm, "gc": cmd_gc, "run": cmd_run, "_watch": cmd_watch,
+            "hook-create": cmd_hook_create, "hook-remove": cmd_hook_remove, "hook-env": cmd_hook_env}
 
 
 def main(argv):

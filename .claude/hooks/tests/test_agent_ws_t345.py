@@ -628,3 +628,79 @@ def test_two_worktrees_never_share_a_target_dir(tmp_path, env, shm, tmpfs):  # S
     assert b"k2-only-mark" in found["k2"] and b"k2-only-mark" not in found["k1"]
     assert b"base-mark" in found["k1"]
     assert not (tmp_path / "shared-target").exists()
+
+
+# ── Slice 4: Claude Code hooks ───────────────────────────────────────────────────────────────
+
+
+def hook(cwd, env, sub, event, timeout=60):
+    return subprocess.run([sys.executable, SCRIPT, sub], cwd=cwd, env=env, input=json.dumps(event),
+                          capture_output=True, text=True, timeout=timeout)
+
+
+def test_hook_create_prints_the_path_last_and_records_the_session(tmp_path, env):  # AC 4
+    repo = make_repo(tmp_path)
+    r = hook(tmp_path, env, "hook-create", {"hook_event_name": "WorktreeCreate", "name": "h1",
+                                            "cwd": str(repo), "session_id": "sess-1"})
+    assert r.returncode == 0, r.stderr
+    lines = [l for l in r.stdout.splitlines() if l.strip()]
+    assert lines[-1] == str(tmp_path / "wt-h1") and os.path.isabs(lines[-1])
+    assert lease_of(repo, "h1")["session_id"] == "sess-1"
+
+
+def test_hook_create_cleans_an_odd_name_and_reuses_an_existing_worktree(tmp_path, env):
+    repo = make_repo(tmp_path)
+    ev = {"name": "Feature X/1", "cwd": str(repo), "session_id": "s"}
+    first = hook(tmp_path, env, "hook-create", ev)
+    assert first.returncode == 0, first.stderr
+    path = first.stdout.strip().splitlines()[-1]
+    assert os.path.basename(path) == "wt-Feature-X-1"
+    again = hook(tmp_path, env, "hook-create", ev)
+    assert again.returncode == 0 and again.stdout.strip().splitlines()[-1] == path
+
+
+def test_hook_create_failure_exits_non_zero(tmp_path, env):
+    r = hook(tmp_path, env, "hook-create", {"name": "x", "cwd": str(tmp_path)})  # not a repo
+    assert r.returncode != 0 and not r.stdout.strip()
+
+
+def test_hook_remove_removes_or_refuses_and_keeps(tmp_path, env):  # AC 4, G3a
+    repo = make_repo(tmp_path)
+    keep = ws(repo, env, "new", "h2").stdout.strip()
+    gone = ws(repo, env, "new", "h3").stdout.strip()
+    commit_in(tmp_path / "wt-h2")
+    r = hook(tmp_path, env, "hook-remove", {"worktree_path": keep, "cwd": str(repo)})
+    assert r.returncode != 0 and os.path.isdir(keep) and "agent-ws/h2" in branches(repo)
+    r = hook(tmp_path, env, "hook-remove", {"worktree_path": gone, "cwd": str(repo)})
+    assert r.returncode == 0, r.stderr
+    assert not os.path.exists(gone) and "agent-ws/h3" not in branches(repo)
+
+
+def test_hook_env_exports_the_profile_and_never_a_target_dir(tmp_path, env):  # AC 13, AC 18
+    repo = make_repo(tmp_path)
+    env_file = tmp_path / "claude-env"
+    r = hook(repo, {**env, "CLAUDE_ENV_FILE": str(env_file)}, "hook-env",
+             {"hook_event_name": "SessionStart", "source": "startup", "cwd": str(repo)})
+    assert r.returncode == 0 and r.stdout == ""
+    text = env_file.read_text()
+    assert f"export AGENT_WS_BIN={SCRIPT}" in text
+    assert "CARGO_TARGET_DIR" not in text
+    sourced = subprocess.run(["bash", "-c", f". {env_file}; echo \"$AGENT_WS_BIN\""],
+                             capture_output=True, text=True).stdout.strip()
+    assert sourced == SCRIPT
+
+
+def test_hook_env_without_env_file_or_repo_is_quiet(tmp_path, env):
+    r = hook(tmp_path, env, "hook-env", {"cwd": str(tmp_path)})
+    assert r.returncode == 0 and r.stdout == ""
+
+
+def test_hook_env_recreates_build_folders_after_reboot(tmp_path, env, shm):
+    repo = make_repo(tmp_path, rust=True)
+    e = {**env, "AGENT_WS_TMPFS_CANDIDATES": shm}
+    ws(repo, e, "new", "h4")
+    build = lease_of(repo, "h4")["build_dir"]
+    shutil.rmtree(os.path.join(shm, f"agent-ws-{os.getuid()}"))
+    r = hook(repo, {**e, "CLAUDE_ENV_FILE": str(tmp_path / "f")}, "hook-env", {"cwd": str(repo)})
+    assert r.returncode == 0
+    assert os.path.isdir(build) and stat.S_IMODE(os.lstat(build).st_mode) == 0o700
