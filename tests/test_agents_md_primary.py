@@ -33,7 +33,9 @@ BASE_REF = "c573bbf"
 # T341: `CLAUDE_LEGACY.md` Hard-Stop Gate 1 mirrors the new last sentence (the Supervisor writes the code,
 # one fresh reviewer spawn required at merge, DDR-0011; CLAUDE_LEGACY.md sync policy); the pin moves to
 # T341's doctrine commit.
-CLAUDE_LEGACY_REF = "08226d34"
+# T366: `CLAUDE_LEGACY.md` places `general-agent-template.md` in `templates/` (lines 216, 355); the pin
+# moves to T366's edit commit.
+CLAUDE_LEGACY_REF = "1ca76763"
 
 # AC 1 allowed edits (a) and (b): (base span, new span). Each span must hit exactly one base line.
 REPLACED_SPANS = [
