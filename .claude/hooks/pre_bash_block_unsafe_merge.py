@@ -1608,6 +1608,25 @@ def _admin_remote_refusal():
             f"push nowhere until it names one remote (or is unset, for `{ADMIN_REMOTE_DEFAULT}`)")
 
 
+def _admin_remote_text():
+    """T365: the admin remote for a refusal text: `` `<name>` ``, or, under a value that is not a
+    plain remote name (`_admin_remote` is None), what the setting is, never `None`."""
+    remote = _admin_remote()
+    return f"`{remote}`" if remote else f"the one remote `{ADMIN_REMOTE_ENV}` names (not set to a plain name)"
+
+
+def _missing_remote_refusal(where):
+    """T365: why the push is refused when the repository at `where` has no remote of the admin
+    remote's name, or None (it has one, the setting is bad, or git cannot be read: the later checks
+    refuse those)."""
+    remote = _admin_remote()
+    done = remote and _git(where, "remote", "get-url", remote)
+    if not done or done.returncode == 0 or "no such remote" not in (done.stderr or "").lower():
+        return None
+    return (f"this repository has no remote `{remote}`: `[admin]` and `[ticket]` push only to it "
+            f"({ADMIN_REMOTE_HINT}); add it with `git remote add {remote} <url>` or change the setting")
+
+
 def _config_value(directory, key):
     """`git config --get <key>` in `directory`: the value, "" when unset, None on any failure."""
     done = _git(directory, "config", "--get", key)
@@ -1683,9 +1702,10 @@ def _origin_url(directory):
 
 def _own_origin_refusal(where, cwd):
     """T296 (P3-3): None when the repository a push runs in (`where`) is the one the command started
-    in (`cwd`) or the project's (`ROOT`), or when its `origin` has the URL of either one's `origin`.
-    Otherwise why: `cd <clone> && git push origin <branch>` in a clone whose `origin` is another remote
-    would send the branch there (the `main` push has had the same-repository rule since T284)."""
+    in (`cwd`) or the project's (`ROOT`), or when its admin remote (`_admin_remote`, `origin` by
+    default; T321) has the URL of either one's. Otherwise why: `cd <clone> && git push origin <branch>`
+    in a clone whose `origin` is another remote would send the branch there (the `main` push has had
+    the same-repository rule since T284)."""
     remote = _admin_remote()
     if remote is None:
         return _admin_remote_refusal()
@@ -2253,9 +2273,10 @@ def hidden_git_verb(command, depth=0):
 
 
 def _remote_main(where):
-    """Round 2: the remote's real `main` sha from `git ls-remote origin refs/heads/main` (argv, no
-    shell, a 10 s timeout, no prompt), never the local `refs/remotes/origin/main` the model can move.
-    None on any failure, a timeout or no answer. T321: the remote is `_admin_remote()`."""
+    """Round 2: the remote's real `main` sha from `git ls-remote <remote> refs/heads/main` (argv, no
+    shell, a 10 s timeout, no prompt), never the local `refs/remotes/<remote>/main` the model can
+    move. T321: `<remote>` is `_admin_remote()`, `origin` by default. None on any failure, a timeout,
+    no answer or a bad setting."""
     remote = _admin_remote()
     if remote is None:
         return None
@@ -2334,6 +2355,8 @@ def _main_push_refusal(where, merged):
     repo_refusal = _admin_repo_refusal(where)
     if repo_refusal:
         return repo_refusal
+    if _admin_remote() is None:  # T365: say why, never `git ls-remote None`
+        return _admin_remote_refusal()
     remote = _remote_main(where)
     if remote is None:
         return (f"cannot read the remote's real `main`: `git ls-remote {_admin_remote()} "
@@ -2647,7 +2670,7 @@ def admin_refusal(command, cwd, transcript_path, admin, tag=None):
                 return repo_refusal
             if args[0] == "merge" and tag == "ticket":
                 return ("`[ticket]` allows no merge: only a plain push of the task branch to "
-                        f"`{_admin_remote()}`")
+                        f"{_admin_remote_text()}")
             if args[0] == "merge":
                 names = [name for _, name in _merge_sources(args[1:], where)]
                 if len(names) != 1:
@@ -2657,6 +2680,9 @@ def admin_refusal(command, cwd, transcript_path, admin, tag=None):
                 remote_refusal = _admin_remote_refusal()  # T321: before every other push check
                 if remote_refusal:
                     return remote_refusal
+                missing = _missing_remote_refusal(where)  # T365: name it, not the generic text
+                if missing:
+                    return missing
                 target_refusal = _admin_push_target_refusal(where)
                 if target_refusal:
                     return target_refusal
