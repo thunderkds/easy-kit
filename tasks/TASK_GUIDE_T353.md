@@ -96,7 +96,7 @@ The installer question text follows the draft: `Turn on parallel builds (agent-w
 
 | # | Criterion (testable) | Traces to requirement |
 |---|----------------------|-----------------------|
-| 1 | Install and Reinstall ask the agent-ws question once, after the project-type question and before `Proceed?`; Enter, `n`, anything but `y`/`yes`, or no terminal means No | "add the option when reinstall the kit" |
+| 1 | Install and Reinstall ask the agent-ws question once, after the project-type question and before `Proceed?`; on Install, Enter, `n`, anything but `y`/`yes`, or no terminal means No; on Reinstall, Enter or no terminal keeps the project's current answer (D2, `TASK_REVIEW_T353.md` decision 7) | "add the option when reinstall the kit" |
 | 2 | With No, the project's files, `.claude/settings.json` and lock are byte-identical to an install of the same kit commit today (no `agent_ws` key, no script) | opt-in |
 | 3 | With Yes, `scripts/agent_ws.py` is a real file in the project, recorded in the lock with its hash, and the three hook entries are registered per D1 | ships the tool |
 | 4 | The lock remembers the answer; Update asks no agent-ws question and keeps the choice; with Yes, Update refreshes `scripts/agent_ws.py` by the edit-safe rules of other kit files | "for the update in another repos" |

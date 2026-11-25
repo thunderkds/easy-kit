@@ -7,7 +7,9 @@ It removes worktrees only when no work can be lost. Linux only; needs git 2.31 o
 It is off unless a project turns it on. The installer asks on Install and Reinstall (T353):
 `Turn on parallel builds (agent-ws)? [y/N]` (Linux only). A yes copies `scripts/agent_ws.py` into
 the project and adds its three hooks to the project's `.claude/settings.json`; the lock remembers
-the answer, and Update keeps it. Reinstall and answer `n` to turn it off. Users read the short
+the answer, and Update keeps it. Reinstall and answer `n` to turn it off: the three hooks leave `.claude/settings.json`, and
+`scripts/agent_ws.py` stays on disk as your own file (the lock stops tracking it); delete it if you
+like. Users read the short
 version at `site/docs.html#parallel-builds`.
 
 ## Commands
