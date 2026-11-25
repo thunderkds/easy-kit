@@ -128,6 +128,7 @@ Options weighed (High risk):
 |------|--------|
 | `.claude/hooks/pre_bash_block_unsafe_merge.py` | 2 helpers, 3 call sites, 2 docstrings |
 | `.claude/hooks/tests/test_t365_admin_remote_texts.py` (new) | AC 1–3 |
+| `.claude/hooks/tests/merge_gate_guard.py`, `.claude/hooks/tests/test_merge_gate_guard.py` | `AUTHORISED_TASKS` gains T365; the rule it owns in the gate: the T321 refusal texts (a missing set remote is named, no `None`), texts only. User sign-off 2026-11-25 |
 | Pre-existing pin tests | `test_t321_admin_remote.py`: stays unchanged, must pass |
 
 ## Files Must NOT Touch
