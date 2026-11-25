@@ -59,10 +59,11 @@ new_repo() {
   printf '%s' "$_r"
 }
 
-# install_both <repo> <kit> -> Install with Claude Code + Codex, New project, Proceed.
-# On Linux the installer first asks the agent-ws question (T353): Enter = No.
+# On Linux the installer asks the agent-ws question (T353) before Proceed: Enter = No.
 AGENT_WS_ANSWER=''
 [ "$(uname -s 2>/dev/null)" = "Linux" ] && AGENT_WS_ANSWER='\n'
+
+# install_both <repo> <kit> -> Install with Claude Code + Codex, New project, [agent-ws], Proceed.
 install_both() {
   ( cd "$1" && SUPERVISOR_REPO="file://$2" \
       run_in_pty "1\\n1 2\\n1\\n${AGENT_WS_ANSWER}\\n" "sh '$2/setup.sh'" >"$1.log" 2>&1 )
