@@ -30,6 +30,7 @@
 - [T316: `sensitive-paths.txt` is a protected pattern — always asks, never predicted or approved](decisions.md) — folder-level and shell-built names still skip the token match
 - [T344: docs.html Change log, every release, titles only](decisions.md) — floor of 263 pinned; later tasks add their own line
 - [T341: Supervisor writes extended-track code; merge gate needs a `ReviewerDone` from a `SubagentStop` hook](decisions.md) — DDR-0011 supersedes DDR-0004; merge with `--no-ff`
+- [T363/T374/T371: folder rule for destructive commands; `[admin]` logs instead of asking](decisions.md) — both readings, every cd folder, a doubt adds an ask; the guard's own files always ask; T375 open
 - [T340: unused kit files removed; root brainstorming log stays (T215)](decisions.md) — IDs T328–T339 left free for machine 2
 - [T322: session tags on site; T321 updates `origin`](decisions.md)
 - [T311–T312: kit data and Explorer on `site/docs.html`](decisions.md) — `39ab138e`
