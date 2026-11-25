@@ -45,8 +45,9 @@ the lock says `"agent_ws": "on"`. The merge owns an entry whose command names ex
 `"$CLAUDE_PROJECT_DIR"/scripts/agent_ws.py`: it keeps it on every run, drops it when the overlay is
 not passed (the project answered No), and drops it when `scripts/agent_ws.py` is missing, so
 `claude --worktree` never calls a script that is not there. A teammate who clones an opted-in
-project gets the hooks too; on macOS agent-ws builds on disk (no tmpfs check), and native Windows
-is not supported.
+project gets the hooks too. agent-ws is tested on Linux only. On macOS it is untested: with no
+`/proc` it finds no tmpfs (builds on disk) and cannot see a process inside a worktree before `rm`.
+Native Windows is not supported (`fcntl`).
 
 ## Turn on the Claude Code hooks by hand (this repo, or a project installed before T353)
 
