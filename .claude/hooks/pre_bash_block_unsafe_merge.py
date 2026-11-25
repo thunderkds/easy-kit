@@ -2453,6 +2453,40 @@ def _session_holds(transcript_path, when, task_id):
 START_SCRIPT = ".claude/hooks/stop_auto_verify.py"
 
 
+# T354: the note the auto close-out appends to the end of a row it moves to Done
+# (`lib/auto_closeout.py`: `row + f" | {note}"`).
+CLOSE_OUT_NOTE = re.compile(
+    r"\| Done \d{4}-\d{2}-\d{2}: auto verify pass \(session ([^,()\s]+), commit ([0-9a-f]{40})\)$")
+
+
+def _closed_out_since(task_id, branch, where, when):
+    """T354: True when `task_id` has exactly one row under `### Done`, the row ends with the
+    close-out's note, and the note's commit has a hook run record that passes the
+    `_pass_recorded_since` rule (the record for that commit, from the note's session, written at or
+    after `when` (this session's own `--start` call), confirming pass, held by `branch`). The
+    close-out moves every `Mode: auto` row to Done right after the pass, before the merge, so a loop
+    task is never in Ready for Review when its merge runs. A Done row with no note, or a note for
+    other code or another run, binds nothing. False on any doubt."""
+    try:
+        with open(KANBAN, encoding="utf-8") as f:
+            kanban = f.read()
+        rows = [r for tid, r in auto_mode.board_rows(kanban, ("Done",)) if tid.upper() == task_id]
+        hit = CLOSE_OUT_NOTE.search(rows[0].rstrip()) if len(rows) == 1 else None
+        if hit is None:
+            return False
+        session, sha = hit.groups()
+        record = read_record(ROOT, normalize_task_id(task_id, ROOT), sha)
+        path = record_path(ROOT, normalize_task_id(task_id, ROOT), sha)
+        if (record is None or record.get("commit") != sha or record.get("session") != session
+                or os.path.getmtime(path) < when.timestamp()
+                or not record_confirms_pass(where, record)):
+            return False
+        held = _git(where, "merge-base", "--is-ancestor", sha, f"refs/heads/{branch}^{{commit}}")
+        return held is not None and held.returncode == 0
+    except Exception:
+        return False
+
+
 def _own_start_since(transcript_path, when, task_id):
     """T317 R1: the time of this session's (or a sub-agent's) earliest own `Bash` call dated at or
     after `when` (the tag request) that runs `python3 .claude/hooks/stop_auto_verify.py --start
@@ -2638,15 +2672,18 @@ def admin_refusal(command, cwd, transcript_path, admin, tag=None):
             # R1: the loop binds only through this session's own `--start` call after the tag
             # request, and a pass record written after that call. R4: for the merge and the task
             # branch push the task's own row is in Ready for Review (the `main` push after the
-            # merge may follow the close-out, so its row may be Done).
+            # merge may follow the close-out, so its row may be Done). T354: or in Done by the
+            # hook's close-out of that same run, which moves a `Mode: auto` row at once.
             _, branch, where = sorted(targets)[0]
             started = _own_start_since(transcript_path, when, task_id)
             bound = (started is not None
-                     and (main_push or _ready_for_review(task_id))
+                     and (main_push or _ready_for_review(task_id)
+                          or _closed_out_since(task_id, branch, where, started))
                      and _session_holds(transcript_path, when, task_id)
                      and _pass_recorded_since(task_id, branch, where, started))
         if not bound:
-            loop = ("the task of this session's loop (its row in Ready for Review, changed by this "
+            loop = ("the task of this session's loop (its row in Ready for Review, or in Done by the "
+                    "hook's close-out of that same pass, changed by this "
                     "session since the tag request, its only task In Progress or Ready for Review, "
                     "its auto verify started by this session's own `python3 "
                     ".claude/hooks/stop_auto_verify.py --start <ID>` call after the request, and "
