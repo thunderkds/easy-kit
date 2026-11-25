@@ -66,7 +66,7 @@ Before writing any code:
 ### Verification Command (exact, runnable)
 
 ```bash
-python3 -m pytest tests/test_auto_verify_shell_suites_t368.py tests/test_auto_verify.py .claude/hooks/tests/test_verify_record_docs_only.py -q
+python3 -m pytest tests/test_auto_verify_shell_suites_t368.py tests/test_auto_verify.py .claude/hooks/tests/test_auto_verify_skip_pass.py -q
 ```
 
 ### Evidence (filled by reviewer at Stage 4/5)
