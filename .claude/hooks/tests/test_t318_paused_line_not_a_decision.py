@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""T318 — `stop_auto_mode_check.py` does not read a `Paused:` line (or any other `STAMP_SKIPS` line)
+"""T318 — `stop_auto_mode_check.py` does not read its own `Paused: auto-mode check failed — …` line
 as a decision (`tasks/TASK_GUIDE_T318.md`, AC 1-3). Every project here is constructed.
 Run with: python3 -m pytest .claude/hooks/tests/test_t318_paused_line_not_a_decision.py -v
 """
@@ -25,13 +25,14 @@ def test_ac1_a_paused_line_quoting_a_flag_is_not_a_decision(tmp_path):
     assert result.returncode == 0 and out == {}, (out, result.stderr)
 
 
-def test_ac2_closed_not_done_and_verify_lines_quoting_a_flag_are_not_decisions(tmp_path):
-    lines = [f"Closed: {FLAG}", f"**Not done:** merge {FLAG}", f"- verify: {FLAG}"]
+def test_ac2_other_skipped_prefixes_and_a_hand_written_paused_line_still_block(tmp_path):
+    """Review P2-1: a flagged choice hidden behind a prefix the agent writes itself is still a choice."""
+    lines = [f"Closed: {FLAG}", f"**Not done:** merge {FLAG}", f"Not done: pick B {FLAG}",
+             f"- verify: {FLAG}", f"Paused: choose B {FLAG}"]
     for i, line in enumerate(lines):
-        project = _project(tmp_path / f"case{i}", [EXT_ROW],
-                           review=_with_line(line), untagged=_trace(3))
-        result, out = _run(project)
-        assert result.returncode == 0 and out == {}, (line, out, result.stderr)
+        project = _project(tmp_path / f"case{i}", [EXT_ROW], review=_with_line(line), untagged=_trace(3))
+        _, out = _run(project)
+        assert _blocked(out) and "is a choice" in out["reason"], (line, out)
 
 
 def test_ac3_a_real_flagged_decision_still_blocks_beside_a_paused_line(tmp_path):
