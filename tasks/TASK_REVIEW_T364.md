@@ -19,7 +19,7 @@ Mode: auto
 4. Edit denies only, no Read deny for the protected patterns — FACT: `.claude/settings.json:78` "\"matcher\": \"Edit|Write|Bash\"" (the hook never guards a Read, so the protected patterns guard integrity, not secrecy) and `skills/craft-spawn-prompt/references/sandbox.md:37` "The sandbox write-protects `.claude/`"
 5. The generator reads the patterns from the hook — FACT: `.claude/hooks/pre_tool_sensitive_path.py:94` "PROTECTED_PATTERNS = (STATE_PATTERN,) + APPROVALS_NAME_PATTERNS + (LIST_NAME_PATTERN,)" (one source; a copy in the list was the T314/T316 reason against it)
 6. Fixed all three reviewer P3 findings (edge shapes, a test that could not fail, the dedup case) and spawned the reviewer again on the new commit — RULE: `docs/claude-md/pipeline-stages.md:198` "one fresh-context reviewer spawn per extended task at Stage 4, which the merge gate requires" (it must have run on the code being merged)
-Checks: tests `python3 -m pytest -q tests/test_subagent_sandbox_profile.py tests/test_plugin_names.py tests/test_craft_spawn_effort.py` — 70 passed after the P3 fixes (red first: `2 failed, 16 passed` at 2026-11-25T09:12:29Z, before the change); `python3 scripts/gen_sandbox_profile.py --check` exit 0; full suite `62 failed, 7943 passed` vs `main` `60 failed`: the 2 extra are `test_memory_usage_report.py::test_script_does_not_touch_the_real_repository` (passes alone) and `test_auto_verify.py::test_t189_ac3_a_minimal_record_with_no_new_test_line_keeps_the_row` (fails alone on the clean `main` worktree too); reviews `Reviewer: T364` PASS (P3 only), `code-review` and `security-review` skills in the Supervisor session; real run `python3 scripts/gen_sandbox_profile.py` — printed nothing, rewrote the profile with the 4 new `Edit` denies (auto-checked, not /verify)
+Checks: tests `python3 -m pytest -q tests/test_subagent_sandbox_profile.py tests/test_plugin_names.py tests/test_craft_spawn_effort.py` — 70 passed after the P3 fixes (red first: `2 failed, 16 passed` at 2026-11-25T09:12:29Z, before the change); `python3 scripts/gen_sandbox_profile.py --check` exit 0; full suite `62 failed, 7943 passed` vs `main` `60 failed`: the 2 extra are `test_memory_usage_report.py::test_script_does_not_touch_the_real_repository` (passes alone) and `test_auto_verify.py::test_t189_ac3_a_minimal_record_with_no_new_test_line_keeps_the_row` (fails alone on the clean `main` worktree too); reviews `Reviewer: T364` PASS in two rounds (P3 only; round 1's three P3 fixed), `code-review` skill in the Supervisor session no P0-P2, `security-review` inline (the built-in could not start: no `origin`) no findings; real run `python3 scripts/gen_sandbox_profile.py` — printed nothing, rewrote the profile with the 4 new `Edit` denies (auto-checked, not /verify)
 Memory: nothing new
 Not done: merge (admin: after the auto verify pass); auto verify: running (T182); push (no `origin`; `EASY_KIT_ADMIN_REMOTE` is not set to `github`)
 
@@ -66,3 +66,42 @@ Security: Edit-only denies, no Read deny (documented cut). The hook is loaded by
 **DELTA**: a CLI-spawned sub-agent's profile now refuses, at the permission layer, a write to the hook's state folder, the approval file and the pattern list, even where the hook is absent or fails open.
 
 **WITNESS**: Supervisor session acceb8c1, 2026-11-25 (BEFORE, red run, full-suite comparison); `Reviewer: T364` (fresh qa-expert, commit `462886f9`, round 2 on the fix commit).
+
+## Round 2 (Reviewer: T364, commit a476b587)
+
+Verdict: PASS. No P0, P1 or P2. Scope: `main...a476b587`, bounded to `scripts/gen_sandbox_profile.py`, the template, `sandbox.md`, the new tests, and the hook's `PROTECTED_PATTERNS` (read only). Code-review and security-reviewer rules applied inline.
+
+Round-1 P3 check:
+
+| Round-1 finding | Fixed? | Evidence |
+|---|---|---|
+| Leading/trailing `/` and `!` patterns | yes | `build_profile` strips `/`, skips empty, `#`, `!`; `test_t364_protected_pattern_edge_shapes` |
+| Always-true assert | yes | replaced by a no-protected-patterns control in `test_t364_generator_reads_protected_patterns_from_the_hook` |
+| Dedup branch untested | yes | `test_t364_a_protected_glob_the_list_already_has_is_denied_once` |
+
+Can each new test fail? Mutations run on a scratch copy of the commit (worktree untouched):
+
+| Test | Code change that turns it red | Result |
+|---|---|---|
+| `..._hook_protected_patterns_are_denied_for_edit` | remove a deny from the template, or reorder it past `Edit(memory/**)` | reads the committed template; not run as a mutation. Generator-side ordering mutation (protected denies after memory) is caught by `test_ac3_profile_is_exactly_what_the_generator_produces`: red |
+| `..._generator_reads_protected_patterns_from_the_hook` | drop the `**/` prefix, or also emit `Read(...)` | both red |
+| `..._protected_pattern_edge_shapes` | stop skipping `!`, or stop stripping `/` | both red |
+| `..._a_protected_glob_the_list_already_has_is_denied_once` | remove the dedup condition | red |
+
+Findings: none above P3. Two notes, no fix needed:
+
+| Sev | File:line | Finding | One-line fix |
+|---|---|---|---|
+| P3 (info) | scripts/gen_sandbox_profile.py (build_profile, `strip("/")` then `"/" in body`) | A future anchored `/foo` or dir-only `foo/` becomes `**/foo` (any depth): stricter than the hook, never weaker. Latent; today's four patterns are exact. | None needed; optionally comment that it over-denies. |
+| P3 (info) | tests (`test_t364_hook_protected_patterns_are_denied_for_edit`) | Hard-codes 4 rules next to the hook-derived loop; if the hook gains a pattern the first loop is stale but the second still guards. | None needed. |
+
+Security (security-reviewer.md rules): new denies are additive, Edit-only (documented cut, integrity not secrecy); no new input, no shell, no network. The hook is loaded by repo-relative path as before. No deny removed or reordered (AC3). No secrets in the diff.
+
+Verification Command (worktree, HEAD a476b587):
+`python3 -m pytest -q tests/test_subagent_sandbox_profile.py tests/test_plugin_names.py tests/test_craft_spawn_effort.py` -> `70 passed in 35.41s`
+`python3 scripts/gen_sandbox_profile.py --check` -> exit 0
+
+## Supervisor Stage 4 (session acceb8c1, commit a476b587)
+
+- `code-review` skill, run in the Supervisor session on `main...a476b587`: no P0, P1 or P2. Lane: `lane: C1, 5 files, 256 lines, EXCEEDS (lines 256 > 250); unpredicted: tasks/TASK_GUIDE_T364.md`. The extra lines are the guide and this file, not code, so C1 stands. Two P3 suggestions, not applied, because a code change would leave the reviewed commit behind: the generator's docstring line 2 still says the profile is generated "from .claude/sensitive-paths.txt" only; protected patterns are not brace-expanded (none has braces today).
+- `security-review`: the built-in skill could not start (`fatal: ambiguous argument 'origin/HEAD...'`: this repo has no `origin`). The diff was checked inline with `skills/code-review/references/security-reviewer.md`. Leads, all `rejected`: (1) the generator executes the hook module by repo path, which is unchanged since T147, and no boundary is crossed; (2) a protected pattern could inject permission-rule syntax, but the patterns are repo constants, not input; (3) Edit-only leaves the approval file readable, which is a hardening note, not a vulnerability: it holds no secret, and `skills/craft-spawn-prompt/references/sandbox.md:37` says the sandbox write-protects `.claude/`.
