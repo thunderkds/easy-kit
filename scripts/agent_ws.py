@@ -342,6 +342,11 @@ def blockers(repo, lease):
         out.append(f"branch {branch} is not merged into {base}")
     if not os.path.isdir(path):
         return out
+    head = git(path, "rev-parse", "-q", "--verify", "HEAD").stdout.strip()
+    if head and git(repo.main, "merge-base", "--is-ancestor", head, base).returncode != 0 \
+            and not (branch_exists(repo, branch) and
+                     git(repo.main, "rev-parse", branch).stdout.strip() == head):
+        out.append(f"the worktree's HEAD {head[:12]} is not merged into {base}")
     done = git(path, "status", "--porcelain", "-z", "--untracked-files=all")
     if done.returncode != 0:
         return out + [f"git status failed in {path}: {done.stderr.strip()}"]
@@ -372,7 +377,8 @@ def remove_build_dir(build):
         return
     st = os.lstat(build)
     base = os.path.dirname(os.path.dirname(build))
-    if os.path.realpath(build) != build or stat.S_ISLNK(st.st_mode) or st.st_uid != os.getuid() \
+    if os.path.realpath(build) != os.path.join(os.path.realpath(os.path.dirname(build)),
+                                               os.path.basename(build)) or stat.S_ISLNK(st.st_mode) or st.st_uid != os.getuid() \
             or os.path.basename(base) != f"agent-ws-{os.getuid()}":
         raise Refused(f"build folder {build} is not agent-ws's own private folder: left in place")
     shutil.rmtree(build)
@@ -386,6 +392,8 @@ def remove(repo, lease):
         saved = {}
         for rel in lease.get("files", {}):
             full = os.path.join(path, rel)
+            if not os.path.isfile(full):
+                continue  # the user deleted it: nothing to put back
             with open(full, "rb") as f:
                 saved[rel] = f.read()
             os.unlink(full)
@@ -573,7 +581,10 @@ def cmd_run(args):
     for sig in (signal.SIGINT, signal.SIGTERM, signal.SIGHUP):
         signal.signal(sig, forward)
     rc = child.wait()
-    os.write(wr, b"done")
+    try:
+        os.write(wr, b"done")
+    except BrokenPipeError:
+        pass  # the watcher is gone already; nothing left to stop
     os.close(wr)
     os.close(fd)
     return rc if rc >= 0 else 128 - rc

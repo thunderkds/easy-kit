@@ -2,7 +2,7 @@
 
 `scripts/agent_ws.py` gives each agent or session its own git worktree beside the repo. A Rust
 worktree builds into a private folder in RAM (tmpfs), so parallel builds do not freeze the disk.
-It removes worktrees only when no work can be lost. Linux only.
+It removes worktrees only when no work can be lost. Linux only; needs git 2.31 or newer.
 
 It does **not** ship to installed projects yet. You turn it on per project, in that project's
 untracked `.claude/settings.local.json` (below).

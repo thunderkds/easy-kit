@@ -704,3 +704,27 @@ def test_hook_env_recreates_build_folders_after_reboot(tmp_path, env, shm):
     r = hook(repo, {**e, "CLAUDE_ENV_FILE": str(tmp_path / "f")}, "hook-env", {"cwd": str(repo)})
     assert r.returncode == 0
     assert os.path.isdir(build) and stat.S_IMODE(os.lstat(build).st_mode) == 0o700
+
+
+# ── Stage 4 review fixes ─────────────────────────────────────────────────────────────────────
+
+
+def test_rm_refuses_unmerged_commits_on_a_detached_head_after_the_branch_is_gone(tmp_path, env):
+    repo = make_repo(tmp_path)
+    ws(repo, env, "new", "x1")
+    wt = tmp_path / "wt-x1"
+    git(wt, "checkout", "-q", "--detach")
+    commit_in(wt)
+    git(repo, "branch", "-D", "agent-ws/x1")
+    r = ws(repo, env, "rm", "x1")
+    assert r.returncode == 1 and "HEAD" in r.stderr and wt.is_dir()
+
+
+def test_rm_survives_a_pointer_file_the_user_deleted(tmp_path, env, shm):
+    repo = make_repo(tmp_path, rust=True)
+    e = {**env, "AGENT_WS_TMPFS_CANDIDATES": shm}
+    ws(repo, e, "new", "x2")
+    os.unlink(tmp_path / "wt-x2" / ".cargo" / "config.toml")
+    r = ws(repo, e, "rm", "x2")
+    assert r.returncode == 0, r.stderr
+    assert not (tmp_path / "wt-x2").exists()
