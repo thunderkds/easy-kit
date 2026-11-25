@@ -89,7 +89,6 @@ TEST_EXCEPT_DIRS = ("tests/lib/",)
 SHELL_SUITE = re.compile(r"test_[A-Za-z0-9_.-]*\.sh")  # T368: a suite `/verify` is asked to run
 SAFE_PATH = re.compile(r"[A-Za-z0-9._/-]+")  # used with fullmatch: `$` would let a trailing newline in
 MAX_PATH_BYTES = 200
-BASE_REF = "refs/heads/main"  # the branch a task branch is judged against: `main`, as the admin push rule
 REGULAR_MODES = ("100644", "100755")  # a symlink (120000) or a gitlink (160000) is never docs-only
 RAW_RECORD = re.compile(r"^:(\d{6}) (\d{6}) [0-9a-f]{40} [0-9a-f]{40} ([AMD])$")
 NOTE_PATHS = 12  # the notes name this many paths; the check always covers all of them
@@ -220,6 +219,22 @@ def _safe_path(path):
             and not path.startswith("/") and not any(part in ("", ".", "..") for part in path.split("/")))
 
 
+def base_ref():
+    """T370: the branch a task branch is judged against, as the admin push rule: `refs/heads/<the
+    default branch>` (`auto_mode.default_branch`, the setting `EASY_KIT_DEFAULT_BRANCH`, default
+    `main`), or None when the setting is not a plain branch name."""
+    name = auto_mode.default_branch()
+    return f"refs/heads/{name}" if name else None
+
+
+def _base():
+    """`base_ref()`, or OSError: every caller sits in a fail-closed `try`."""
+    ref = base_ref()
+    if ref is None:
+        raise OSError(f"`{auto_mode.DEFAULT_BRANCH_ENV}` is not a plain branch name")
+    return ref
+
+
 def shell_suites_changed(checkout, tip):
     """T368: the sorted `test_*.sh` suites under `tests/` or `.claude/hooks/tests/` (never `tests/lib/`)
     that the branch at `tip` adds or modifies since it left `main`, as regular files with safe names,
@@ -228,7 +243,7 @@ def shell_suites_changed(checkout, tip):
     try:
         if not isinstance(tip, str) or not SHA_PATTERN.match(tip):
             return []
-        bases = _git(checkout, "merge-base", "--all", BASE_REF, tip).split()
+        bases = _git(checkout, "merge-base", "--all", _base(), tip).split()
         if len(bases) != 1 or not SHA_PATTERN.match(bases[0]):
             return []
         out = _git(checkout, "diff", "--raw", "-z", "--no-abbrev", "--no-renames", "--no-ext-diff",
@@ -263,7 +278,7 @@ def docs_only_change(checkout, tip):
     try:
         if not isinstance(tip, str) or not SHA_PATTERN.match(tip):
             return None
-        bases = _git(checkout, "merge-base", "--all", BASE_REF, tip).split()
+        bases = _git(checkout, "merge-base", "--all", _base(), tip).split()
         if len(bases) != 1 or not SHA_PATTERN.match(bases[0]):
             return None
         paths = _raw_diff(checkout, bases[0], tip)
@@ -287,7 +302,7 @@ def record_confirms_pass(checkout, record):
                 and SHA_PATTERN.match(base) and SHA_PATTERN.match(sha)):
             return False
         _git(checkout, "merge-base", "--is-ancestor", base, sha)
-        _git(checkout, "merge-base", "--is-ancestor", base, BASE_REF)
+        _git(checkout, "merge-base", "--is-ancestor", base, _base())
         return bool(_raw_diff(checkout, base, sha))
     except Exception:
         return False

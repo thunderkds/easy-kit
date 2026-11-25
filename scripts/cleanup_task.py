@@ -21,8 +21,6 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(
                                 ".claude", "hooks", "lib"))
 import auto_mode as am  # noqa: E402
 
-MAIN = "main"
-
 
 def git(cwd, *args):
     return subprocess.run(["git", "-C", cwd, *args], capture_output=True, text=True)
@@ -142,6 +140,9 @@ def main(argv):
         say("this checkout is a linked worktree; run cleanup from the main checkout: nothing removed")
         return 0
     root = top
+    main_branch = am.default_branch()  # T370: the setting `EASY_KIT_DEFAULT_BRANCH`, default `main`
+    if main_branch is None:
+        return refuse(f"`{am.DEFAULT_BRANCH_ENV}` is not a plain branch name: nothing removed")
 
     try:
         kanban = am.read(os.path.join(root, "PROJECT_KANBAN.md"), root)
@@ -157,14 +158,14 @@ def main(argv):
         return refuse(err)
     exists = branch in local_branches(root) if branch else False
     wt = next((p for p, b in trees if branch and b == branch), None)
-    if branch in (MAIN, git(root, "rev-parse", "--abbrev-ref", "HEAD").stdout.strip()):
+    if branch in (main_branch, git(root, "rev-parse", "--abbrev-ref", "HEAD").stdout.strip()):
         return refuse(f"branch {branch} is the main checkout's branch")
     if not exists and not wt:
         say(f"{task_id}: already clean (no worktree, no branch)")
         return 0
 
-    if exists and git(root, "merge-base", "--is-ancestor", branch, MAIN).returncode != 0:
-        return refuse(f"branch {branch} is not merged into {MAIN}")
+    if exists and git(root, "merge-base", "--is-ancestor", branch, f"refs/heads/{main_branch}").returncode != 0:
+        return refuse(f"branch {branch} is not merged into {main_branch}")
     if wt and not os.path.isdir(wt):
         return refuse(f"worktree folder {wt} is missing; run `git worktree prune`, then run again")
     if wt:
