@@ -422,7 +422,8 @@ which file holds its report. The auto-mode check above reads the same module, so
 disagree about which tasks are in auto mode.
 
 The hook then starts one new headless session in the task's checkout (the main checkout or its worktree):
-`claude -p "/verify <ID>" --max-budget-usd 2 --output-format json`. The session uses your normal permission
+`claude -p "/verify <ID>" --max-budget-usd 2 --output-format json` (when the branch changes a shell test
+suite, the request also names it and asks for a real run: T368, below). The session uses your normal permission
 settings, never `--dangerously-skip-permissions`. The hook returns at once: the run is detached in its own
 session (`setsid`). `CLAUDE_AUTO_VERIFY_BUDGET_USD` changes the budget, and `CLAUDE_AUTO_VERIFY_TIMEOUT_S`
 the time limit (default 1800). The run writes its output to `.claude/verify-runs/<ID>-<commit>.log`

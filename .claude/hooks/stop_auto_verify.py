@@ -6,6 +6,8 @@ For each task on PROJECT_KANBAN.md's `### Ready for Review` whose result is not 
 head commit of the checkout holding its report, it starts one detached run and returns at once:
 
     claude -p "/verify <ID>" --max-budget-usd 2 --output-format json      (cwd = that checkout)
+    (T368: a branch that changes `tests/**/test_*.sh` suites gets them named in the request, with an
+    ask to run each and answer PASS or FAIL by its exit code: `verify_request`)
 
 T203 D1: the task needs no marker — before T203 only a task with the T180 `Mode: auto` line ran.
 `CLAUDE_AUTO_VERIFY=off` (D3) restores that rule: then only a marked task (`Mode: auto` alone on a
