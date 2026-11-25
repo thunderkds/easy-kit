@@ -371,3 +371,4 @@
 - [Merge-gate traps (T310)](learnings.md) — an orphan Ready row blocks merges
 - [Merge-gate traps (T309)](learnings.md) — stale untracked guides, truncated trace summaries, suite deletes worktree files
 - [Two live `[admin]` sessions on one board](learnings.md) — T365: check the worktree's last commit and `active_task.d/` before resuming a paused task; claim another ticket instead
+- [T370: the default branch is `EASY_KIT_DEFAULT_BRANCH` (default `main`), never a git ref](decisions.md) — one reader `auto_mode.default_branch()`; a bad value refuses every `[admin]` merge and push; set it for a `master` repo
