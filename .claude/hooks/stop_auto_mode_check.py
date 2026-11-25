@@ -552,7 +552,8 @@ def check_task(task, windows, owned=None, debates=None, window=None):
     hit = RISK.search(risk_text)
     risk = {"Med": "Medium"}.get(hit.group(1), hit.group(1)) if hit else "Low"
     need_per_line = ADVOCATES_BY_RISK.get(risk)
-    lines = [l.strip() for l in body.splitlines() if l.strip()]
+    # T318: a `STAMP_SKIPS` line is no decision (a `Paused:` line quotes earlier report text, `⚠` included).
+    lines = [l.strip() for l in body.splitlines() if l.strip() and not l.strip().startswith(STAMP_SKIPS)]
     reasons = [] if task.strict else [missing]
     if not ac.has_memory_line(body):
         reasons.append("no `Memory:` line in the report — run the memory pass before you stop and "
