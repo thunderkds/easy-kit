@@ -63,7 +63,9 @@ Recorded limitations (cut list, TASK_GUIDE_T146; T363):
 * The folder rule knows only the verbs above: `git reset --hard`, `git clean`, `git stash`,
   `cp -r`, `rsync --delete`, `tar -x`, `ln -sf`, a script or an alias acting on a folder do not
   ask (T363 option C). Nor does a destructive command inside quoted code (`bash -c "rm -rf x"`,
-  `sh -c '…'`), a folder named through a variable (`$PWD/config`), or `git -C <dir> restore`.
+  `sh -c '…'`, `find -exec sh -c '…'`), one fed its folders by `xargs` (`… | xargs rm -rf`,
+  `xargs rm -rf config`), a folder named through a variable (`$PWD/config`), or
+  `git -C <dir> restore` (T374).
   A folder outside both roots is never walked (a sibling worktree).
 * A Bash command that only *reads* a sensitive path (`grep KEY .env`) asks too —
   reads and writes are not cheaply distinguishable in a command string.
@@ -163,6 +165,15 @@ RM_TREE_FLAGS = re.compile(r"-[A-Za-z]*[rR]|--recursive\Z")
 FIND_ACTION_FLAGS = {"-delete", "-exec", "-execdir", "-ok", "-okdir"}
 GIT_FOLDER_SUBCOMMANDS = {"checkout", "restore"}
 COMMAND_PREFIXES = {"sudo", "env", "command", "nice", "nohup", "time", "exec", "timeout"}
+# T374: a wrapper option that takes its value as the next word (`timeout -s KILL`, `sudo -u root`),
+# so the value is not read as the command.
+PREFIX_VALUE_OPTIONS = {
+    "timeout": {"-s", "--signal", "-k", "--kill-after"},
+    "sudo": {"-u", "--user", "-g", "--group", "-C", "--close-from", "-h", "--host", "-p", "--prompt",
+             "-U", "--other-user", "-D", "--chdir", "-r", "--role", "-t", "--type"},
+    "env": {"-u", "--unset", "-C", "--chdir", "-S", "--split-string"},
+    "nice": {"-n", "--adjustment"},
+}
 # `find -exec`/`-ok` asks only when the command it runs deletes or moves (round 1: `-exec grep`
 # reads); `-delete` always does.
 FIND_DESTRUCTIVE_EXEC = {"rm", "mv", "shred", "unlink", "rmdir", "truncate"}
@@ -549,10 +560,11 @@ def _segment_command(words):
         if re.match(r"[A-Za-z_]\w*=", word):
             i += 1
         elif os.path.basename(word) in COMMAND_PREFIXES:
+            wrapper = os.path.basename(word)
             i += 1
             while i < len(words) and words[i].startswith("-"):
-                i += 1
-            if os.path.basename(word) == "timeout" and i < len(words):
+                i += 2 if words[i] in PREFIX_VALUE_OPTIONS.get(wrapper, ()) else 1
+            if wrapper == "timeout" and i < len(words):
                 i += 1  # its duration
         else:
             return os.path.basename(word.lstrip("\\")), words[i + 1:]
