@@ -77,7 +77,8 @@ Recorded limitations (cut list, TASK_GUIDE_T146; T363; T375):
   `python -c` / `node -e` spans are not resolved (T363 option C, T375). A built part is a `*`:
   it stays in one folder (a variable holding `/` is missed) and it finds only a file that exists
   (`echo x > .env$x` with no `.env` is silent) (T375 Debate). The folder rule
-  does not read a built part inside a flag word (`find config -d${E}elete`) (T375 review).
+  does not read a built part inside a flag word (`find config -d${E}elete`), and a quoted value
+  after `=` is read even behind a data command (`grep --exclude=".env" KEY src` asks) (T375 review).
 * The folder rule knows only the verbs above: `git reset --hard`, `git clean`, `git stash`,
   `cp -r`, `rsync --delete`, `tar -x`, `ln -sf`, a script or an alias acting on a folder do not
   ask (T363 option C). Nor does a destructive command inside quoted code (`bash -c "rm -rf x"`,
@@ -418,8 +419,10 @@ def dequoted_tokens(text, cwd):
     found = []
     for match in SHELL_WORD_PATTERN.finditer(text):
         word = match.group()
-        if not SHELL_WORD_MARKS.search(word) or WHOLLY_QUOTED_PATTERN.fullmatch(word):
+        if not SHELL_WORD_MARKS.search(word):
             continue
+        if WHOLLY_QUOTED_PATTERN.fullmatch(word) and not BUILT_PART_PATTERN.search(word):
+            continue  # data behind a data command; a built part in it is read (round 2 P2-B)
         word = shell_word(word)
         readings = [word]
         built = BUILT_PART_PATTERN.sub("*", word)
@@ -429,6 +432,8 @@ def dequoted_tokens(text, cwd):
             readings = [built, BUILT_PART_PATTERN.sub("", word)]
         for reading in readings:
             for token in TOKEN_PATTERN.finditer(reading):
+                if not token.group().strip("*/."):
+                    continue  # `TOKEN_PATTERN` splits at `=` and `:`: a piece of only `*` or `./*` is no name (round 2 P1-A)
                 found.append(token.group())
                 if BRACE_PATTERN.search(token.group()):
                     found.extend(capped_brace_expansion(token.group()))

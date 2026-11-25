@@ -71,6 +71,23 @@ class Dequote(FixRoundTest):
             with self.subTest(command=cmd):
                 self.assert_silent(self.pre("Bash", cmd))
 
+    def test_r2_p1_a_variable_after_an_equals_or_colon_is_not_a_bare_star(self):
+        """Round 2 P1-A: `TOKEN_PATTERN` splits at `=` and `:`, so a piece of only `*` or `./*` must not
+        be globbed against the project root (it would find `infra/`)."""
+        for cmd in ('export PATH="$HOME/bin:$PATH"', 'FOO="$BAR" make', 'X="$A:$B"', 'make build OUT="$DIR"',
+                    'curl --output="$F" http://x', "cmd --opt=$V", 'docker run -v "$PWD":/app img',
+                    'cat ./"$F"', "ls ./$D", "./$BIN --help", 'rm -rf ./"$TMP"'):
+            with self.subTest(command=cmd):
+                self.assert_silent(self.pre("Bash", cmd))
+
+    def test_r2_p2_a_wholly_quoted_word_with_a_built_part_is_read(self):
+        """Round 2 P2-B: quotes round a whole word must not skip it when a built part is in it."""
+        for cmd in ('cat ".claude/sens${x}itive-paths.txt"', 'cat ".claude/sens$xitive-paths.txt"',
+                    'cat "$E.env"', 'cat "${E}.env"', 'cat "config/${E}.env"',
+                    'grep KEY ".claude/sens${x}itive-paths.txt"'):
+            with self.subTest(command=cmd):
+                self.assert_ask(self.pre("Bash", cmd))
+
     def test_ac2_a_dollar_quote_word_is_dequoted_in_the_folder_rule(self):
         for cmd in ("find config -d$'elete'", 'find config -d$"elete"'):
             with self.subTest(command=cmd):
