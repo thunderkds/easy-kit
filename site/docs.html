@@ -3844,7 +3844,7 @@ curl -fsSL https://raw.githubusercontent.com/$GITHUB_USERNAME/easy-kit/main/setu
 <table>
 <thead><tr><th>Path</th><th>What it contains</th></tr></thead>
 <tbody>
-<tr><td data-label="Path"><code>agents/</code></td><td data-label="What it contains">Canon sub-agent definitions plus <code>general-<wbr>agent-<wbr>template.md</code> (DDR-0007)</td></tr>
+<tr><td data-label="Path"><code>agents/</code></td><td data-label="What it contains">Canon sub-agent definitions (DDR-0007)</td></tr>
 <tr><td data-label="Path"><code>skills/</code></td><td data-label="What it contains">Canon custom skills (DDR-0007)</td></tr>
 <tr><td data-label="Path"><code>.claude/agents/</code></td><td data-label="What it contains">Committed <strong>relative symlink</strong> onto <code>agents/</code> so Claude Code can discover it (<code>.claude/<wbr>agents -&gt; ../agents</code>)</td></tr>
 <tr><td data-label="Path"><code>.claude/skills/</code></td><td data-label="What it contains">Committed <strong>relative symlink</strong> onto <code>skills/</code> so Claude Code can discover it (<code>.claude/<wbr>skills -&gt; ../skills</code>)</td></tr>
@@ -3853,7 +3853,7 @@ curl -fsSL https://raw.githubusercontent.com/$GITHUB_USERNAME/easy-kit/main/setu
 <tr><td data-label="Path"><code>.cursor/<wbr>rules/<wbr>agent-<wbr>base.mdc</code></td><td data-label="What it contains">Provider adapter for Cursor — see Providers below</td></tr>
 <tr><td data-label="Path"><code>tasks/</code></td><td data-label="What it contains">Task guides generated at Stage 2 (per project)</td></tr>
 <tr><td data-label="Path"><code>tasks/<wbr>attempts.tsv</code></td><td data-label="What it contains">Append-only log of blocked and stopped runs, built from the event trace after each merge</td></tr>
-<tr><td data-label="Path"><code>templates/</code></td><td data-label="What it contains">Blank templates for PRD, PROJECT_SPEC, task board, TASK_GUIDE, and more</td></tr>
+<tr><td data-label="Path"><code>templates/</code></td><td data-label="What it contains">Blank templates for PRD, PROJECT_SPEC, task board, TASK_GUIDE, and more, plus <code>general-<wbr>agent-<wbr>template.md</code>, the shared base rules every role guide inherits</td></tr>
 <tr><td data-label="Path"><code>packs/</code></td><td data-label="What it contains">Optional domain packs — each adds agents + skills for a specific project type</td></tr>
 <tr><td data-label="Path"><code>memory/</code></td><td data-label="What it contains">Two-tier hot/cold memory files (per project) — see Memory System below</td></tr>
 </tbody>

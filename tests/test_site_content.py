@@ -2169,3 +2169,24 @@ def test_install_states_the_plugin_limits(limit):
     """T236 AC4 (D3): the honest limits of the plugin path sit in #install."""
     text = re.sub(r"\s+", " ", _install_section())
     assert limit in text, f"#install does not state the plugin limit {limit!r}"
+
+
+# ---- T304: the layout table puts general-agent-template.md in templates/, not agents/ ----
+
+def _layout_row(path):
+    """The repository layout table row whose Path cell is <code>{path}</code>, <wbr> stripped."""
+    text = _raw_page_text()
+    m = re.search(
+        r'<tr><td data-label="Path"><code>' + re.escape(path) + r'</code></td>.*?</tr>',
+        text,
+        re.S,
+    )
+    assert m, f"no layout table row for {path!r}"
+    return m.group(0).replace("<wbr>", "")
+
+
+def test_layout_table_base_template_lives_in_templates_row():
+    agents_row = _layout_row("agents/")
+    templates_row = _layout_row("templates/")
+    assert "general-agent-template" not in agents_row, "agents/ row still names general-agent-template"
+    assert "general-agent-template" in templates_row, "templates/ row does not name general-agent-template"
