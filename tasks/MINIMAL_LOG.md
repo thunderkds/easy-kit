@@ -16,14 +16,15 @@ Mode: auto
 5. `memory/codebase-map.md` unchanged — FACT: it is a dated snapshot (`Generated: 2026-08-28 | Commit: 7060c13`), and its tree is right for that commit; `/map-codebase` regenerates it.
 6. `tests/test_agents_md_primary.py` `CLAUDE_LEGACY_REF` moves to the T366 edit commit `1ca76763` — RULE: the pin's own comment ("Repoint `CLAUDE_LEGACY.md`'s pin when a later task edits it"), as T200/T228/T239/T245/T341 did.
 **Checked:**
-- New test `tests/test_agent_frontmatter.py::test_legacy_doctrine_places_template_in_templates_dir`
+- New test `tests/test_agent_frontmatter.py::test_legacy_doctrine_places_template_in_templates_dir` — 1 failed before the fix (CLAUDE_LEGACY.md placed the base template in agents/), passed after the fix
 - BEFORE (2026-11-25T08:47:46Z, `python3 -m pytest -q -p no:cacheprovider tests/test_agent_frontmatter.py`): `1 failed, 34 passed` — `CLAUDE_LEGACY.md places the base template in agents/`
 - AFTER (same command plus `tests/test_agents_md_primary.py`): `46 passed`
 - Suite: `python3 -m pytest -q -p no:cacheprovider -rf tests .claude/hooks/tests` — `61 failed, 7943 passed, 24 skipped`; the same command on `main` (`b90f112e`, clean worktree) — `60 failed, 7943 passed, 24 skipped`, the same 60. The one extra, `tests/test_auto_verify.py::test_t189_ac3_a_minimal_record_with_no_new_test_line_keeps_the_row`, passed on its own (`7 passed` for `-k t189_ac3`): load from two suites running at once
 - Real run: `bash scripts/validate.sh` — printed `validate.sh: PASS`; `grep -n 'templates/general' CLAUDE_LEGACY.md` — lines 216 and 355
+- Real run (install): `bash tests/test_setup.sh` — `21 passed, 0 failed`, with `PASS: test5: legacy CLAUDE.md is CLAUDE_LEGACY.md byte-for-byte` (an existing / legacy project install writes this file as its `CLAUDE.md`, so `CLAUDE_LEGACY.md` has a runtime surface)
 **Memory:** nothing new
 **Files:** `CLAUDE_LEGACY.md` (lines 216, 355), `tests/test_agent_frontmatter.py` (new test), `tests/test_agents_md_primary.py` (pin moves to `1ca76763`), `tasks/MINIMAL_LOG.md`, `PROJECT_KANBAN.md`
-**Not done:** merge (admin: after the auto verify pass); auto verify: running (T182); `main` has 60 failing tests before this change (not from T366)
+**Not done:** merge (admin: after the auto verify pass); auto verify: running (T182), retry 1 after a `blocked` SKIP; `main` has 60 failing tests before this change (not from T366)
 
 ## T253 — the Update summary says what was and was not replaced when a backup fails · minimal
 Mode: auto
