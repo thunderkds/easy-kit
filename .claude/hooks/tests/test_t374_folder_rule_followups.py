@@ -72,6 +72,11 @@ class FollowUps(FixRoundTest):
             with self.subTest(command=cmd):
                 self.assert_ask(self.pre("Bash", cmd))
         self.assert_ask(self.pre("Bash", "cd config && rm -rf ."))  # a bare cd still moves
+        for cmd in ("FOO=1 cd build && rm -rf ../config", "command cd build && rm -rf ../config",
+                    "\\cd build && rm -rf ../config", "time cd build && rm -rf ../config",
+                    "FOO=1 cd build; rm -rf ../cd", "builtin cd build && rm -rf ../config"):  # round 3 (H1)
+            with self.subTest(command=cmd):
+                self.assert_ask(self.pre("Bash", cmd))
 
     def test_n1_timeout_on_a_reading_command_stays_silent(self):
         self.assert_silent(self.pre("Bash", "timeout -s KILL 5 ls config"))

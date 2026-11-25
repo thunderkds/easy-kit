@@ -104,3 +104,57 @@ Verification Command in the worktree (the five guide files, no full suite):
 $ python3 -m pytest -q -p no:cacheprovider .claude/hooks/tests/test_t374_folder_rule_followups.py .claude/hooks/tests/test_t363_folder_level.py .claude/hooks/tests/test_pre_tool_sensitive_path.py .claude/hooks/tests/test_t316_list_self_protect.py .claude/hooks/tests/test_t314_fix_round.py
 80 passed, 114 subtests passed in 8.17s
 ```
+
+---
+
+## Round 3 (Reviewer: T374, commit 0337bfde)
+
+Verdict: **PASS on G1 and G2 (both fixed); one NEW P2 (H1) to fix before merge.** The round-2 fix narrowed the `cd` test to `words[0]`, and that turns off the folder move for `cd` forms a real shell still obeys. Confidence >= 75.
+
+### Round-2 findings
+
+| Round-2 | Result |
+|---|---|
+| G1(a) `sudo -u rm -rf cd`, `env -C rm -rf cd`, `nice -n 5 rm -rf cd` | fixed: ask (both readings are judged; a reading on `cd` no longer hides the other) |
+| G1(b) `nice -n 5 cd x && rm -rf config`, `sudo -u root cd cd; rm -rf config` | fixed: ask (a wrapped `cd` no longer moves `where`) |
+| G2 pin for an option in no table | fixed: `sudo --nonsense-opt rm -rf config` is in `test_r2_...` |
+
+### Comparison, real hook as a subprocess (T363-branch hook vs 0337bfde hook; scratch project with `config/.env`, `cd/.env`, `build/`)
+
+Harness: round 2's `cmp.py`, copied to `<scratchpad>/cmp3.py` (same command generator over every wrapper, option, with value / bare / `=VAL` / no duration, five targets) plus 15 `cd`-form commands. 733 distinct commands.
+
+| Count | Result |
+|---|---|
+| Old ask, new silent | **0** in the generated set (round 2 had 38) |
+| Old silent, new ask | 80, all `WRAPPER OPT VAL rm -rf config|cd` (a table option with its value before the command), the asks the task wants |
+| New ask on an ordinary command (`ls config`, `rm -rf build`, `cat config/.env`) | **0** |
+
+Second probe (`<scratchpad>/cd3.py`), `cd` forms followed by a command that depends on the folder (old / new):
+
+| Command | old | new |
+|---|---|---|
+| `cd build && rm -rf ../config` | ask | ask |
+| `command cd build && rm -rf ../config` | ask | **silent** |
+| `FOO=1 cd build && rm -rf ../config` | ask | **silent** |
+| `\cd build && rm -rf ../config` | ask | **silent** |
+| `time cd build && rm -rf ../config` | ask | **silent** |
+| `FOO=1 cd build; rm -rf ../cd` | ask | **silent** |
+| `sudo cd build && ...`, `/usr/bin/cd build && ...` | ask | silent (correct: a child process; over-ask removed) |
+
+### Findings
+
+| ID | Sev | Where | Finding | One-line fix |
+|----|-----|-------|---------|--------------|
+| H1 | P2 | `.claude/hooks/pre_tool_sensitive_path.py:618` `if words and words[0] in DIR_CHANGE_COMMANDS` | NEW silence vs T363 (fail-open in a High-risk hook). The test now looks at the first word only, so `command cd build`, `VAR=x cd build`, `\cd build`, `time cd build` no longer move `where`. A real shell DOES change folder for these (builtin `cd` with an assignment, `command cd`, `\cd`, `time cd`). The next segment is then resolved against the wrong folder: `FOO=1 cd build && rm -rf ../config` (with `config/.env`): T363 hook ask, this hook silent. The same shape as G1(b), the other way round. Not covered by the tests. | Find the verb with `_segment_command` past only `VAR=`, `\`, `command`, `time` (not the value-skip table, not `sudo/env/nice/exec/timeout/nohup`), and move `where` when that verb is `cd`/`pushd`; add `FOO=1 cd build && rm -rf ../config`, `command cd build && rm -rf ../config`, `\cd build && rm -rf ../config` to `test_r2_...` |
+| H2 | P3 | `.claude/hooks/tests/test_t374_folder_rule_followups.py` `test_r2_...` | Pin gap: no row has a moving `cd` form other than a bare `cd`; H1 passes the whole suite. | The rows from H1 |
+
+Checked, no finding: `i += 2` past the end and an empty `words` (the `words and` guard; `_segment_command([])` returns `(None, [])`); `dict.fromkeys` keeps both readings on one walk budget and one folder list; `target` read from `words[1:]` still skips `-` options; the hook still only reads the string and runs nothing from it; header names `xargs`, `find -exec sh -c`, `env -S "..."`, `git -C ... restore`.
+
+### Evidence
+
+Verification Command in the worktree (five guide files, no full suite; `git status` clean before my edit of this file):
+
+```
+$ python3 -m pytest -q -p no:cacheprovider .claude/hooks/tests/test_t374_folder_rule_followups.py .claude/hooks/tests/test_t363_folder_level.py .claude/hooks/tests/test_pre_tool_sensitive_path.py .claude/hooks/tests/test_t316_list_self_protect.py .claude/hooks/tests/test_t314_fix_round.py
+81 passed, 119 subtests passed in 8.47s
+```

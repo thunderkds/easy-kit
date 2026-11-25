@@ -54,7 +54,7 @@ Folder-level calls (T363, option C): a Bash segment whose command is `rm -r`, `f
 arguments, or a folder its glob matches, is a folder under the project root or the cwd that holds
 a sensitive path: a walk (one budget of `FOLDER_WALK_MAX` entries per call, `.git` skipped) finds a
 listed or protected file in it, or the walk cannot finish or cannot read a folder. A `cd`/`pushd`
-segment moves the folder later segments resolve against. A `{a,b}` brace token is expanded and each
+segment, wrapped or not, adds its target to the folders later segments are judged against (T374). A `{a,b}` brace token is expanded and each
 expansion is checked as a path; a token over `MAX_BRACE_EXPANSIONS` paths asks.
 
 Recorded limitations (cut list, TASK_GUIDE_T146; T363):
@@ -164,7 +164,7 @@ FOLDER_VERBS = {"rm", "find", "mv", "git"}
 RM_TREE_FLAGS = re.compile(r"-[A-Za-z]*[rR]|--recursive\Z")
 FIND_ACTION_FLAGS = {"-delete", "-exec", "-execdir", "-ok", "-okdir"}
 GIT_FOLDER_SUBCOMMANDS = {"checkout", "restore"}
-COMMAND_PREFIXES = {"sudo", "env", "command", "nice", "nohup", "time", "exec", "timeout"}
+COMMAND_PREFIXES = {"sudo", "env", "command", "builtin", "nice", "nohup", "time", "exec", "timeout"}
 # T374: a wrapper option that takes its value as the next word (`timeout -s KILL`, `sudo -u root`),
 # so the value is not read as the command. Each segment is read twice, with these skips and
 # without them, and the folder rule judges both readings: an entry that is wrong (an option that
@@ -187,6 +187,11 @@ FIND_DESTRUCTIVE_EXEC = {"rm", "mv", "shred", "unlink", "rmdir", "truncate"}
 # check asks instead (round 1: the expansion is exponential, and a hook that times out is silent).
 MAX_BRACE_EXPANSIONS = 1000
 DIR_CHANGE_COMMANDS = {"cd", "pushd"}
+# T374 round 3: the folders a call may have moved to. A `cd` segment adds its target to the set and
+# keeps the old folders, so a later segment is judged against every folder it may run in: a `cd`
+# that moves the shell (`cd`, `FOO=1 cd`, `command cd`, `\cd`) and one that does not (`sudo cd`)
+# are both covered without telling them apart. Capped; past the cap no folder is added.
+MAX_CD_FOLDERS = 16
 # The walk of a folder stops after this many entries; a folder it could not finish counts as
 # holding a sensitive path (toward the human). Overridable for tests.
 FOLDER_WALK_MAX = 20000
@@ -611,26 +616,30 @@ def folder_hits(command, cwd, roots, patterns):
     that holds a sensitive path. A folder under neither root is skipped (a sibling worktree). A
     `cd`/`pushd` segment moves the folder later segments resolve against."""
     text = strip_quoted_spans(strip_heredoc_bodies(command))
-    hits, where, budget = [], cwd, [_walk_cap()]
+    hits, wheres, budget, walked = [], [cwd], [_walk_cap()], set()
     for segment in SEGMENT_BOUNDARY_PATTERN.split(text):
         words = [re.split(r"\d*[<>]", w, 1)[0].strip("\"'()") for w in segment.split()]
         words = [w for w in words if w and not w.startswith(("<", ">", "2>", "&>"))]
-        if words and words[0] in DIR_CHANGE_COMMANDS:
-            # Only a bare `cd`/`pushd` moves the shell's folder: a wrapped one (`sudo cd`,
-            # `nice -n 5 cd`) runs in a child and changes nothing (T374 round 2).
-            target = next((a for a in words[1:] if not a.startswith("-")), None)
-            where = os.path.normpath(os.path.join(where, os.path.expanduser(target))) if target else where
-            continue
         readings = [_segment_command(words)]
         plain = _segment_command(words, skip_values=False)
         if plain != readings[0]:
             readings.append(plain)
+        for verb, args in readings:
+            if verb in DIR_CHANGE_COMMANDS:
+                target = next((a for a in args if not a.startswith("-")), None)
+                if target:
+                    moved = [os.path.normpath(os.path.join(w, os.path.expanduser(target))) for w in wheres]
+                    wheres = list(dict.fromkeys(wheres + moved))[:MAX_CD_FOLDERS]
         targets = [a for v, rest in readings if v in FOLDER_VERBS for a in _folder_arguments(v, rest)]
-        for arg in dict.fromkeys(targets):  # each folder once: both readings share the walk budget
+        for arg, where in dict.fromkeys((a, w) for a in targets for w in wheres):
+            # each (argument, folder) once: both readings and every `cd` folder share the budget
             base = os.path.join(where, os.path.expanduser(arg))
             folders = ([base] if not GLOB_CHARS.search(arg) else
                        list(itertools.islice(glob.iglob(base), MAX_GLOB_MATCHES)))
-            for folder in (os.path.normpath(f) for f in folders):
+            for folder in dict.fromkeys(os.path.normpath(f) for f in folders):
+                if folder in walked:
+                    continue
+                walked.add(folder)
                 if not os.path.isdir(folder) or not any(
                         _within(folder, r) or os.path.realpath(folder) == os.path.realpath(r)
                         for r in roots):
