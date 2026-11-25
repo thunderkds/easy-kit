@@ -24,7 +24,7 @@ Checks: tests `python3 -m pytest .claude/hooks/tests/test_agent_ws_t345.py -q` �
 Memory: `memory/decisions.md` — 2026-11-25 T345: `agent-ws` stays local, nothing ships; `memory/learnings.md` — 2026-11-25 T345 traps (Debate the Stop hook cannot see; Claude keeps a worktree with an untracked file; main's overwritten `CLAUDE.md` fails 2 tests; `git stash` negative check). `memory/MEMORY.md` not touched: over its budget (43,909 chars), a `/compact-memory` job
 Not done: merge (admin: after the auto verify pass); auto verify: PENDING
 Paused: auto-mode check failed — extended track, but the trace has no `code-review` Skill call (Stage 4 runs in auto mode); Risk High, but the trace has no `security-review` Skill call [report c54b4e946dba]
-Paused: auto-mode check failed — Risk High, but the trace has no `security-review` Skill call [report c9567d477cc8]
+Paused: auto-mode check failed — Risk High, but the trace has no `security-review` Skill call [report 2d7d32f98a6e]
 
 ## Evidence
 
@@ -74,3 +74,91 @@ write+fsync ms     p50    37.7  p95   466.2  max   712.5  (n=355)
 
 Reading: the run plan expected an fsync max under 1 s with tmpfs (R10 on the target: 0.24 s); here it is 1.1 s, and the on-disk mode did not stall either (0.71 s, against 5–6 s on the target), so this machine does not reproduce the freeze and cannot confirm the fix. tmpfs cut fsync p95 (466 → 80 ms) and build time (81 → 63 s). The 3 build folders took 11 GB of the 16 GB `/dev/shm`, not R10's 4.2 GB: `easy-note-mcp` grew. `new`'s 4 GB free check is per call, so 3 parallel `new` calls all pass it, and a 4th build would hit ENOSPC (documented: `docs/agent-ws.md` "Full tmpfs"). The re-run on the target machine stays open (`Not done:`).
 
+
+---
+
+## Stage 4 review (Reviewer: T345, fresh context)
+
+Commit reviewed: `d5dc23bd91b72ef2d364f72a1658dd80c5b1f497` (`git diff main...d5dc23bd`: 9 files, 1641 insertions). Worktree `/home/thunderkds/workspace/pets/hungnguyen111/wt-t345`, branch `feat/t345-agent-ws`. Risk High, C3.
+
+Method: no `Skill` tool was callable in this context, so `code-review` and `security-review` were done inline: the diff read in full against `skills/code-review/references/security-reviewer.md` (boundary, actor, resource, result; no built-in `security-review` was started). The guide's 19 Acceptance Criteria and 11 Success Criteria were traced to code and tests. No code was edited.
+
+Verification command (scratchpad venv first on `PATH`):
+
+```
+$ python3 -m pytest .claude/hooks/tests/test_agent_ws_t345.py -q
+.........................................................                [100%]
+57 passed in 15.89s
+```
+
+The whole repo suite was not run, as instructed.
+
+### Acceptance trace
+
+| AC / SC | Code | Test | Result |
+|---|---|---|---|
+| AC 1 baseline | n/a (measurements in guide) | n/a | recorded, not re-run |
+| AC 2 `new` path, lease, stdout | `cmd_new` | `test_new_creates_worktree_beside_repo_with_lease_and_path_only_on_stdout` | ok |
+| AC 3 / SC 4 8 concurrent | `new.lock` flock | `test_eight_concurrent_new_all_succeed` | ok |
+| AC 4 hooks | `hook-create` / `hook-remove`, registered locally (Debate, `## Questions Log`) | `test_hook_create_*`, `test_hook_remove_*` | ok at handler level; the live `claude --worktree` and Agent runs are in the record, not re-run by me |
+| AC 5 / SC 1 nested run | `AGENT_WS_SLOT` bypass | `test_nested_run_inside_a_slot_does_not_deadlock` | ok |
+| AC 6 / SC 2 daemon | O_CLOEXEC lock fd | `test_daemon_left_by_a_build_does_not_keep_the_slot` | ok |
+| AC 7 / SC 3 kill -9 | `_watch` process group kill | `test_kill_9_of_the_wrapper_frees_the_slot_and_kills_the_build` | ok |
+| AC 8 / SC 11 queue off by default, cap N | `slots()`, `take_slot` | `test_queue_off_by_default_*`, `test_n_slots_cap_overlap_across_sessions` | ok |
+| AC 9 refusals, no force | `blockers`, `remove` | `test_rm_refuses_and_removes_nothing`, `test_rm_never_forces` | ok |
+| AC 10 / SC 5, 6 gc | `owner_alive`, `cmd_gc` | `test_gc_*` (6 tests, incl. reused PID) | ok |
+| AC 11 reflink | `reflink_probe` | `test_reflink_probe_says_nothing_seeded` | ok |
+| AC 12 waiting message | `take_slot` | `test_waiting_for_slot_is_announced` | ok |
+| AC 13 SessionStart env | `cmd_hook_env` | `test_hook_env_exports_the_profile_and_never_a_target_dir` | ok |
+| AC 14 / SC 7 tmpfs folder | `pick_tmpfs`, `setup_build_dir` | `test_rust_worktree_points_*`, `test_cargo_build_lands_on_tmpfs_*` | ok, path shape differs from the AC text (F3) |
+| AC 15 / SC 8 fallback | `pick_tmpfs` reasons | `test_no_tmpfs_falls_back_*`, `test_tmpfs_with_too_little_free_space_*` | ok |
+| AC 16 / SC 9 rm and reboot | `remove_build_dir`, `ensure_build_dir` | `test_rm_*`, `test_cargo_recreates_*` | ok |
+| AC 17 nice, no ionice | `os.nice(19)` | `test_run_uses_nice_19_and_leaves_io_class_alone` | ok |
+| AC 18 / SC 10 no shared target | `build_env` | `test_two_worktrees_never_share_a_target_dir` | ok |
+| AC 19 cache warning | `cache_warnings` | `test_cache_on_another_filesystem_warns` | ok |
+
+All 19 ACs and 11 SCs have a check. The tests use real git repos and real processes, and the negative cases (refusals, symlinked private folder, forged lease `build_dir`, tracked cargo config) are present.
+
+### Security review (inline)
+
+Boundaries looked at: other local users on a shared `/dev/shm` and `/tmp`; the hook JSON on stdin (`name`, `worktree_path`, `cwd`); lease files under `.git/agent-ws`; the command given to `run`.
+
+- Shared tmpfs: `private_dir` uses `lstat`, refuses a symlink, a foreign owner or a non-folder, and tightens the mode; a pre-created foreign folder only makes `new` fall back to disk. Rejected as a vulnerability (denial of tmpfs use only, no data reach).
+- Hook `name`: reduced to `[A-Za-z0-9._-]` and checked by `NAME_RE` and `..`; the branch name goes through `git check-ref-format`; all `git` calls use argument lists, no shell. Rejected.
+- Lease `build_dir` and `name` are trusted as written. The writer is the same user (`.git` is not shipped by clone). `remove_build_dir` still requires an `agent-ws-<uid>` grandparent, owner, non-symlink and `tmpfs` (test covers it). Hardening note only.
+- `rm` and `gc` never use `--force` or `branch -D`; `remove` puts the pointer file back if `git worktree remove` fails. Rejected.
+- Verdict: no confirmed security finding; no `needs_validation` lead.
+
+### Findings
+
+**P0: none.  P1: none.**
+
+**P2-1: `gc` can crash on a build that is changing, and the size walk runs on every `gc`**
+- `scripts/agent_ws.py` `cmd_gc`, the `used += sum(os.path.getsize(...) for ... os.walk(build) ...)` lines (inside the lease loop, before the `owner_alive` check).
+- Scenario: agent A is building (cargo creates and deletes files in `target/`); agent B runs `agent_ws.py gc`. `os.walk` lists a file, cargo removes it, `os.path.getsize` raises `FileNotFoundError`. `main` catches only `Refused`, so `gc` ends with a traceback in the middle of the loop: later leases are not collected and the exit code is 1 with no reason line. The sum is only printed under `--dry-run`, yet it is computed (and walks up to 11 GB of files, per the lag test) on every real `gc`.
+- Action: compute `used` only when `dry`, and catch `OSError` per file (use `os.lstat` in a `try`).
+
+**P3-1: malformed input gives a traceback instead of `refused:`**
+- `scripts/agent_ws.py` `cmd_new` (`--owner-pid abc` raises `ValueError` from `int(...)`); `Repo.find` and `cmd_gc` read `lease["path"]` / `lease["branch"]` / `lease["base"]` with no `.get`, so a lease file missing a key raises `KeyError` (the "unreadable lease" skip only covers invalid JSON).
+- Scenario: a hand-edited or half-written lease makes `rm`, `gc` and `hook-remove` fail with a traceback. Exit is still 1 and nothing is removed, so the failure is safe, only unclear.
+- Action: validate the required keys in `all_leases` and skip with the existing `unreadable lease` message; wrap the `int()` in `Refused`.
+
+**P3-2: lease owner is unknown or PID 1 gives an immediately "dead" lease**
+- `scripts/agent_ws.py` `owner_alive`, `owner_pid`. If `proc_start(pid)` is `None` at creation, `owner_start` is `None`, and `owner_alive` returns `False` at once, so `gc` treats the workspace as stale. `blockers` still guards unmerged, dirty and in-use work, so no work is lost; only a clean, merged, live workspace could be removed early. Narrow.
+- Action: record it in `docs/agent-ws.md` limits, or refuse `new` when the owner start time cannot be read.
+
+**P3-3: the guide's AC 14 text no longer matches the code**
+- Guide AC 14 says `<mount>/agent-ws-<uid>/<name>/`; code and `## Auto decisions` item 6 use `<mount>/agent-ws-<uid>/<repo id>/<name>-<token>/` (the repo id is required by the edge-case list; the token by R5). Tests and the doc agree with the code, the AC row was not updated.
+- Action: edit AC 14 and SC 7 to the real path, so the next reader does not think the code is wrong.
+
+**P3-4 (note): AC 4 is met by local registration, not by a shipped hook**
+- The Debate chose a project's untracked `.claude/settings.local.json`; the guide's "Files to change" row records this. The live runs in the record cover `claude --worktree` and the Agent spawn, on `coupd` only. The target-machine re-run stays open (`Not done:` in the record). No action beyond what the record already lists.
+
+### Gate rows (not mine to close)
+
+- The `verify` row of the Evidence table is the auto verify hook's; the record shows `Paused: auto-mode check failed` for missing `code-review` / `security-review` Skill calls in the Supervisor's trace. This review is the fresh-context reviewer run required by the merge gate; it does not repair those trace rows.
+- Smoke suite: the record's `56 failed` are shared with `main` (61 there); I did not re-run the full suite.
+
+### Verdict
+
+PASS WITH FINDINGS: 0 P0, 0 P1, 1 P2, 4 P3. The P2 (F1) should be fixed before merge: it is small and safe to fix; the P3s may be fixed or recorded.
