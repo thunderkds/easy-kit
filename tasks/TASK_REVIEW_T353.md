@@ -23,6 +23,7 @@ Memory: `memory/decisions.md` — 2026-11-25 T353: agent-ws is an opt-in install
 Not done: merge (admin: after the auto verify pass); push (yours: no `origin` remote, `git push github main`); T345 to Done (yours); `easy-note-mcp`: untrack `memory/event-trace/` so `gc` can clean its worktrees (yours, another repo); auto verify: running (T182)
 Paused: auto-mode check failed — no test run in memory/event-trace/T353.jsonl — write /home/thunderkds/workspace/pets/hungnguyen111/easy-kit/.claude/hooks/.state/active_task.d/$CLAUDE_CODE_SESSION_ID with the task ID (minimal-track step 1): `mkdir -p /home/thunderkds/workspace/pets/hungnguyen111/easy-kit/.claude/hooks/.state/active_task.d && printf '%s\n%s\n' "T353" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > /home/thunderkds/workspace/pets/hungnguyen111/easy-kit/.claude/hooks/.state/active_task.d/$CLAUDE_CODE_SESSION_ID`, then rerun the task's tests so the trace records them under the task, then stop; Risk High, but no decision was DEBATED with 3 Advocates; extended track, but the trace has no `code-review` Skill call (Stage 4 runs in auto mode); Risk High, but the trace has no `security-review` Skill call [report ea28300862ce]
 Paused: auto-mode check failed — extended track, but the trace has no `code-review` Skill call (Stage 4 runs in auto mode); Risk High, but the trace has no `security-review` Skill call [report 0ad4148d9826]
+Paused: auto-mode check failed — Risk High, but the trace has no `security-review` Skill call [report d7b64e0eb4dc]
 
 ## Evidence
 
@@ -76,3 +77,29 @@ Security: no injection path found. The overlay path comes from the fetch temp di
 Counts: P0 0, P1 0, P2 1, P3 4.
 
 Verdict: PASS (no P0/P1; resolve or accept the P2 before merge).
+
+### Round 2 (Reviewer: T353, commit 864415b7)
+
+Scope: `main...864415b7`, plus `git diff 864415b7 HEAD` (only `memory/` and this record). Method: code-review and security-review criteria applied inline (`skills/code-review/references/security-reviewer.md`); the Skill tool was not used.
+
+Verification (venv first on PATH):
+- `bash tests/test_agent_ws_installer_t353.sh`: `--- 33 passed, 0 failed ---`
+- `python3 -m pytest tests/test_merge_settings_agent_ws_t353.py tests/test_agent_ws_no_proc_t353.py tests/test_site_story.py tests/test_site_content.py -q`: `207 passed in 0.94s`
+
+Round 1 findings:
+- **P2** hook-create on a machine with no /proc: FIXED, with a caveat. `tests/test_agent_ws_no_proc_t353.py` hides `/proc` in-process; `hook-create` returns 0, prints `../wt-mac1` as its last stdout line, the worktree exists, stderr says `on-disk target/`; `hook-remove` then removes it. It reads the code truthfully (`scripts/agent_ws.py:127-150` return None/"" on OSError; `fcntl` is available on macOS). It simulates /proc, it does not run on macOS.
+- **P3** AC 1 wording: FIXED (`tasks/TASK_GUIDE_T353.md:99` names the Reinstall default).
+- **P3** turning off leaves the script: FIXED in `docs/agent-ws.md:7-12` and `site/docs.html:3381` ("stays as your own file").
+- **P3** exact-form hand entries dropped on No: ANSWERED (accepted, record decision 11).
+- **P3** unfilled record slots: PARTLY OPEN. The record's Evidence, Checks, Memory, Not done and the real `claude -p --worktree` run are now filled. The guide's Fidelity Gate boxes (domain terms, FR-002, D1 decided), Edge Case Checklist and Completion Checklist at `tasks/TASK_GUIDE_T353.md:50,52,53,163-169,205-210` are still `[ ]`.
+
+Whole-diff re-review: no new code in 864415b7 beyond one test and wording. Security unchanged from round 1: no injection path, overlay path quoted, anchored ownership regex, lock value compared literally to `on`, a No answer ships nothing new. The test uses a tmp repo and in-process patches only.
+
+### Findings
+
+- **P3** `scripts/agent_ws.py:127-150,163-165` with `tests/test_agent_ws_no_proc_t353.py:55`: without /proc `owner_alive` is always False, so on macOS every lease reads as an ended session. Failure scenario: a macOS teammate runs `agent_ws.py gc` (or `hook-remove`) while another session is live, and a clean, merged worktree under that live session is removed. The unmerged/unsaved guards still hold, so no work is lost. The test comment ("no process check without /proc, but the rest still guards") says this; `docs/agent-ws.md` calls macOS untested. Action: optional one sentence in `docs/agent-ws.md` that off Linux `gc` cannot tell a live session from an ended one.
+- **P3** `tasks/TASK_REVIEW_T353.md` (`Paused:` lines, record top) and `tasks/TASK_GUIDE_T353.md` checklists (see above): stale auto-mode "Paused" notes about a missing `code-review`/`security-review` Skill call, and unchecked guide boxes. Action: Supervisor ticks the guide boxes and clears or answers the Paused lines before verify. Not a code defect.
+
+Counts: P0 0, P1 0, P2 0, P3 2.
+
+Verdict: PASS (round 1 P2 fixed, no open P0/P1/P2).
