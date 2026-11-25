@@ -488,6 +488,7 @@ Mode: auto
 - BEFORE: `date -u` 2026-11-25T08:51:26Z — `bash tests/test_pack_catalog.sh` → `10 passed, 6 failed`
 - AFTER: `bash tests/test_pack_catalog.sh` → `16 passed, 0 failed`; with `uname` faked to `Darwin` (no agent-ws question) → `16 passed, 0 failed`
 - Neighbours: `tests/test_agent_ws_installer_t353.sh` `33 passed, 0 failed`; `tests/test_one_command_menu.sh` `22 passed, 0 failed`; `shellcheck -x tests/test_pack_catalog.sh` rc 0
+- Reviewer: T367 (fresh qa-expert, commit `c97a785c`) PASS, 0 P0–P2: answer order matches `setup.sh:886-888`; the string expands to the old one off Linux; every other `run_in_pty` suite passes (`test_install_backups` 18, `test_setup` 21, `test_harness_projection` 41, `test_t098_harness_presence` 20, `test_update` 38, `test_cli_and_project_menus` 25, `test_update_auto_approve` 91, all 0 failed); 1 P3 left (`tests/test_pack_catalog.sh:62-65`: the `AGENT_WS_ANSWER` lines sit under the `install_both` comment header; cosmetic)
 **Memory:** `memory/learnings.md` — the T353 entry gains: a new installer question shifts every pty answer string; grep `run_in_pty` in `tests/*.sh` and run every CI shell step, not only the menu tests
 **Files:** `tests/test_pack_catalog.sh` (`install_both` sends an Enter for the agent-ws question on Linux), `tasks/MINIMAL_LOG.md`, `memory/learnings.md`
 **Not done:** merge (admin: after the auto verify pass); push (yours: `git push github main`, then CI reruns); auto verify: running (T182)
