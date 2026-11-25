@@ -18,10 +18,12 @@ import sys
 import pytest
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from test_merge_gate_t210 import gate, git, kanban  # noqa: E402
+from test_merge_gate_t210 import gate, git, kanban, merge_gate  # noqa: E402
 from test_admin_tag import auto_verified, reason  # noqa: E402
 from test_t317_loop_binding import TAG_AT, pass_written_at  # noqa: E402
 from test_t317_fix_round import _gate_case, _loop  # noqa: E402
+
+import verify_record  # noqa: E402
 
 assert gate  # the fixture, imported for pytest
 
@@ -128,3 +130,36 @@ def test_two_done_rows_for_the_task_do_not_bind(gate, tmp_path, tag):
     command, cwd = _gate_case(fx, tag)
     text = reason(command, cwd, _loop(tmp_path, tag))
     assert text is not None and f"[{tag}]" in text, text
+
+
+# ── Stage 4 P2-1: the helper's own record checks, not shadowed by `_pass_recorded_since` ────────
+def _second_record(fx, sha, offset_s):
+    """A hook pass record for `sha` from session `s-1`, dated `offset_s` from now."""
+    import time
+    verify_record.write_record(merge_gate.ROOT, "T900", sha, "pass", SESSION, "log2.txt")
+    path = verify_record.record_path(merge_gate.ROOT, "T900", sha)
+    when = time.time() + offset_s
+    os.utime(path, (when, when))
+
+
+@pytest.mark.parametrize("tag", ["admin", "ticket"])
+@pytest.mark.parametrize("case", ["note-record-before-start", "note-commit-off-branch"])
+def test_the_notes_own_commit_must_pass_the_record_rule(gate, tmp_path, tag, case):
+    """Commit A (the guide commit) has a fresh record held by the branch, so `_pass_recorded_since`
+    holds. The note names commit B: its record is older than this session's `--start`, or B is not
+    on the task branch. The Done row must not bind through B."""
+    fx = gate(kanban(ready=("T900",)))
+    auto_verified(fx)
+    pass_written_at(fx, TAG_AT + 60)
+    if case == "note-record-before-start":
+        other = git(fx.wt, "rev-parse", "HEAD")  # the review-file commit after A, on the branch
+        assert other != verified_sha(fx)
+        _second_record(fx, other, TAG_AT + 10)
+    else:
+        git(fx.main, "commit", "-q", "--allow-empty", "-m", "on main only")
+        other = git(fx.main, "rev-parse", "HEAD")
+        _second_record(fx, other, TAG_AT + 60)
+    board_with(fx, done_row_extra=note(other))
+    command, cwd = _gate_case(fx, tag)
+    text = reason(command, cwd, _loop(tmp_path, tag))
+    assert text is not None and f"[{tag}]" in text, (case, text)
