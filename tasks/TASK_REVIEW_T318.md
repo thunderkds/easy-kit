@@ -12,8 +12,9 @@ Mode: auto
 5. Kept the guide on `main` and on the branch identical, so the merge has no add/add conflict, and put the review file on `main` where the stop check reads it — RULE: `AGENTS.md:171` (the merge gate reads a reviewer record for the code being merged)
 Checks: tests `python3 -m pytest -q -p no:cacheprovider .claude/hooks/tests/test_t318_paused_line_not_a_decision.py .claude/hooks/tests/test_stop_auto_mode_check.py` — 90 passed at `8fdc3b75`; the new file is red on the base hook first (`1 failed, 2 passed`, AC 1 fails); related suites (`test_t250_session_ownership`, `test_t317_fix_round`, `test_t247_auto_span_entries`, `test_t310_admin_unsure_stop`, `test_admin_tag`, `tests/test_hooks_from_plugin.py`, `tests/test_plugin_init.py`) 551 passed at `c843e958`; code-review (Supervisor, no P0 to P3 on the one-line change; `lane_check`: C1, 3 files, FITS) and security-review (Supervisor, no finding at confidence 8 or higher)
 Memory: nothing new
-Not done: merge (admin: after the auto verify pass); auto verify (starts now that round 2 passed); push (`EASY_KIT_ADMIN_REMOTE` decides the remote)
+Not done: merge (admin: after the auto verify pass); auto verify: ☑ pass (session 4ce08a0e-72de-4392-8802-7c0e72a76743, commit e571a16b4debd1170cc3509cbe1d41be96b1e0c2, log .claude/verify-runs/T318-e571a16b4deb.log; a second run by this session at `120df51c` also printed `verdict: pass`, log .claude/verify-runs/T318-120df51ca277.log); push (`EASY_KIT_ADMIN_REMOTE` decides the remote)
 Paused: done not moved — the verify result is not confirmed by its run record (the merge gate's rule); report incomplete: auto verify slot
+Paused: done not moved — report incomplete: auto verify slot
 
 ## Review verdict
 
@@ -35,7 +36,7 @@ Round 2 (`8fdc3b75`): PASS, no P0, P1 or P2; one P3.
 | **New test(s) cover Acceptance Criteria (file paths pasted)** | ☑ pass | `.claude/hooks/tests/test_t318_paused_line_not_a_decision.py` (AC 1 to 3; AC 4 is `.claude/hooks/tests/test_stop_auto_mode_check.py`, unchanged) — `3 passed`; on the base hook `1 failed, 2 passed` (AC 1) |
 | Verification command run | ☑ pass | the guide's command printed `90 passed` at `8fdc3b75` |
 | Negative cases hold | ☑ pass | round 1: AC 1 and AC 2 red on the reverted hook (scratch copy); round 2 probes a flagged line behind each other prefix (blocks) |
-| verify | ☑ pass | auto-run by hook, session 2e91ec2d-259b-48ab-bb76-0f2ca0b2157e, commit 4de436e22598544a8287bd6434a16d97eda567cf, log .claude/verify-runs/T318-4de436e22598.log — pass |
+| verify | ☑ pass | auto-run by hook, session 4ce08a0e-72de-4392-8802-7c0e72a76743, commit e571a16b4debd1170cc3509cbe1d41be96b1e0c2, log .claude/verify-runs/T318-e571a16b4deb.log — pass |
 | Review scope bounded to the change's blast radius (affected set, not whole repo) | ☑ pass | `lines` has two readers in `check_task` (`choice_reason` loop, `DEBATED` list); `report_stamp` and `last_pause` do not read it |
 | Full smoke suite still green (no regression) | ☑ pass | round 1 hook suite: `5 failed, 5763 passed`; the 5 are the `MEMORY.md` hot-tier budget (44,683 of 42,000 characters, from `main`'s last memory commit), none touch this change |
 | **Companion score (easy-verifier)** | ☑ N/A | Not run in this review |
