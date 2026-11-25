@@ -415,7 +415,9 @@ def shell_word(word):
 def blank_spaced_spans(text):
     """`text` with each quoted span that holds a space turned into spaces: it is a message, so a
     `$` in it is no word (`echo "see $x.env file"`, round 4). Quotes pair left to right; an
-    unterminated quote or a `\\"` ends the scan."""
+    unterminated quote or a `\\"` ends the scan; a `$(` or a backtick anywhere turns it off."""
+    if "$(" in text or "`" in text:
+        return text  # a quoted `$(…)` is code, and its inner quotes break the pairing (round 6)
     out, i = list(text), 0
     while i < len(text):
         if text[i] in "\"'":

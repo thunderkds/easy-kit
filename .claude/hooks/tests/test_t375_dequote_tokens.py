@@ -129,6 +129,14 @@ class Dequote(FixRoundTest):
             with self.subTest(command=cmd):
                 self.assert_ask(self.pre("Bash", cmd))
 
+    def test_r6_p2_a_quoted_command_substitution_is_code_not_a_message(self):
+        for cmd in ('cat "$(cat .e\'\'nv)"', 'echo "$(cat .e"n"v) done"', 'x="$(cat .e\'\'nv)"',
+                    'git commit -m "$(cat .e\'\'nv) a"', 'cat "`cat .e\'\'nv`"',
+                    'echo "$(cat .claude/sens\'\'itive-paths.txt) y"'):
+            with self.subTest(command=cmd):
+                self.assert_ask(self.pre("Bash", cmd))
+        self.assert_silent(self.pre("Bash", 'echo "today is $(date +%F) and $x.env"'.replace("$x.env", "ok")))
+
     def test_r4_p3_bang_is_a_built_part(self):
         for cmd in ("cat .env$!", "cat .claude/sens$!itive-paths.txt"):
             with self.subTest(command=cmd):
