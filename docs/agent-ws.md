@@ -4,8 +4,11 @@
 worktree builds into a private folder in RAM (tmpfs), so parallel builds do not freeze the disk.
 It removes worktrees only when no work can be lost. Linux only; needs git 2.31 or newer.
 
-It does **not** ship to installed projects yet. You turn it on per project, in that project's
-untracked `.claude/settings.local.json` (below).
+It is off unless a project turns it on. The installer asks on Install and Reinstall (T353):
+`Turn on parallel builds (agent-ws)? [y/N]` (Linux only). A yes copies `scripts/agent_ws.py` into
+the project and adds its three hooks to the project's `.claude/settings.json`; the lock remembers
+the answer, and Update keeps it. Reinstall and answer `n` to turn it off. Users read the short
+version at `site/docs.html#parallel-builds`.
 
 ## Commands
 
@@ -35,7 +38,17 @@ python3 scripts/agent_ws.py gc [--dry-run]      # removes worktrees whose owner 
   `gc` removes a worktree only when that process is gone and `rm` would allow it. A worktree made
   by plain `git worktree add` has no lease, and `gc` never touches it.
 
-## Turn on the Claude Code hooks (per project, by hand)
+## How the installer wires it (T353)
+
+The installer passes `lib/agent-ws-hooks.json` to `lib/merge-settings.py` as an overlay, only when
+the lock says `"agent_ws": "on"`. The merge owns an entry whose command names exactly
+`"$CLAUDE_PROJECT_DIR"/scripts/agent_ws.py`: it keeps it on every run, drops it when the overlay is
+not passed (the project answered No), and drops it when `scripts/agent_ws.py` is missing, so
+`claude --worktree` never calls a script that is not there. A teammate who clones an opted-in
+project gets the hooks too; on macOS agent-ws builds on disk (no tmpfs check), and native Windows
+is not supported.
+
+## Turn on the Claude Code hooks by hand (this repo, or a project installed before T353)
 
 With these, `claude --worktree` and Agent `isolation: "worktree"` get an agent-ws worktree, and every
 session gets `AGENT_WS_BIN` (the script path) in its Bash environment. Put this in the project's
@@ -52,6 +65,8 @@ absolute path of this repo; inside this repo you can use `"$CLAUDE_PROJECT_DIR"`
 }
 ```
 
-Restart Claude Code after the edit. To turn it off, delete the three entries. Claude Code does not
+Restart Claude Code after the edit. To turn it off, delete the three entries. Do not also answer
+yes in the installer: the installer warns when `settings.local.json` already wires `agent_ws.py`,
+because each hook would run twice. Claude Code does not
 run `WorktreeRemove` when a subagent finishes and keeps its worktree, so run `agent-ws gc` now and
 then.

@@ -233,6 +233,7 @@
       <li><a href="#update-flow">Update flow</a></li>
       <li><a href="#settings-tool">Settings tool</a></li>
       <li><a href="#install-variants">Install variants</a></li>
+      <li><a href="#parallel-builds">Parallel builds</a></li>
     </ul>
     <p class="nav-group-title">// the team</p>
     <ul>
@@ -550,6 +551,8 @@
   <li><strong>New or existing project</strong> — <code>1) New project  2) Existing / legacy
     project</code>. An existing / legacy project gets <code>CLAUDE_LEGACY.md</code>'s rules as its
     <code>CLAUDE.md</code>.</li>
+  <li><strong>Parallel builds</strong> (Linux) — <code>Turn on parallel builds (agent-ws)? [y/N]</code>.
+    See <a href="#parallel-builds">Parallel builds</a>.</li>
 </ul>
 <p class="lead">
   A plan then lists the CLIs, the project type and anything that will be backed up, and asks
@@ -3356,6 +3359,29 @@ curl -fsSL https://raw.githubusercontent.com/$GITHUB_USERNAME/easy-kit/main/setu
     patterns).</li>
   <li><code>1) New project</code> — the default with no terminal. You get <code>CLAUDE.md</code> (only <code>@AGENTS.md</code>) and the full <code>AGENTS.md</code>.</li>
 </ul>
+</section>
+
+<section id="parallel-builds">
+<h2>Parallel builds</h2>
+<p class="lead">Run several agents on one Rust repo without freezing your computer. Each agent gets its own copy of the repo and its own build folder in memory.</p>
+<ol class="lead">
+  <li><strong>Turn it on.</strong> Run the install command, choose <strong>Reinstall</strong>, and answer <code>y</code> to <code>Turn on parallel builds (agent-ws)?</code> Linux only.</li>
+  <li><strong>Work as usual.</strong> <code>claude --worktree &lt;name&gt;</code>, or an agent started in its own copy, lands in <code>../wt-&lt;name&gt;</code> beside your repo.</li>
+  <li><strong>Run heavy commands through it.</strong> <code>python3 scripts/agent_ws.py run -- cargo test</code> runs at low priority, in that copy's own build folder.</li>
+  <li><strong>Clean up.</strong> <code>python3 scripts/agent_ws.py gc</code> removes copies whose session has ended. It never removes unmerged or unsaved work.</li>
+</ol>
+<details class="more">
+<summary>More</summary>
+<ul class="lead">
+  <li><code>python3 scripts/agent_ws.py rm &lt;name&gt;</code> removes one copy now.</li>
+  <li><code>gc --dry-run</code> shows what <code>gc</code> would remove, and how much memory the build folders use.</li>
+  <li>A restart empties the build folders, so the next build starts from scratch.</li>
+  <li>Each new copy needs 4 GB free in memory; otherwise it builds on disk.</li>
+  <li><code>AGENT_BUILD_SLOTS=N</code> lets at most N heavy commands run at once. It is off by default.</li>
+  <li>To turn it off, choose <strong>Reinstall</strong> and answer <code>n</code>. Its three hooks leave <code>.claude/settings.json</code>; <code>scripts/agent_ws.py</code> stays.</li>
+  <li><strong>Update</strong> keeps your answer and refreshes <code>scripts/agent_ws.py</code> like any kit file.</li>
+</ul>
+</details>
 </section>
 
 <section id="agent-roles">

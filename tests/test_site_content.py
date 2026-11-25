@@ -1946,7 +1946,8 @@ def test_drawer_family_nav_lists_the_same_five_sites_as_the_header():
 
 SIDEBAR_GROUPS = [
     ("// overview", ["Quick reference", "What you get", "Minimal and extended tracks"]),
-    ("// getting started", ["Install", "Update flow", "Settings tool", "Install variants"]),
+    ("// getting started", ["Install", "Update flow", "Settings tool", "Install variants",
+                            "Parallel builds"]),  # T353 added Parallel builds
     ("// the team", ["Agent roles", "Skills", "Explorer", "Hooks", "Agent focus"]),  # T312 added Explorer after Skills
     ("// reference", ["Packs", "Providers", "Repository layout", "Memory system", "MCPs", "Options",
                       "Change log"]),  # T344 added Change log after Options
