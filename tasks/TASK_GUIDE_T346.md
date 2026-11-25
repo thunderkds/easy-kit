@@ -55,6 +55,8 @@ Before writing any code:
 2. The gate lets those commands through while a task is In Progress.
 3. `gh_merge_hit` is True for a real `gh` merge before or after a heredoc, for a quoted-verb merge (`gh pr "merge" 12`) after a heredoc, and for a heredoc that feeds a shell (`bash <<'EOF'`).
 4. Every T320 test passes unchanged.
+5. An unquoted-tag heredoc body that runs a `gh` merge through `$(…)` is still a hit.
+6. The same body under a quoted tag is data (the shell does not expand it).
 
 ## Evaluation & Acceptance
 
@@ -113,6 +115,7 @@ No UI. ☐ N/A: a PreToolUse hook.
 |------|--------|
 | `.claude/hooks/pre_bash_block_unsafe_merge.py` | `_gh_merge_hit`: strip heredoc bodies before unquoting |
 | `.claude/hooks/tests/test_t346_heredoc_gh_merge.py` (new) | AC 1–3 |
+| `.claude/hooks/tests/merge_gate_guard.py` | `AUTHORISED_TASKS` gains T346, with the rule it owns (the user signed off, 2026-11-25, under session `[admin]`) |
 
 ## Files Must NOT Touch
 
