@@ -54,7 +54,7 @@ Folder-level calls (T363, option C): a Bash segment whose command is `rm -r`, `f
 arguments, or a folder its glob matches, is a folder under the project root or the cwd that holds
 a sensitive path: a walk (one budget of `FOLDER_WALK_MAX` entries per call, `.git` skipped) finds a
 listed or protected file in it, or the walk cannot finish or cannot read a folder. A `cd`/`pushd`
-segment moves the folder later segments resolve against. A `{a,b}` brace token is expanded and each
+segment, wrapped or not, adds its target to the folders later segments are judged against (T374). A `{a,b}` brace token is expanded and each
 expansion is checked as a path; a token over `MAX_BRACE_EXPANSIONS` paths asks.
 
 Recorded limitations (cut list, TASK_GUIDE_T146; T363):
@@ -63,7 +63,9 @@ Recorded limitations (cut list, TASK_GUIDE_T146; T363):
 * The folder rule knows only the verbs above: `git reset --hard`, `git clean`, `git stash`,
   `cp -r`, `rsync --delete`, `tar -x`, `ln -sf`, a script or an alias acting on a folder do not
   ask (T363 option C). Nor does a destructive command inside quoted code (`bash -c "rm -rf x"`,
-  `sh -c '…'`), a folder named through a variable (`$PWD/config`), or `git -C <dir> restore`.
+  `sh -c '…'`, `find -exec sh -c '…'`, `env -S "…"`), one fed its folders by `xargs` (`… | xargs rm -rf`,
+  `xargs rm -rf config`), a folder named through a variable (`$PWD/config`), or
+  `git -C <dir> restore` (T374).
   A folder outside both roots is never walked (a sibling worktree).
 * A Bash command that only *reads* a sensitive path (`grep KEY .env`) asks too —
   reads and writes are not cheaply distinguishable in a command string.
@@ -162,7 +164,22 @@ FOLDER_VERBS = {"rm", "find", "mv", "git"}
 RM_TREE_FLAGS = re.compile(r"-[A-Za-z]*[rR]|--recursive\Z")
 FIND_ACTION_FLAGS = {"-delete", "-exec", "-execdir", "-ok", "-okdir"}
 GIT_FOLDER_SUBCOMMANDS = {"checkout", "restore"}
-COMMAND_PREFIXES = {"sudo", "env", "command", "nice", "nohup", "time", "exec", "timeout"}
+COMMAND_PREFIXES = {"sudo", "env", "command", "builtin", "nice", "nohup", "time", "exec", "timeout"}
+# T374: a wrapper option that takes its value as the next word (`timeout -s KILL`, `sudo -u root`),
+# so the value is not read as the command. Each segment is read twice, with these skips and
+# without them, and the folder rule judges both readings: an entry that is wrong (an option that
+# takes no value) or missing can then only add an ask, never hide the command (T374 round 1).
+# `env -S` is not here: its value is the command line itself.
+PREFIX_VALUE_OPTIONS = {
+    "timeout": {"-s", "--signal", "-k", "--kill-after"},
+    "sudo": {"-u", "--user", "-g", "--group", "-C", "--close-from", "-h", "--host", "-p", "--prompt",
+             "-U", "--other-user", "-D", "--chdir", "-r", "--role", "-t", "--type", "-R", "--chroot",
+             "-T", "--command-timeout"},
+    "env": {"-u", "--unset", "-C", "--chdir", "-P", "-a", "--argv0"},
+    "nice": {"-n", "--adjustment"},
+    "time": {"-o", "--output", "-f", "--format"},
+    "exec": {"-a"},
+}
 # `find -exec`/`-ok` asks only when the command it runs deletes or moves (round 1: `-exec grep`
 # reads); `-delete` always does.
 FIND_DESTRUCTIVE_EXEC = {"rm", "mv", "shred", "unlink", "rmdir", "truncate"}
@@ -170,6 +187,12 @@ FIND_DESTRUCTIVE_EXEC = {"rm", "mv", "shred", "unlink", "rmdir", "truncate"}
 # check asks instead (round 1: the expansion is exponential, and a hook that times out is silent).
 MAX_BRACE_EXPANSIONS = 1000
 DIR_CHANGE_COMMANDS = {"cd", "pushd"}
+# T374 round 3: the folders a call may have moved to. A `cd` segment adds its target to the set and
+# keeps the old folders, so a later segment is judged against every folder it may run in: a `cd`
+# that moves the shell (`cd`, `FOO=1 cd`, `command cd`, `\cd`) and one that does not (`sudo cd`)
+# are both covered without telling them apart. The set can double with each `cd`: past the cap the
+# check asks (a `ValueError` main() turns into an ask), never drops a folder (T374 round 4).
+MAX_CD_FOLDERS = 64
 # The walk of a folder stops after this many entries; a folder it could not finish counts as
 # holding a sensitive path (toward the human). Overridable for tests.
 FOLDER_WALK_MAX = 20000
@@ -540,7 +563,7 @@ def held_sensitive_path(folder, cwd, roots, patterns, budget):
     return None
 
 
-def _segment_command(words):
+def _segment_command(words, skip_values=True):
     """The command word of a segment and its arguments, past `VAR=value` words and the
     `COMMAND_PREFIXES` wrappers (`sudo`, `env`, …) and their options; a path prefix is dropped."""
     i = 0
@@ -549,10 +572,11 @@ def _segment_command(words):
         if re.match(r"[A-Za-z_]\w*=", word):
             i += 1
         elif os.path.basename(word) in COMMAND_PREFIXES:
+            wrapper = os.path.basename(word)
             i += 1
             while i < len(words) and words[i].startswith("-"):
-                i += 1
-            if os.path.basename(word) == "timeout" and i < len(words):
+                i += 2 if skip_values and words[i] in PREFIX_VALUE_OPTIONS.get(wrapper, ()) else 1
+            if wrapper == "timeout" and i < len(words):
                 i += 1  # its duration
         else:
             return os.path.basename(word.lstrip("\\")), words[i + 1:]
@@ -593,21 +617,33 @@ def folder_hits(command, cwd, roots, patterns):
     that holds a sensitive path. A folder under neither root is skipped (a sibling worktree). A
     `cd`/`pushd` segment moves the folder later segments resolve against."""
     text = strip_quoted_spans(strip_heredoc_bodies(command))
-    hits, where, budget = [], cwd, [_walk_cap()]
+    hits, wheres, budget, walked = [], [cwd], [_walk_cap()], set()
     for segment in SEGMENT_BOUNDARY_PATTERN.split(text):
         words = [re.split(r"\d*[<>]", w, 1)[0].strip("\"'()") for w in segment.split()]
-        verb, args = _segment_command([w for w in words if w and not w.startswith(("<", ">", "2>", "&>"))])
-        if verb in DIR_CHANGE_COMMANDS:
-            target = next((a for a in args if not a.startswith("-")), None)
-            where = os.path.normpath(os.path.join(where, os.path.expanduser(target))) if target else where
-            continue
-        if verb not in FOLDER_VERBS:
-            continue
-        for arg in _folder_arguments(verb, args):
+        words = [w for w in words if w and not w.startswith(("<", ">", "2>", "&>"))]
+        readings = [_segment_command(words)]
+        plain = _segment_command(words, skip_values=False)
+        if plain != readings[0]:
+            readings.append(plain)
+        for verb, args in readings:
+            if verb in DIR_CHANGE_COMMANDS:
+                target = next((a for a in args if not a.startswith("-")), None)
+                if target:
+                    moved = [os.path.normpath(os.path.join(w, os.path.expanduser(target))) for w in wheres]
+                    wheres = list(dict.fromkeys(wheres + moved))
+                    if len(wheres) > MAX_CD_FOLDERS:
+                        raise ValueError(f"the command changes folder into more than {MAX_CD_FOLDERS} "
+                                         "possible folders")
+        targets = [a for v, rest in readings if v in FOLDER_VERBS for a in _folder_arguments(v, rest)]
+        for arg, where in dict.fromkeys((a, w) for a in targets for w in wheres):
+            # each (argument, folder) once: both readings and every `cd` folder share the budget
             base = os.path.join(where, os.path.expanduser(arg))
             folders = ([base] if not GLOB_CHARS.search(arg) else
                        list(itertools.islice(glob.iglob(base), MAX_GLOB_MATCHES)))
-            for folder in (os.path.normpath(f) for f in folders):
+            for folder in dict.fromkeys(os.path.normpath(f) for f in folders):
+                if folder in walked:
+                    continue
+                walked.add(folder)
                 if not os.path.isdir(folder) or not any(
                         _within(folder, r) or os.path.realpath(folder) == os.path.realpath(r)
                         for r in roots):
