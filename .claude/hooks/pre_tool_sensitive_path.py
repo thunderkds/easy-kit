@@ -76,9 +76,11 @@ Recorded limitations (cut list, TASK_GUIDE_T146; T363; T375):
 * A word that is only a variable (`cat "$F"`), `eval`, `$'\x65'` escapes, and the code of
   `python -c` / `node -e` spans are not resolved (T363 option C, T375). A built part is a `*`:
   it stays in one folder (a variable holding `/` is missed) and it finds only a file that exists
-  (`echo x > .env$x` with no `.env` is silent) (T375 Debate). The folder rule
-  does not read a built part inside a flag word (`find config -d${E}elete`), and a quoted value
-  after `=` is read even behind a data command (`grep --exclude=".env" KEY src` asks) (T375 review).
+  (`echo x > .env$x` with no `.env` is silent) (T375 Debate). A built part made by `$(…)` or a
+  backtick is not read (`sens$(true)itive-paths.txt`). A short literal prefix next to a built part
+  asks when it globs a sensitive file (`"se$x"` finds `server.pem`). The folder rule does not read a
+  built part (`find config -d${E}elete`, `rm -r conf${x}ig`). A quoted value after `=` is read even
+  behind a data command (`grep --exclude=".env" KEY src` asks) (T375 review).
 * The folder rule knows only the verbs above: `git reset --hard`, `git clean`, `git stash`,
   `cp -r`, `rsync --delete`, `tar -x`, `ln -sf`, a script or an alias acting on a folder do not
   ask (T363 option C). Nor does a destructive command inside quoted code (`bash -c "rm -rf x"`,
@@ -163,9 +165,9 @@ except Exception as exc:  # pragma: no cover - exercised via subprocess test
 TOKEN_PATTERN = re.compile(r"[^\s;&|<>()`'\"=:]+")
 GLOB_CHARS = re.compile(r"[*?\[]")
 # T375: a word the shell reads as one: plain characters, `\x` pairs, `$'…'`, and quoted spans with no space.
-SHELL_WORD_PATTERN = re.compile(r"""(?:[^\s;&|<>()`'"\\]|\\.|\$?'[^'\s]*'|\$?"[^"\s]*")+""")
-SHELL_WORD_MARKS = re.compile(r"""['"\\]|\$[{\w]""")
-BUILT_PART_PATTERN = re.compile(r"\$\{[^}]*\}|\$\w+")
+SHELL_WORD_PATTERN = re.compile(r"""(?:[^\s;&|<>()`'"\\]|\\[\s\S]|\$?'[^'\s]*'|\$?"[^"\s]*")+""")
+SHELL_WORD_MARKS = re.compile(r"""['"\\]|\$[{\w@*]""")
+BUILT_PART_PATTERN = re.compile(r"\$\{[^}]*\}|\$\w+|\$[@*]")
 WHOLLY_QUOTED_PATTERN = re.compile(r"""\$?(["'])[^"']*\1""")
 # T342: a segment whose command neither globs its arguments nor runs a shell. Anchored at the
 # segment start like shell_data's DATA_COMMAND_PATTERN: only `VAR=value` and a path may come
@@ -405,7 +407,7 @@ def command_tokens(command, cwd):
 
 def shell_word(word):
     """`word` as the shell reads it: `$` before a quote, quotes, backslashes and parens dropped (T375)."""
-    return re.sub(r"[\"'\\()]", "", re.sub(r"\$(?=[\"'])", "", word))
+    return re.sub(r"[\"'\\()]", "", re.sub(r"\$(?=[\"'])", "", word.replace("\\\n", "")))
 
 
 def dequoted_tokens(text, cwd):
@@ -421,19 +423,20 @@ def dequoted_tokens(text, cwd):
         word = match.group()
         if not SHELL_WORD_MARKS.search(word):
             continue
-        if WHOLLY_QUOTED_PATTERN.fullmatch(word) and not BUILT_PART_PATTERN.search(word):
+        if WHOLLY_QUOTED_PATTERN.fullmatch(word) and not BUILT_PART_PATTERN.search(
+                re.sub(r"'[^']*'", "", word)):
             continue  # data behind a data command; a built part in it is read (round 2 P2-B)
-        word = shell_word(word)
-        readings = [word]
+        word = shell_word(re.sub(r"'[^']*'", lambda m: m.group().replace("$", "\0"), word))  # `$` in '…' is a letter
+        readings = [word.replace("\0", "$")]
         built = BUILT_PART_PATTERN.sub("*", word)
         if built != word:
             if not built.strip("*/"):
                 continue
-            readings = [built, BUILT_PART_PATTERN.sub("", word)]
+            readings = [built.replace("\0", "$"), BUILT_PART_PATTERN.sub("", word).replace("\0", "$")]
         for reading in readings:
             for token in TOKEN_PATTERN.finditer(reading):
-                if not token.group().strip("*/."):
-                    continue  # `TOKEN_PATTERN` splits at `=` and `:`: a piece of only `*` or `./*` is no name (round 2 P1-A)
+                if not re.search(r"[A-Za-z0-9]", token.group()):
+                    continue  # `TOKEN_PATTERN` splits at `=` and `:`: a piece of only `*`, `/`, `.`, `-`, `_` or `?` is no name (rounds 2-3)
                 found.append(token.group())
                 if BRACE_PATTERN.search(token.group()):
                     found.extend(capped_brace_expansion(token.group()))

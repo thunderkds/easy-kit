@@ -34,6 +34,9 @@ class Dequote(FixRoundTest):
         with open(os.path.join(self.project, "config", ".env"), "w") as f:
             f.write("KEY=1\n")
         os.makedirs(os.path.join(self.project, "infra"), exist_ok=True)  # R1 P2-3: a `*` finds a folder
+        for name in ("prod-values.yaml", "tls_cert.pem", "server.pem"):  # R3: `*-*`, `*_*` find these
+            with open(os.path.join(self.project, name), "w") as f:
+                f.write("x\n")
 
     def test_ac1_quotes_and_backslashes_in_a_word_are_dropped(self):
         for cmd in ("cat .claude/sens''itive-paths.txt", 'cat .claude/sens""itive-paths.txt',
@@ -87,6 +90,23 @@ class Dequote(FixRoundTest):
                     'grep KEY ".claude/sens${x}itive-paths.txt"'):
             with self.subTest(command=cmd):
                 self.assert_ask(self.pre("Bash", cmd))
+
+    def test_r3_p2_a_piece_with_no_letter_or_digit_is_no_name(self):
+        """Round 3 P2-1: `*-*`, `*_*` and `*?` are not names; they would match `prod-values.yaml`."""
+        for cmd in ('docker build -t "$name-$ver" .', 'git commit -m "$a-$b"', 'echo "${a}_${b}"', 'ls "$D"?'):
+            with self.subTest(command=cmd):
+                self.assert_silent(self.pre("Bash", cmd))
+
+    def test_r3_p2_a_backslash_newline_inside_a_word_is_dropped(self):
+        for cmd in ("cat .e\\\nnv", "cat .claude/sens\\\nitive-paths.txt"):
+            with self.subTest(command=cmd):
+                self.assert_ask(self.pre("Bash", cmd))
+
+    def test_r3_p3_at_and_star_are_built_parts_and_single_quotes_are_not(self):
+        self.assert_ask(self.pre("Bash", 'cat .claude/sens"$@"itive-paths.txt'))
+        for cmd in ("echo '$HOME/.env'", "grep -n '$HOME/.env' README.md"):
+            with self.subTest(command=cmd):  # a `$` inside single quotes is a letter, not a variable
+                self.assert_silent(self.pre("Bash", cmd))
 
     def test_ac2_a_dollar_quote_word_is_dequoted_in_the_folder_rule(self):
         for cmd in ("find config -d$'elete'", 'find config -d$"elete"'):
