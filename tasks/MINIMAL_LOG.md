@@ -24,6 +24,7 @@ Mode: auto
 **Files:** `tests/test_readme_current.sh`, `tests/test_t347_readme_codex_list.py` (new), `tasks/MINIMAL_LOG.md`, `PROJECT_KANBAN.md`
 **Not done:** merge (admin: after the auto verify pass); push (the merge gate pushes to `origin` only and this repo's remote is `github`: T321); auto verify: ☑ pass (session b2a15d6c-24f4-4c2c-8461-d134833b57f2, commit c603ca4d03180d585ea9550cc8cc97f7a639b45a, log .claude/verify-runs/T347-c603ca4d0318.log)
 Closed: row moved to Done 2026-11-25 — auto verify pass (session b2a15d6c-24f4-4c2c-8461-d134833b57f2, commit c603ca4d03180d585ea9550cc8cc97f7a639b45a); Gates 5 and 6 checked
+Paused: safety-hook block — the merge gate refused `git merge --no-ff fix/t347-readme-codex-list`: "T347 is not the task of the `[admin]` request". The loop binds only a row in Ready for Review, and the auto close-out had already moved this `Mode: auto` row to Done; the merge waits for `merge T347 [admin]`.
 
 ## T350 — Keep `experiments/` on disk but out of the git repo · minimal
 **Asked:** "we should not remove it, just keep it out of the git repos only I think" — then: "yes, go ahead. But let think about the install the kit solution also"
