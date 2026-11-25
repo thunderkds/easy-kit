@@ -11,7 +11,7 @@ Mode: auto
 4. Item 2 (the run-record slug) split out to T369, not fixed here — DEBATED: Advocate 1: fix it in T365 (`repo_slug` reads `remote.<admin remote>.url`; it conceded the slug would then depend on a setting only Claude Code sessions get, so `scripts/verify_trace.py` from a plain terminal reads the wrong folder); Advocate 2: split it (every anchor, record and resume mark lives under the slug: `.claude/hooks/lib/trace_chain.py:79`, `verify_record.py:125`, `auto_mode.py:197`); Advocate 3: split it and add a temporary pin test of today's slug (the smallest safe thing). Settled by a written rule: `docs/claude-md/tracks.md:35` "The change deletes, moves, renames or converts user data or its storage format … | extended" (moving the record folders is its own extended task). Advocate 3's pin test not added: `memory/learning-records/LR-0004-pin-tests-hit-later-tasks.md` (pin tests break later tasks), and the T369 row tracks the bug
 5. Fixed both reviewer P3 findings (an assert the appended `AUTO_MODE_LIMIT` always satisfied; no test that another git failure is not "no remote") and spawned the reviewer again on the new commit — RULE: `docs/claude-md/pipeline-stages.md:198` "one fresh-context reviewer spawn per extended task at Stage 4, which the merge gate requires"
 6. Added T365 to `AUTHORISED_TASKS` (`.claude/hooks/tests/merge_gate_guard.py`, its pin in `test_merge_gate_guard.py`, and the guide's Files to Change row) after the user signed it off, then spawned `Reviewer: T365` again on that commit — RULE: `.claude/hooks/tests/merge_gate_guard.py:22` "A task that must touch the gate adds its ID to `AUTHORISED_TASKS` with the Supervisor's sign-off"; the user's answer "T365 (paused, ready)" to the gate sign-off question (2026-11-25, session 43b43f7e)
-Checks: tests `python3 -m pytest -q -p no:cacheprovider .claude/hooks/tests/test_t365_admin_remote_texts.py` — 23 passed after the P3 fixes (red first: `18 failed, 1 passed` at 2026-11-25T09:15:30Z, before the change); guide Verification Command — Reviewer `350 passed`; full suite: see the Evidence row; reviews `Reviewer: T365` PASS in two rounds (P3 only), `code-review` rules in the Supervisor session no P0–P2; `security-review` skill in the Supervisor session (started with a temporary `refs/remotes/origin/HEAD` at the base `480227da`, removed right after with `git update-ref -d`; its precomputed diff was the main checkout's, so its sub-task read the branch range `main...979783b3`) — no vulnerabilities; real run: the gate refuses `git push github <branch>` with "this repository has no remote `github`" (`test_ac1_a_missing_set_remote_is_named`, a constructed repo) (auto-checked, not /verify)
+Checks: tests `python3 -m pytest -q -p no:cacheprovider .claude/hooks/tests/test_t365_admin_remote_texts.py` — 23 passed after the P3 fixes (red first: `18 failed, 1 passed` at 2026-11-25T09:15:30Z, before the change); guide Verification Command — Reviewer `350 passed`; full suite `61 failed, 7966 passed` vs `main` `60 failed` (the 1 extra passes alone; the 3 merge-gate pins fixed by the `AUTHORISED_TASKS` entry, user sign-off "approve"); guard `.claude/hooks/tests/test_merge_gate_guard.py` 32 passed; reviews `Reviewer: T365` PASS in two rounds (P3 only), `code-review` rules in the Supervisor session no P0–P2; `security-review` skill in the Supervisor session (started with a temporary `refs/remotes/origin/HEAD` at the base `480227da`, removed right after with `git update-ref -d`; its precomputed diff was the main checkout's, so its sub-task read the branch range `main...979783b3`) — no vulnerabilities; real run: the gate refuses `git push github <branch>` with "this repository has no remote `github`" (`test_ac1_a_missing_set_remote_is_named`, a constructed repo) (auto-checked, not /verify)
 Memory: nothing new
 Not done: merge (admin: after the auto verify pass); auto verify: running (T182); push (no `origin`; `EASY_KIT_ADMIN_REMOTE` is not set to `github`); T369 (the slug) registered, not started; numbered T369 because a parallel session registered T368 on `main` the same minute
 Paused: 2026-11-25 for the user's `AUTHORISED_TASKS` sign-off (the auto-mode classifier refused the Supervisor's own edit of the gate pin list); resumed in session 43b43f7e after the sign-off
@@ -66,7 +66,7 @@ Not findings: `_admin_push_target_refusal`'s docstring and `AUTO_MODE_LIMIT` sti
 | Negative cases hold | ☑ pass | Mutations M1 to M5 and M8 turn the matching tests red (table above); the mutated copy was `git archive HEAD` extracted to the session scratchpad, never the worktree. M6b and M7 survive (P3) |
 | verify | ☐ pass / ☐ fail / ☐ N/A | [leave it: the auto verify hook writes this row, with its run record. If you ran /verify yourself, tick pass and make the whole Notes cell "/verify by the user, session <id>, commit <sha>" (the full 40-character commit). The merge gate counts no other row, even with the word "pass" in it] |
 | Review scope bounded to the change's blast radius (affected set, not whole repo) | ☑ pass | Reviewed: the two helpers, three call sites, two docstrings, the T321 and T365 tests, plus the callers `_admin_push_target_refusal`, `_admin_push_branch`, `_own_origin_refusal`. Skipped: the rest of the gate and the full suite, as instructed |
-| Full smoke suite still green (no regression) | ☐ pass / ☐ fail | Not run by the reviewer (the full suite was out of scope for this review); the guide's baseline comparison stays the Supervisor's |
+| Full smoke suite still green (no regression) | ☑ pass | Not green, no regression (Supervisor, at `18a8fce2`): `61 failed, 7966 passed, 24 skipped` vs clean `main` worktree `60 failed, 7943 passed, 24 skipped`; the 1 extra, `.claude/hooks/tests/test_memory_usage_report.py::test_script_does_not_touch_the_real_repository`, passes alone (`9 passed`) and reads no changed file. The first run (at `979783b3`) had 3 more: the merge-gate pins, fixed by the `AUTHORISED_TASKS` entry (user sign-off "approve") |
 | **Companion score (easy-verifier)** | ☑ N/A | Not run in this review |
 | **UI: Visual regression (diff or verdict pasted)** | ☑ N/A | No UI |
 | **UI: Design-system compliance (tokens/colors/typography verified)** | ☑ N/A | No UI |
@@ -83,3 +83,32 @@ Not findings: `_admin_push_target_refusal`'s docstring and `AUTO_MODE_LIMIT` sti
 **DELTA**: a user who sets `EASY_KIT_ADMIN_REMOTE` to a remote they have not added is told exactly that, and a bad setting is named in every refusal instead of `None`; no command is allowed or refused differently.
 
 **WITNESS**: Supervisor session acceb8c1, 2026-11-25 (BEFORE red run, full-suite comparison); `Reviewer: T365` (fresh qa-expert, commit `f364bded`, mutations on a scratch copy; round 2 on the fix commit).
+
+## Round 2 (Reviewer: T365, commit 18a8fce2)
+
+Verdict: PASS (no P0, P1, P2 or P3 finding). Scope: the whole diff `main...18a8fce2`, bounded to the gate's T321 texts, the two new tests, and the `AUTHORISED_TASKS` pin.
+
+### Round 1 findings
+
+| # | Status | Evidence |
+|---|---|---|
+| 1 (setting name vacuous) | Fixed | `test_ac1_a_missing_set_remote_is_named` now asserts `ENV` and `` `github` `` on `merge_gate._missing_remote_refusal(fx.wt)` itself. Mutation on a scratch copy (`git archive`, hint replaced by `()`): `2 failed, 21 passed` (`[named]`, `[bare]`) |
+| 2 (other git failure is not "no remote") | Fixed | New `test_ac1_only_git_no_such_remote_counts_as_missing` (4 cases plus `_git` returning None). Mutation (the `"no such remote"` stderr match removed): `2 failed, 21 passed` (`[not-a-repo]`, `[other-error]`) |
+
+### `AUTHORISED_TASKS` entry
+
+`.claude/hooks/tests/merge_gate_guard.py`: one comment block and the tuple gain only `"T365"` (last). The block follows the others' format (ID, dash, the rule it owns, the guide and AC, who authorised, date) and names the rule: the T321 refusal texts (`_missing_remote_refusal`, `_admin_remote_text`, `_main_push_refusal`), texts only. `.claude/hooks/tests/test_merge_gate_guard.py`: one comment and the pinned tuple gain only `"T365"`. No other ID changed or moved. The hook's diff is texts and docstrings; no allow or refusal changed (as round 1 analysed; unchanged since).
+
+### security-reviewer.md (hooks section)
+
+Env value is validated before use; git stderr is matched, never echoed; `_git` is argv with a timeout, no shell; no fetch, installer or CI change; `.claude/settings.json` untouched. Nothing found.
+
+### Findings
+
+None.
+
+### Commands run (worktree)
+
+- `python3 -m pytest -q -p no:cacheprovider .claude/hooks/tests/test_t365_admin_remote_texts.py .claude/hooks/tests/test_t321_admin_remote.py .claude/hooks/tests/test_admin_tag.py .claude/hooks/tests/test_merge_gate_t210.py` printed `354 passed in 20.68s`
+- `python3 -m pytest -q -p no:cacheprovider .claude/hooks/tests/test_merge_gate_guard.py` printed `32 passed in 0.89s`
+- Full suite not run (one was running).
