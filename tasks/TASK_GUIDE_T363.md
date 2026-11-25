@@ -70,7 +70,7 @@ Before writing any code:
 | 1 | each AC 1 command | ask, naming the folder | automated (`.claude/hooks/tests/test_t363_folder_level.py`) |
 | 2 | each AC 2 command | silent | automated (same file) |
 | 3 | brace tokens | ask / silent as AC 3 | automated (same file) |
-| 4 | walk cap set to 1 | ask | automated (same file) |
+| 4 | walk cap set to 0 | ask | automated (same file) |
 | 5 | the existing sensitive-path tests | unchanged, pass | automated |
 
 ### Verification Command (exact, runnable)
@@ -109,7 +109,7 @@ No UI. ☐ N/A: a PreToolUse hook.
 
 ## Edge Case Checklist
 
-- [x] The walk is bounded (`MAX_FOLDER_WALK` files) and a hit at the cap asks; `.git` is skipped
+- [x] The walk is bounded (`FOLDER_WALK_MAX` entries per call) and a hit at the cap asks; `.git` is skipped
 - [x] A folder outside both roots (a sibling worktree) is skipped
 - [x] `rm` without `-r` on a folder: rm refuses it, no walk needed; a file argument is already checked by the token rule
 - [x] `find` with no path argument acts on `.`

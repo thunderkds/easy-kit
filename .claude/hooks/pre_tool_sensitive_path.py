@@ -48,19 +48,23 @@ data (T099's three fail-opens came from fresh regexes). Quoted spans T099 classe
 as executable are kept, so `bash -c "cat > .env"` still asks. What is left is
 split into tokens and each token is checked as a path.
 
-Folder-level calls (T363, option C): a Bash segment whose command is `rm -r`, `find` with
-`-delete`/`-exec`/`-execdir`/`-ok`/`-okdir`, `mv`, or `git checkout`/`git restore` asks when one of
-its arguments is a folder, under the project root or the cwd, that holds a sensitive path: a
-bounded walk (`FOLDER_WALK_MAX`, `.git` skipped) finds a listed or protected file in it, or the
-walk cannot finish. A `cd`/`pushd` segment moves the folder later segments resolve against. A
-`{a,b}` brace token is expanded and each expansion is checked as a path.
+Folder-level calls (T363, option C): a Bash segment whose command is `rm -r`, `find -delete`,
+`find -exec`/`-execdir`/`-ok`/`-okdir` running `rm`/`mv`/`shred`/`unlink`/`rmdir`/`truncate`,
+`mv` (its sources), `git checkout`, or `git restore` (not `--staged` alone) asks when one of its
+arguments, or a folder its glob matches, is a folder under the project root or the cwd that holds
+a sensitive path: a walk (one budget of `FOLDER_WALK_MAX` entries per call, `.git` skipped) finds a
+listed or protected file in it, or the walk cannot finish or cannot read a folder. A `cd`/`pushd`
+segment moves the folder later segments resolve against. A `{a,b}` brace token is expanded and each
+expansion is checked as a path; a token over `MAX_BRACE_EXPANSIONS` paths asks.
 
 Recorded limitations (cut list, TASK_GUIDE_T146; T363):
 * Paths built from variables (`cat "$F"`, `${f}itive-paths.txt`), `eval`, and the code of
   `python -c` / `node -e` spans are not resolved (T363 option C).
 * The folder rule knows only the verbs above: `git reset --hard`, `git clean`, `git stash`,
   `cp -r`, `rsync --delete`, `tar -x`, `ln -sf`, a script or an alias acting on a folder do not
-  ask (T363 option C). A folder outside both roots is never walked (a sibling worktree).
+  ask (T363 option C). Nor does a destructive command inside quoted code (`bash -c "rm -rf x"`,
+  `sh -c '…'`), a folder named through a variable (`$PWD/config`), or `git -C <dir> restore`.
+  A folder outside both roots is never walked (a sibling worktree).
 * A Bash command that only *reads* a sensitive path (`grep KEY .env`) asks too —
   reads and writes are not cheaply distinguishable in a command string.
 * A glob inside a kept quoted span is expanded too, as code (T342), except when the
@@ -158,7 +162,13 @@ FOLDER_VERBS = {"rm", "find", "mv", "git"}
 RM_TREE_FLAGS = re.compile(r"-[A-Za-z]*[rR]|--recursive\Z")
 FIND_ACTION_FLAGS = {"-delete", "-exec", "-execdir", "-ok", "-okdir"}
 GIT_FOLDER_SUBCOMMANDS = {"checkout", "restore"}
-COMMAND_PREFIXES = {"sudo", "env", "command", "nice", "nohup", "time", "exec"}
+COMMAND_PREFIXES = {"sudo", "env", "command", "nice", "nohup", "time", "exec", "timeout"}
+# `find -exec`/`-ok` asks only when the command it runs deletes or moves (round 1: `-exec grep`
+# reads); `-delete` always does.
+FIND_DESTRUCTIVE_EXEC = {"rm", "mv", "shred", "unlink", "rmdir", "truncate"}
+# A token whose `{a,b}` groups would expand to more than this many paths is not expanded: the
+# check asks instead (round 1: the expansion is exponential, and a hook that times out is silent).
+MAX_BRACE_EXPANSIONS = 1000
 DIR_CHANGE_COMMANDS = {"cd", "pushd"}
 # The walk of a folder stops after this many entries; a folder it could not finish counts as
 # holding a sensitive path (toward the human). Overridable for tests.
@@ -325,7 +335,7 @@ def command_tokens(command, cwd):
         start, end = match.span()
         tokens.append(match.group())
         if BRACE_PATTERN.search(match.group()):  # T363: `.claude/{a,b}` names both paths
-            tokens.extend(expand_braces(match.group()))
+            tokens.extend(capped_brace_expansion(match.group()))
         if GLOB_CHARS.search(masked[start:end]):
             matches = glob.iglob(os.path.join(cwd, match.group()), recursive=True)
             tokens.extend(itertools.islice(matches, MAX_GLOB_MATCHES))
@@ -493,23 +503,40 @@ def _walk_cap():
         return FOLDER_WALK_MAX
 
 
-def held_sensitive_path(folder, cwd, roots, patterns):
-    """`(path, pattern)` of the first sensitive file under `folder`, or None. `.git` is skipped. A
-    walk that reaches the cap, or cannot list a folder, counts as a hit (T363 AC 4)."""
-    cap, seen = _walk_cap(), 0
+def capped_brace_expansion(token):
+    """`expand_braces(token)`, or a `ValueError` (main() then asks) when its groups would give more
+    than `MAX_BRACE_EXPANSIONS` paths. Counted before expanding, innermost groups first."""
+    count, rest = 1, token
+    while True:
+        group = BRACE_PATTERN.search(rest)
+        if not group:
+            break
+        count *= group.group().count(",") + 1
+        if count > MAX_BRACE_EXPANSIONS:
+            raise ValueError(f"a brace token expands to more than {MAX_BRACE_EXPANSIONS} paths")
+        rest = rest[:group.start()] + "x" + rest[group.end():]
+    return expand_braces(token)
+
+
+def held_sensitive_path(folder, cwd, roots, patterns, budget):
+    """`(path, pattern)` of the first sensitive file under `folder`, or None. `.git` is skipped.
+    `budget` (`[entries left]`) is shared by every folder of the call and counts folders and files.
+    A walk that runs out of budget, or cannot list a folder, counts as a hit (T363 AC 4)."""
     errors = []
     for top, dirs, files in os.walk(folder, onerror=errors.append):
+        if errors:
+            return (folder, "a folder that could not be read")
         dirs[:] = [d for d in dirs if d != ".git"]
+        budget[0] -= len(dirs) + len(files)
+        if budget[0] < 0:
+            return (folder, f"more than {_walk_cap()} entries, not all checked")
         for name in files:
-            seen += 1
-            if seen > cap:
-                return (folder, f"more than {cap} files, not all checked")
             path = os.path.join(top, name)
             pattern = matching_pattern(path_forms(path, cwd, roots), patterns)
             if pattern:
                 return (path, pattern)
-        if errors:
-            return (folder, "a folder that could not be read")
+    if errors:  # round 1: an unreadable folder that is the last one reached
+        return (folder, "a folder that could not be read")
     return None
 
 
@@ -525,8 +552,10 @@ def _segment_command(words):
             i += 1
             while i < len(words) and words[i].startswith("-"):
                 i += 1
+            if os.path.basename(word) == "timeout" and i < len(words):
+                i += 1  # its duration
         else:
-            return os.path.basename(word), words[i + 1:]
+            return os.path.basename(word.lstrip("\\")), words[i + 1:]
     return None, []
 
 
@@ -536,7 +565,9 @@ def _folder_arguments(verb, args):
     if verb == "rm":
         return paths if any(RM_TREE_FLAGS.match(a) for a in args) else []
     if verb == "find":
-        if not FIND_ACTION_FLAGS.intersection(args):
+        runs = [os.path.basename(args[k + 1]) for k, a in enumerate(args[:-1])
+                if a in FIND_ACTION_FLAGS and a != "-delete"]
+        if "-delete" not in args and not FIND_DESTRUCTIVE_EXEC.intersection(runs):
             return []
         start = []
         for a in args:  # find's start paths come before the first expression word
@@ -545,11 +576,14 @@ def _folder_arguments(verb, args):
             start.append(a)
         return start or ["."]
     if verb == "mv":
-        return paths
+        return paths[:-1] if len(paths) > 1 else paths  # the sources; the target is not removed
     if verb == "git":
         sub = next((a for a in args if not a.startswith("-")), None)
         if sub not in GIT_FOLDER_SUBCOMMANDS:
             return []
+        if sub == "restore" and ({"--staged", "-S"} & set(args)) and not (
+                {"--worktree", "-W"} & set(args)):
+            return []  # the index only, not the files
         return paths[1:]
     return []
 
@@ -559,9 +593,9 @@ def folder_hits(command, cwd, roots, patterns):
     that holds a sensitive path. A folder under neither root is skipped (a sibling worktree). A
     `cd`/`pushd` segment moves the folder later segments resolve against."""
     text = strip_quoted_spans(strip_heredoc_bodies(command))
-    hits, where = [], cwd
+    hits, where, budget = [], cwd, [_walk_cap()]
     for segment in SEGMENT_BOUNDARY_PATTERN.split(text):
-        words = [w.strip("\"'()") for w in segment.split()]
+        words = [re.split(r"\d*[<>]", w, 1)[0].strip("\"'()") for w in segment.split()]
         verb, args = _segment_command([w for w in words if w and not w.startswith(("<", ">", "2>", "&>"))])
         if verb in DIR_CHANGE_COMMANDS:
             target = next((a for a in args if not a.startswith("-")), None)
@@ -570,14 +604,17 @@ def folder_hits(command, cwd, roots, patterns):
         if verb not in FOLDER_VERBS:
             continue
         for arg in _folder_arguments(verb, args):
-            folder = os.path.normpath(os.path.join(where, os.path.expanduser(arg)))
-            if not os.path.isdir(folder) or not any(
-                    _within(folder, r) or os.path.realpath(folder) == os.path.realpath(r)
-                    for r in roots):
-                continue
-            found = held_sensitive_path(folder, cwd, roots, patterns)
-            if found:
-                hits.append((arg, path_forms(folder, cwd, roots), found[1]))
+            base = os.path.join(where, os.path.expanduser(arg))
+            folders = ([base] if not GLOB_CHARS.search(arg) else
+                       list(itertools.islice(glob.iglob(base), MAX_GLOB_MATCHES)))
+            for folder in (os.path.normpath(f) for f in folders):
+                if not os.path.isdir(folder) or not any(
+                        _within(folder, r) or os.path.realpath(folder) == os.path.realpath(r)
+                        for r in roots):
+                    continue
+                found = held_sensitive_path(folder, cwd, roots, patterns, budget)
+                if found:
+                    hits.append((arg, path_forms(folder, cwd, roots), found[1]))
     return hits
 
 

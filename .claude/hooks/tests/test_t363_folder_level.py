@@ -90,6 +90,43 @@ class FolderLevel(FixRoundTest):
             self.assert_ask(self.pre("Bash", "rm -rf build"))
         self.assert_silent(self.pre("Bash", "rm -rf build"))  # control: no cap, nothing inside
 
+    # ── Round 1 review fixes ───────────────────────────────────────────────────────────────────
+    def test_r1_brace_bomb_asks_fast(self):
+        import time
+        start = time.monotonic()
+        self.assert_ask(self.pre("Bash", "cat notes.txt #" + "{a,b}" * 24))
+        self.assertLess(time.monotonic() - start, 10)
+
+    def test_r1_an_unreadable_folder_asks(self):
+        ro = os.path.join(self.project, "ro", "sub")
+        os.makedirs(ro)
+        os.chmod(ro, 0)
+        self.addCleanup(os.chmod, ro, 0o755)
+        if os.access(ro, os.R_OK):
+            self.skipTest("running as a user who can read mode-000 folders")
+        self.assert_ask(self.pre("Bash", "rm -rf ro"))
+
+    def test_r1_read_only_finds_and_index_only_restores_stay_silent(self):
+        for cmd in ("find . -name '*.py' -exec grep -l x {} +", "find . -type f -exec wc -l {} +",
+                    "git restore --staged .", "git restore -S .", "rm config", "mv notes.txt .",
+                    "mv notes.txt src/"):
+            with self.subTest(command=cmd):
+                self.assert_silent(self.pre("Bash", cmd))
+
+    def test_r1_destructive_forms_the_first_round_missed_ask(self):
+        for cmd in ("find . -name x -exec rm {} +", "find config -execdir rm {} ;",
+                    "git restore --staged --worktree .", "rm -rf conf*", "rm -rf ./conf*",
+                    "timeout 5 rm -rf config", "\\rm -rf config", "rm -rf config>/dev/null"):
+            with self.subTest(command=cmd):
+                self.assert_ask(self.pre("Bash", cmd))
+
+    def test_r1_a_secret_only_under_git_stays_silent(self):
+        git_dir = os.path.join(self.project, "repo", ".git")
+        os.makedirs(git_dir)
+        with open(os.path.join(git_dir, ".env"), "w") as f:
+            f.write("x\n")
+        self.assert_silent(self.pre("Bash", "rm -rf repo"))
+
 
 if __name__ == "__main__":
     unittest.main()
