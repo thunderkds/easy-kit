@@ -99,7 +99,6 @@
 
 
 ### In Progress
-- [ ] **T345** — Shared build base for multi-agent, multi-session work (`agent-ws`), Phase 0–1 with the 2026-11-24 review fixes | common-infrastructure | C3 | Risk: High | P1 | Guide: `tasks/TASK_GUIDE_T345.md` | Registered 2026-11-24, user: "create the ticket and note all to this" (review of the Claude Docs plan https://claude.ai/artifact/VjwpdBJSzeMLSdFYn3hyYc: 3 blocking + 5 smaller gaps, 13 experiments) | Track: extended | Started 2026-11-25 [admin], worktree `../wt-t345`, branch `feat/t345-agent-ws` | Before start: D1–D3 answered 2026-11-24 (Python, this board, tmpfs `target/` default, slot queue opt-in); experiments R1–R10 recorded in the guide; intent and Acceptance Criteria confirmed by the user 2026-11-25; Gate has two bookkeeping boxes left (glossary rows, PRD FR) = step 1 of the guide's `## Run plan`; the user runs it later | Phases 2–4 = follow-up tickets, not registered
 
 
 
@@ -113,6 +112,7 @@
 
 
 ### Ready for Review
+- [ ] **T345** — Shared build base for multi-agent, multi-session work (`agent-ws`), Phase 0–1 with the 2026-11-24 review fixes | common-infrastructure | C3 | Risk: High | P1 | Guide: `tasks/TASK_GUIDE_T345.md` | Registered 2026-11-24, user: "create the ticket and note all to this" (review of the Claude Docs plan https://claude.ai/artifact/VjwpdBJSzeMLSdFYn3hyYc: 3 blocking + 5 smaller gaps, 13 experiments) | Track: extended | Ready for Review 2026-11-25 [admin] (Reviewer: T345 round 2 pass, `a9861d08`), started 2026-11-25, worktree `../wt-t345`, branch `feat/t345-agent-ws` | Before start: D1–D3 answered 2026-11-24 (Python, this board, tmpfs `target/` default, slot queue opt-in); experiments R1–R10 recorded in the guide; intent and Acceptance Criteria confirmed by the user 2026-11-25; Gate has two bookkeeping boxes left (glossary rows, PRD FR) = step 1 of the guide's `## Run plan`; the user runs it later | Phases 2–4 = follow-up tickets, not registered
 - [ ] **T347** — CI fails on `main`: `tests/test_readme_current.sh` cannot parse the README's Codex-skip list (`FAIL: AC2: could not parse any skill names from README's Codex-skip bullet list`, re-checked on `4dd9ac10` 2026-11-24); restore the bullet list after "Skills currently affected:" (was local T326; renumbered 2026-11-24 — upstream T326 is a different task) | Supervisor | C0 | Risk: Low | P1 | Registered 2026-11-24, user: "yes, register T347–T349" | Source: branch `fix/t326-readme-codex-list` (`b19d98e3`, never merged) | Started 2026-11-25 [admin]: branch `fix/t347-readme-codex-list`, worktree `../wt-t347` | Ready for Review 2026-11-25 | Track: minimal | Record: tasks/MINIMAL_LOG.md
 
 
