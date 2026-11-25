@@ -68,9 +68,20 @@ not a link; the file is opened `O_APPEND|O_NOFOLLOW`, 0600), and an `additionalC
 line in the task's final report. A call that touches the guard's own files (`PROTECTED_PATTERNS`)
 still asks, a read included, and so does any call whose log line cannot be written.
 
-Recorded limitations (cut list, TASK_GUIDE_T146; T363):
-* Paths built from variables (`cat "$F"`, `${f}itive-paths.txt`), `eval`, and the code of
-  `python -c` / `node -e` spans are not resolved (T363 option C).
+Words (T375): a word that holds a quote, a backslash or `$'…'` is also read as the shell reads it
+(`sens''itive-paths.txt`, `sensitive-pa\ths.txt`, `-d$'elete'`). A part the shell still builds
+(`${x}`, `$x`) next to literal text is read as `*` and globbed (`sens${x}itive-paths.txt`).
+
+Recorded limitations (cut list, TASK_GUIDE_T146; T363; T375):
+* A word that is only a variable (`cat "$F"`), `eval`, `$'\x65'` escapes, and the code of
+  `python -c` / `node -e` spans are not resolved (T363 option C, T375). A built part is a `*`:
+  it stays in one folder (a variable holding `/` is missed) and it finds only a file that exists
+  (`echo x > .env$x` with no `.env` is silent) (T375 Debate). A built part made by `$(…)` or a
+  backtick is not read (`sens$(true)itive-paths.txt`), nor the default text in `${F:-.env}`.
+  A short literal prefix next to a built part asks when it globs a sensitive file (`"se$x"` finds `server.pem`). The folder rule does not read a
+  built part (`find config -d${E}elete`, `rm -r conf${x}ig`). A quoted value after `=` is read even
+  behind a data command (`grep --exclude=".env" KEY src` asks). An apostrophe in a `#` comment
+  can pair with a later quote and blank a span (`shell_data` has the same weakness) (T375 review).
 * The folder rule knows only the verbs above: `git reset --hard`, `git clean`, `git stash`,
   `cp -r`, `rsync --delete`, `tar -x`, `ln -sf`, a script or an alias acting on a folder do not
   ask (T363 option C). Nor does a destructive command inside quoted code (`bash -c "rm -rf x"`,
@@ -154,6 +165,16 @@ except Exception as exc:  # pragma: no cover - exercised via subprocess test
 # `:` too (T314): `git show :.env` and `HEAD:.env` read the file; splitting only adds asks.
 TOKEN_PATTERN = re.compile(r"[^\s;&|<>()`'\"=:]+")
 GLOB_CHARS = re.compile(r"[*?\[]")
+# T375: a word the shell reads as one: plain characters, `\x` pairs, `$'…'`, and quoted spans with no space.
+SHELL_WORD_PATTERN = re.compile(r"""(?:[^\s;&|<>()`'"\\]|\\[\s\S]|\$?'[^'\s]*'|\$?"[^"\s]*")+""")
+SHELL_WORD_MARKS = re.compile(r"""['"\\]|\$[{\w@*!]""")
+BUILT_PART_PATTERN = re.compile(r"\$\{[^}]*\}|\$\w+|\$[@*!]")
+# Round 7: a quoted span with a space is a message only behind these commands; behind `bash -c`,
+# `eval`, `ssh`, `xargs` or any other command it stays code. A command missing here over-asks.
+MESSAGE_COMMAND_PATTERN = re.compile(
+    r"\s*(?:[A-Za-z_]\w*=\S*\s+)*(?:[\w.\-/]*/)?(?:echo|printf|[ef]?grep|rg|ag)(?:\s|\Z)")
+DOT_GLOB_PATTERN = re.compile(r"(?:^|/)\.[*?\[]")  # `.??` names dotfiles; `*-*` and `./*` name nothing
+WHOLLY_QUOTED_PATTERN = re.compile(r"""\$?(["'])[^"']*\1""")
 # T342: a segment whose command neither globs its arguments nor runs a shell. Anchored at the
 # segment start like shell_data's DATA_COMMAND_PATTERN: only `VAR=value` and a path may come
 # first, so `sudo sed`, `xargs grep` keep the default (expand). Short on purpose: a command
@@ -386,7 +407,78 @@ def command_tokens(command, cwd):
         if GLOB_CHARS.search(masked[start:end]):
             matches = glob.iglob(os.path.join(cwd, match.group()), recursive=True)
             tokens.extend(itertools.islice(matches, MAX_GLOB_MATCHES))
+    tokens.extend(dequoted_tokens(unheredoc, cwd))  # before strip_quoted_spans blanks a data command's spans
     return tokens
+
+
+def shell_word(word):
+    """`word` as the shell reads it: `$` before a quote, quotes, backslashes and parens dropped (T375)."""
+    return re.sub(r"[\"'\\()]", "", re.sub(r"\$(?=[\"'])", "", word.replace("\\\n", "")))
+
+
+def blank_spaced_spans(text):
+    """`text` with each quoted span that holds a space turned into spaces: it is a message, so a
+    `$` in it is no word (`echo "see $x.env file"`, round 4). Quotes pair left to right; an
+    unterminated quote or a `\\"` ends the scan; a `$(` or a backtick anywhere turns it off; only a span behind `echo`, `printf`,
+    `grep`, `rg` or `ag` is a message (round 7)."""
+    if "$(" in text or "`" in text:
+        return text  # a quoted `$(…)` is code, and its inner quotes break the pairing (round 6)
+    out, i, segment_start = list(text), 0, 0
+    while i < len(text):
+        boundary = SEGMENT_BOUNDARY_PATTERN.match(text, i)
+        if boundary and text[i] not in "\"'":
+            segment_start = i = boundary.end()
+            continue
+        if text[i] in "\"'":
+            if i and text[i - 1] == "\\":
+                break
+            close = text.find(text[i], i + 1)
+            if close == -1 or "\\" in text[i:close + 1]:
+                break  # an escaped quote may pair the wrong way: read the tail unblanked (round 5)
+            span = text[i:close + 1]
+            if (re.search(r"\s", span) and MESSAGE_COMMAND_PATTERN.match(text[segment_start:i])
+                    and not SPAN_EXECUTOR_PATTERN.search(span)):
+                out[i:close + 1] = " " * (close + 1 - i)
+            i = close + 1
+        else:
+            i += 1
+    return "".join(out)
+
+
+def dequoted_tokens(text, cwd):
+    """T375: path-like tokens of each word of `text` that mixes a quote, a backslash or a `$` part
+    with plain text, read as the shell reads it (`sens''itive-paths.txt`, `sensitive-pa\\ths.txt`). `text`
+    is read before `strip_quoted_spans`, so `echo x > .e"n"v` and `grep KEY .e''nv` are seen; a
+    wholly quoted word (`grep ".env" f`) is data there, as before. A part the shell still builds
+    (`${x}`, `$x`) next to literal text is read twice: as `*`, globbed (`sens${x}itive-paths.txt`),
+    and as empty (`$E.env` is `.env`; a `*` never matches a leading dot). A word with no literal
+    text (`"$F"`) is a recorded limit."""
+    found = []
+    for match in SHELL_WORD_PATTERN.finditer(blank_spaced_spans(text)):
+        word = match.group()
+        if not SHELL_WORD_MARKS.search(word):
+            continue
+        if WHOLLY_QUOTED_PATTERN.fullmatch(word) and not BUILT_PART_PATTERN.search(
+                re.sub(r"'[^']*'", "", word)):
+            continue  # data behind a data command; a built part in it is read (round 2 P2-B)
+        word = shell_word(re.sub(r"'[^']*'", lambda m: m.group().replace("$", "\0"), word))  # `$` in '…' is a letter
+        readings = [word.replace("\0", "$")]
+        built = BUILT_PART_PATTERN.sub("*", word)
+        if built != word:
+            if not built.strip("*/"):
+                continue
+            readings = [built.replace("\0", "$"), BUILT_PART_PATTERN.sub("", word).replace("\0", "$")]
+        for reading in readings:
+            for token in TOKEN_PATTERN.finditer(reading):
+                if not re.search(r"[A-Za-z0-9]", token.group()) and not DOT_GLOB_PATTERN.search(token.group()):
+                    continue  # `TOKEN_PATTERN` splits at `=` and `:`: a piece of only `*`, `/`, `.`, `-`, `_` or `?` is no name (rounds 2-3)
+                found.append(token.group())
+                if BRACE_PATTERN.search(token.group()):
+                    found.extend(capped_brace_expansion(token.group()))
+                if GLOB_CHARS.search(token.group()):
+                    matches = glob.iglob(os.path.join(cwd, token.group()), recursive=True)
+                    found.extend(itertools.islice(matches, MAX_GLOB_MATCHES))
+    return found
 
 
 def unexpanded_globs(text):
@@ -644,7 +736,7 @@ def folder_hits(command, cwd, roots, patterns):
     hits, wheres, budget, walked = [], [cwd], [_walk_cap()], set()
     for segment in SEGMENT_BOUNDARY_PATTERN.split(text):
         # the shell drops quotes and backslashes inside a word too (`-de''lete` is `-delete`, T371)
-        words = [re.sub(r"[\"'\\()]", "", re.split(r"\d*[<>]", w, 1)[0]) for w in segment.split()]
+        words = [shell_word(re.split(r"\d*[<>]", w, 1)[0]) for w in segment.split()]
         words = [w for w in words if w and not w.startswith(("<", ">", "2>", "&>"))]
         readings = [_segment_command(words)]
         plain = _segment_command(words, skip_values=False)
@@ -699,7 +791,9 @@ def only_reads(tool_name, tool_input):
     seen = False
     for segment in SEGMENT_BOUNDARY_PATTERN.split(text):
         # the shell drops quotes and backslashes inside a word (`-de''lete` is `-delete`)
-        words = [re.sub(r"[\"'\\()]", "", w) for w in segment.split()]
+        if re.search(r"\$['\"][^'\"]*\\", segment):
+            return False  # security review: `$'\x65lete'` decodes to `elete`; dequoting would hide it
+        words = [shell_word(w) for w in segment.split()]
         words = [w for w in words if w]
         if not words:
             continue
