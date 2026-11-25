@@ -120,9 +120,15 @@ GATE_REL = ".claude/hooks/pre_bash_block_unsafe_merge.py"
 #          (`.claude/settings.json` `"env"`, default `origin`; a bad value refuses every push;
 #          `tasks/TASK_GUIDE_T321.md`, AC 1-6). Supervisor sign-off under session `[admin]`: the
 #          user's "T321 [admin]" (2026-11-25).
+#   T372 — the session loop binds on the run record's own start stamp (`_stamped_start_since`:
+#          `started_by` = this session, `started_at` at or after the tag's onset, a commit the
+#          branch holds), beside the transcript's `--start`; its window starts at the tag's onset
+#          (`auto_mode.session_onset`: a repeated same tag keeps it) (`tasks/TASK_GUIDE_T372.md`,
+#          AC 1-3). Authorised by the user, 2026-11-25 (gate sign-off question under session
+#          `[admin]`).
 AUTHORISED_TASKS = ("T182", "T188", "T190", "T197", "T196", "T210", "T211", "T232", "T250", "T284",
                     "T289", "T291", "T296", "T295", "T308", "T309", "T317", "T323", "T326", "T341",
-                    "T320", "T354", "T321")
+                    "T320", "T354", "T321", "T372")
 
 
 def _git(root, *args):

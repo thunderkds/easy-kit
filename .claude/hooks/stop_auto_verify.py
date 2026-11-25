@@ -87,6 +87,7 @@ import shlex
 import signal
 import subprocess
 import sys
+from datetime import datetime, timezone
 
 RUNS_REL = os.path.join(".claude", "verify-runs")
 
@@ -206,10 +207,13 @@ def eligible(task):
     return task.marker or every_task()
 
 
-def start(task, head):
+def start(task, head, started_by=None):
     """Start the detached run; return its log path (relative to ROOT) and whether this call started
     it. The log is created exclusively first: it is the one lock the Stop hook and `--start` share,
-    so one task and commit never run twice."""
+    so one task and commit never run twice.
+
+    T372: `started_by` (`--start` only) is the session that asked; the run writes it and the start
+    time into its record as the start stamp. The Stop hook passes none, so its runs carry no stamp."""
     log_rel = os.path.join(RUNS_REL, f"{vr.safe_name(task.task_id, '_untagged')}-{head[:12]}.log")
     log_path = os.path.join(ROOT, log_rel)
     os.makedirs(os.path.dirname(log_path), exist_ok=True)
@@ -218,10 +222,11 @@ def start(task, head):
     except FileExistsError:
         return log_rel, False  # this task and commit already ran (or is running)
     env = dict(os.environ, **{CHILD_ENV: "1", "CLAUDE_PROJECT_DIR": ROOT})
+    stamp = [started_by, datetime.now(timezone.utc).isoformat()] if started_by else []
     try:
         subprocess.Popen([sys.executable, os.path.abspath(__file__), "--run", task.task_id,
                           task.report_path, task.checkout, head, log_rel, task.track,
-                          "marked" if task.marker else "unmarked"],
+                          "marked" if task.marker else "unmarked"] + stamp,
                          cwd=ROOT, env=env, stdin=subprocess.DEVNULL, stdout=fd, stderr=fd,
                          close_fds=True, start_new_session=True)  # setsid: survives this hook
     finally:
@@ -294,6 +299,16 @@ def stop_hook():
             warn(f"{task_id}: skipped ({type(exc).__name__}: {exc})")
 
 
+SESSION_ENV = "CLAUDE_CODE_SESSION_ID"
+
+
+def starting_session():
+    """T372: the id of the Claude Code session whose Bash call runs `--start` (`$CLAUDE_CODE_SESSION_ID`,
+    which equals the transcript's session id, T196 F2), or None when it is unset or not the id shape."""
+    value = os.environ.get(SESSION_ENV, "")
+    return value if am.SESSION_ID.fullmatch(value) else None
+
+
 def start_one(task_id):
     """T203 D2: `--start <ID>` — the Supervisor's entry. The same checks and the same detached
     `start()` as the Stop hook, for one task; prints one line (the log path, or why nothing
@@ -334,7 +349,7 @@ def start_one(task_id):
         if reason:
             print(f"{task_id}: {reason} — nothing started")
             return 1
-        log_rel, started = start(task, head)
+        log_rel, started = start(task, head, started_by=starting_session())
     except Exception as exc:  # fail open: one line, never a traceback
         print(f"{task_id}: nothing started ({type(exc).__name__}: {exc})")
         return 1
@@ -512,6 +527,8 @@ def run():
     minimal = track == "minimal"
     # T203 D6: a run started by a hook before T203 passes no 9th argument; it was always marked.
     marked = len(sys.argv) < 9 or sys.argv[8] == "marked"
+    # T372: a `--start` run carries its start stamp as argv 9 and 10 (session, ISO time).
+    started_by, started_at = sys.argv[9:11] if len(sys.argv) == 11 else (None, None)
     out, reason = call_claude(checkout, head)
     if reason:
         verdict, session = "blocked", "none"
@@ -522,7 +539,8 @@ def run():
         verdict, reason, base, paths = settle_skip(checkout, head)
     print(f"verdict: {verdict}" + (f" ({reason})" if reason else ""), flush=True)
     try:
-        vr.write_record(ROOT, task_id, head, verdict, session, log_rel, base=base)
+        vr.write_record(ROOT, task_id, head, verdict, session, log_rel, base=base,
+                        started_by=started_by, started_at=started_at)
     except Exception as exc:
         print(f"run record not written ({type(exc).__name__}: {exc})", flush=True)
     if minimal:
@@ -549,7 +567,7 @@ def run():
 
 
 def main():
-    if len(sys.argv) in (8, 9) and sys.argv[1] == "--run":
+    if len(sys.argv) in (8, 9, 11) and sys.argv[1] == "--run":
         run()
     elif len(sys.argv) == 3 and sys.argv[1] == "--start":
         sys.exit(start_one(sys.argv[2]))

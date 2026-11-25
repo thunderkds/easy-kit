@@ -261,6 +261,21 @@ def request_session_tag(text):
 def session_request(source):
     """`(tag, timestamp, text)` of the typed request that set the session tag now in force, with
     `tag` "admin" or "ticket"; None when no session tag holds or on any doubt."""
+    found = _session_scan(source)
+    return found[0] if found else None
+
+
+def session_onset(source):
+    """T372: `(tag, timestamp)` of the request that turned the session tag now in force on: a later
+    request with the same tag keeps it, and `[stop]`, another tag or a resume reset it. None when no
+    session tag holds or on any doubt. The merge gate's session loop reads its window from here;
+    every other binding keeps `session_request` (the latest tag request)."""
+    found = _session_scan(source)
+    return (found[0][0], found[1]) if found else None
+
+
+def _session_scan(source):
+    """`(session_request's tuple, onset time)`, or None. One pass for both readers."""
     try:
         found = _session_entries(source)
         if found is None:
@@ -269,7 +284,7 @@ def session_request(source):
         ok, resumed = _resume_mark(sid)
         if not ok:
             return None
-        current = None
+        current = onset = None
         for entry in entries:
             text = request_text(entry)
             origin = entry.get("origin") if isinstance(entry, dict) else None
@@ -280,10 +295,12 @@ def session_request(source):
                 continue  # typed before the resume (or undated while a mark exists)
             tag = request_session_tag(text)
             if tag in ("ticket", "admin"):
+                if current is None or current[0] != tag:
+                    onset = ts
                 current = (tag, ts, text) if ts is not None else None
             elif tag is not None:
                 current = None  # `[stop]`, or G3: a later different tag ends the session tag
-        return current
+        return (current, onset) if current is not None and onset is not None else None
     except Exception:
         return None
 

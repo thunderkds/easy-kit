@@ -132,15 +132,22 @@ def record_path(root, task_id, sha):
     return os.path.join(record_dir(root), f"{safe_name(task_id, '_untagged')}-{sha}.json")
 
 
-def write_record(root, task_id, sha, verdict, session, log, base=None):
+def write_record(root, task_id, sha, verdict, session, log, base=None, started_by=None,
+                 started_at=None):
     """`base` (T289) is the merge-base a `skip-pass` was judged against; the merge gate repeats the
-    path check between it and `commit`. Other verdicts carry none."""
+    path check between it and `commit`. Other verdicts carry none.
+
+    T372: `started_by` (the session id that ran `--start`) and `started_at` (its ISO time) are the
+    run's start stamp, which the merge gate's session loop reads as that session's own start. Only
+    a `--start` run carries them, and only both together are stored."""
     path = record_path(root, task_id, sha)
     os.makedirs(os.path.dirname(path), exist_ok=True)
     tmp = f"{path}.{os.getpid()}.tmp"
     data = {"task": task_id, "commit": sha, "verdict": verdict, "session": session, "log": log}
     if base is not None:
         data["base"] = base
+    if started_by and started_at:
+        data["started_by"], data["started_at"] = started_by, started_at
     with open(tmp, "w", encoding="utf-8") as f:
         json.dump(data, f)
     os.replace(tmp, path)
