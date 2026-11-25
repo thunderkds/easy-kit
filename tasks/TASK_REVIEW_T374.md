@@ -10,6 +10,19 @@
 
 ---
 
+## Auto decisions
+
+Mode: auto
+1. Took T374, then T371, stacked on T363's branch (same hook functions; T363 is Done, not merged) — RULE: the user's request "continue [admin] 371 and 374"
+2. Track extended — RULE: `docs/claude-md/tracks.md` § Track rule (Risk High row)
+3. The Supervisor wrote the code, one fresh `Reviewer: T374` spawn per round (five rounds) — RULE: `docs/claude-md/pipeline-stages.md:198` "the Supervisor writes the code itself, in the task's worktree, test first"
+4. The value-option table covers `timeout`, `sudo`, `env`, `nice`, `time` and `exec`, and every segment is read both with and without the value skips — DEBATED: Advocate 1: keep the table for all four wrappers (one bug class); Advocate 2: narrow it to `timeout` as the row says (a wrong entry hides the command); Advocate 3: keep all four but drop `env -S` (its value is the command). Settled by a written rule: `.claude/hooks/pre_tool_sensitive_path.py:18` "Fail toward the human, never a silent allow (AC5)" — reading both ways means a wrong or missing entry can only add an ask; `env -S` dropped as Advocate 3 showed
+5. Fixed every finding of rounds 1–4 (F1 P2 `env -S`, F2–F4; G1 P2 a reading landing on `cd`; H1 P2 `command cd`/`VAR= cd`/`\cd`/`time cd`; J1 P2 the folder-set cap) and spawned the reviewer again after each — RULE: `docs/claude-md/pipeline-stages.md:198` "one fresh-context reviewer spawn per extended task at Stage 4, which the merge gate requires"
+6. Round 5's K1 (seven or more distinct `cd` targets in one command ask) left as it is — RULE: `skills/code-review/SKILL.md:28` "| **P3** | Style, minor improvement, documentation | Optional |" (it fails toward the human)
+Checks: tests `python3 -m pytest -q -p no:cacheprovider .claude/hooks/tests/test_t374_folder_rule_followups.py` — 8 passed (red first: `4 failed, 4 passed` at 2026-11-25T11:44:04Z; each round's new tests red before its fix: 11:50:20Z `8 failed`, 12:47:42Z `4 failed`, 12:52:28Z `5 failed`, 12:57:17Z `5 failed`); the 9 sensitive-path suites `150 passed`; full suite at `6c0a3836` `60 failed, 7979 passed`, the same 60 as `main`; reviews `Reviewer: T374` rounds 1–4 PASS with one P2 each (all fixed), round 5 PASS (P3 only); `security-review` skill in the Supervisor session (temporary `refs/remotes/origin/HEAD` at `221fd720`, removed right after) — one finding, `env -S` (confidence 9/10), fixed; real run: the reviewers' harness (`cmp3.py`, 733 commands, the real hook as a subprocess against the T363 hook) — 0 old asks now silent, 0 new asks on ordinary commands (auto-checked, not /verify)
+Memory: nothing new
+Not done: merge (admin: after the auto verify pass, and after T363's merge); auto verify: running (T182); push (no `origin`; `EASY_KIT_ADMIN_REMOTE` is not set to `github`)
+
 ## Evidence
 
 | Check | Result | Notes / output snippet |
@@ -19,7 +32,7 @@
 | Negative cases hold | ☑ pass | 16 mutations of a scratch copy (worktree untouched): 15 turn the file red (empty table or step-1 loop: 6 failed; one failed each for the sudo/nice/env entry, timeout `-k`, `--kill-after`, `-s`, sudo `-u`, env `-u`, nice `-n`; budget per folder; folders not counted; header xargs; header `-exec sh -c`). Survivor: dropping `--signal` stays green (F3). Real hook as subprocess, project with `config/.env`: `timeout -s KILL 5 rm -rf config` old silent, new ask; `timeout -s KILL 5 ls config` and `... rm -rf build` silent |
 | verify | ☐ pass / ☐ fail / ☐ N/A | [leave it: the auto verify hook writes this row, with its run record. If you ran /verify yourself, tick pass and make the whole Notes cell "/verify by the user, session <id>, commit <sha>" (the full 40-character commit). The merge gate counts no other row, even with the word "pass" in it] |
 | Review scope bounded to the change's blast radius (affected set, not whole repo) | ☑ pass | Reviewed the 524f0070 range only: `_segment_command` and its one caller `folder_hits`, the new table, the header. Not reviewed: T363 code, `lib/shell_data.py` (untouched) |
-| Full smoke suite still green (no regression) | ☐ pass / ☐ fail | Not run by this reviewer (a full run was already in progress); the five guide suites above are green |
+| Full smoke suite still green (no regression) | ☑ pass | Not green, no regression (Supervisor, at `6c0a3836`): `60 failed, 7979 passed, 24 skipped` — the same 60 failures as the clean `main` worktree (`60 failed, 7943 passed, 24 skipped`). Earlier rounds each had one extra timing test under load (`test_memory_usage_report`, `test_t203_ac3_off_still_runs_a_marked_task[start]`, `test_ac4_any_other_answer_on_a_docs_only_branch_stays_blocked[none]`), each passing alone |
 | **Companion score (easy-verifier)** | ☑ N/A | Not run in this review. |
 | **UI: Visual regression (diff or verdict pasted)** | ☑ N/A | No UI (a PreToolUse hook). |
 | **UI: Design-system compliance (tokens/colors/typography verified)** | ☑ N/A | No UI. |
@@ -29,7 +42,13 @@
 
 ## Demonstration
 
-Not filled by this reviewer (the Supervisor owns BEFORE/AFTER). Reviewer observation, real hook as a subprocess, 2026-11-25: `timeout -s KILL 5 rm -rf config` (config/.env present): T363 hook silent, T374 hook ask.
+**BEFORE** (2026-11-25T11:44:04Z, the new test file against the T363 branch's hook, before the first implementation commit): `python3 -m pytest -q -p no:cacheprovider .claude/hooks/tests/test_t374_folder_rule_followups.py` printed `4 failed, 4 passed`: `timeout -s KILL 5 rm -rf config`, `timeout -k 5 10 rm -rf config` and `timeout --kill-after 3 5 rm -rf config` got no ask (the option value was read as the command), and the header named neither `xargs` nor `find -exec sh -c`.
+
+**AFTER** (branch head `6c0a3836`): the same file printed `8 passed, 33 subtests passed`. Every wrapper form asks, `env -S rm -rf config` asks, every `cd` form (`command cd`, `FOO=1 cd`, `\cd`, `time cd`, `builtin cd`) moves the folder, and a long `cd` chain asks. The reviewers' harness (733 commands, the real hook run as a subprocess against the T363 hook) shows 0 old asks gone silent and 0 new asks on ordinary commands.
+
+**DELTA**: a destructive command behind a wrapper with an option value (`timeout -s KILL`, `sudo -u root`, `nice -n 5`) is judged like the bare command, and a wrong or missing table entry can no longer hide one.
+
+**WITNESS**: Supervisor session acceb8c1, 2026-11-25 (BEFORE red run, the per-round red runs, full-suite comparison); `Reviewer: T374`, fresh qa-expert spawns in five rounds (`524f0070`, `1bbbf065`, `0337bfde`, `25ab79dd`, `6c0a3836`), each comparing the real hooks as subprocesses.
 
 ---
 
@@ -200,3 +219,44 @@ $ python3 -m pytest -q -p no:cacheprovider .claude/hooks/tests/test_t374_folder_
 ```
 
 Cap probe harness: `<scratchpad>/cap5.py` (`python3 -I cap5.py <scratchpad>`): the first row `cd a && cd b && cd c && cd d && cd e && rm -rf f` prints `ask silent`.
+
+---
+
+## Round 5 (Reviewer: T374, commit 6c0a3836)
+
+Verdict: **PASS. J1 and J2 are fixed; no P0-P2 finding; one P3 note.** Confidence >= 75 (real hook as a subprocess).
+
+### Round-4 findings
+
+| Round-4 | Result |
+|---|---|
+| J1 `cd a && cd b && cd c && cd d && cd e && rm -rf f`, `cd .` x3 forms, `cd a/b && cd ../.. ` forms | fixed: ask (old ask, new ask). Past `MAX_CD_FOLDERS` (64) the code raises `ValueError`, which `main()` turns into an ask; no folder is dropped |
+| J2 pin | fixed: `test_r4_a_long_cd_chain_never_drops_the_shell_folder` (four chains plus an 8-`cd` chain over the cap) |
+
+### Comparison (T363-branch hook vs 6c0a3836 hook; harnesses `cmp3.py`, `cd3.py`, `cap5.py`, new `multi5.py`)
+
+| Harness | Count |
+|---|---|
+| cmp3.py, 733 commands: old ask, new silent | **0** |
+| cmp3.py: old silent, new ask | 84 listed lines: the wrapper option-value `rm -rf config|cd` asks the task wants (round 4 counted 80; the extra lines are `env -u cd rm -rf config`-type rows, same shape) |
+| cmp3.py: new ask on an ordinary command (`ls config`, `rm -rf build`, `cat config/.env`) | **0** |
+| cd3.py, 12 `cd` forms: old ask, new silent | **0** (`builtin cd build && rm -rf ../config`: old silent, new ask) |
+| cap5.py, 20 chains: old ask, new silent | **0** (7 ask/ask; 13 old silent, new ask: chains with `cd x` into folders that do not exist, kept as forks, an over-ask toward the human) |
+| multi5.py, 8 ordinary multi-cd commands | 7 silent/silent, including `cd build && git status && cd ..`, `cd build && ls && cd .. && cd build && ls`, 4-`cd` chains, 5 x `cd build && ls && cd ..` then `rm -rf build`. 1 silent/ask: 8 distinct `cd xN` then `rm -rf build` (see K1) |
+
+### Findings
+
+| ID | Sev | Where | Finding | One-line fix |
+|----|-----|-------|---------|--------------|
+| K1 | P3 | `.claude/hooks/pre_tool_sensitive_path.py:633-636` (`MAX_CD_FOLDERS` raise in the `cd` branch) | The set doubles per distinct `cd`, so 7 distinct `cd` targets in one command ask even when no folder verb follows (the test's own `cd x0 ... cd x7 && ls` asks). Fail-safe, not a hole; a kit session with 7+ different `cd` hops in one command is rare, and `cd ..` / repeated `cd` back to a folder do not grow the set. | Optional: raise only when a folder verb is later seen, or raise the cap; no change needed to merge |
+
+Checked, no finding: `ValueError` reaches the ask path in `main()`; dedup keeps `cd .` and `cd x && cd ..` from growing the set; `walked` and the `(arg, folder)` dedup keep one walk budget across readings and folders; the hook still only reads the string and runs nothing from it; `builtin` stays a prefix only.
+
+### Evidence
+
+Verification Command in the worktree (five guide files, no full suite; `git status` clean before my edit of this file):
+
+```
+$ python3 -m pytest -q -p no:cacheprovider .claude/hooks/tests/test_t374_folder_rule_followups.py .claude/hooks/tests/test_t363_folder_level.py .claude/hooks/tests/test_pre_tool_sensitive_path.py .claude/hooks/tests/test_t316_list_self_protect.py .claude/hooks/tests/test_t314_fix_round.py
+82 passed, 129 subtests passed in 8.90s
+```
